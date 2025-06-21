@@ -1,0 +1,6 @@
+class: StaffAuthResult
+fields:
+  success: bool
+  message: String
+  staffUser: StaffUser?
+  authToken: String? 

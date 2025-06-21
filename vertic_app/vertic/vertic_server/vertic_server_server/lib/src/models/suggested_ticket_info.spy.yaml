@@ -1,0 +1,5 @@
+class: SuggestedTicketInfo
+fields:
+  name: String
+  price: double
+  description: String 

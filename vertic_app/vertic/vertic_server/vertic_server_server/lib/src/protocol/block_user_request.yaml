@@ -1,0 +1,8 @@
+class: BlockUserRequest
+fields:
+  userId:
+    type: int
+  isBlocked:
+    type: bool
+  reason:
+    type: String? 

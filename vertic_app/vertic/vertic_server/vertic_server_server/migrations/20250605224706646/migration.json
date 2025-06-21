@@ -1,0 +1,43 @@
+{
+  "actions": [
+    {
+      "type": "alterTable",
+      "alterTable": {
+        "name": "app_users",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [
+          "tempPassword"
+        ],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [],
+        "deleteForeignKeys": [],
+        "warnings": [
+          {
+            "type": "columnDropped",
+            "message": "Column \"tempPassword\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "tempPassword"
+            ],
+            "destrucive": true
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "type": "columnDropped",
+      "message": "Column \"tempPassword\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "tempPassword"
+      ],
+      "destrucive": true
+    }
+  ],
+  "migrationApiVersion": 1
+}

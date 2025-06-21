@@ -1,0 +1,22 @@
+class: PrinterConfiguration
+table: printer_configurations
+fields:
+  facilityId: int? # Optional: Fremdschlüssel zur Facility (null = global)
+  printerName: String # Name der Drucker-Konfiguration
+  printerType: String # Typ: 'thermal', 'laser', 'inkjet'
+  connectionType: String # 'com_port', 'network', 'usb'
+  connectionSettings: String # JSON: COM-Port-Details, IP-Adresse, etc.
+  paperSize: String # 'thermal_58mm', 'thermal_80mm', 'a4', etc.
+  isDefault: bool # Standard-Drucker für diese Facility
+  isActive: bool # Ob der Drucker aktiv ist
+  testPrintEnabled: bool # Ob Testdrucke erlaubt sind
+  createdBy: int # User-ID des Erstellers
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  printer_facility_idx:
+    fields: facilityId
+  printer_default_idx:
+    fields: isDefault
+  printer_active_idx:
+    fields: isActive 

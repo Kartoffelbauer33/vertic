@@ -1,0 +1,35 @@
+class: Ticket
+table: tickets
+fields:
+  userId: int
+  ticketTypeId: int
+  price: double
+  purchaseDate: DateTime
+  expiryDate: DateTime
+  isUsed: bool
+  remainingPoints: int?
+  initialPoints: int?
+  subscriptionStatus: String?
+  lastBillingDate: DateTime?
+  nextBillingDate: DateTime?
+  qrCodeData: String
+  
+  # NEUE FELDER für korrektes Einzelticket-System
+  activatedDate: DateTime?      # Wann wurde es erstmals aktiviert/eingelöst
+  activatedForDate: DateTime?   # Für welchen Tag ist es aktiviert (nur Datum ohne Zeit)
+  currentUsageCount: int, default=0  # Wie oft wurde es heute verwendet (Ein-/Ausgang)
+  
+  createdAt: DateTime
+  updatedAt: DateTime?
+
+indexes:
+  tickets_user_idx:
+    fields: userId
+  tickets_type_idx:
+    fields: ticketTypeId
+  tickets_expiry_idx:
+    fields: expiryDate
+  tickets_activated_idx:
+    fields: activatedForDate
+  tickets_qr_idx:
+    fields: qrCodeData 

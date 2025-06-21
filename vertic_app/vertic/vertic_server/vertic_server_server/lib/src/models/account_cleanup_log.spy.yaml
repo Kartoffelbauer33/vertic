@@ -1,0 +1,13 @@
+# Log für automatische Bereinigung alter Accounts
+class: AccountCleanupLog
+table: account_cleanup_logs
+fields:
+  cleanupDate: DateTime
+  accountsDeleted: int
+  criteriaUsed: String  # z.B. "pending_verification > 30 days"
+  detailsJson: String?  # JSON mit Details der gelöschten Accounts
+  triggeredBy: String   # 'automatic', 'manual', 'staff_id:123'
+  
+indexes:
+  cleanup_log_date_idx:
+    fields: cleanupDate 

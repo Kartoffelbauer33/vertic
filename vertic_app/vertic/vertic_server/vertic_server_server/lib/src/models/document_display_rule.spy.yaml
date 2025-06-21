@@ -1,0 +1,16 @@
+class: DocumentDisplayRule
+table: document_display_rules
+fields:
+  documentId: int # Foreign key to RegistrationDocument
+  ruleName: String
+  description: String?
+  # Age-based rules
+  minAge: int? # Minimum age requirement
+  maxAge: int? # Maximum age requirement  
+  # Gym-based rules
+  gymId: int? # Specific gym (null = all gyms)
+  # Other conditions
+  isRequired: bool # Must agree to continue registration
+  isActive: bool
+  createdAt: DateTime
+  updatedAt: DateTime? 

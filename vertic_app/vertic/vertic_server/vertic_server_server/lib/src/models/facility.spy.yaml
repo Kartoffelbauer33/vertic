@@ -1,0 +1,17 @@
+class: Facility
+table: facilities
+fields:
+  name: String
+  description: String?
+  address: String?
+  city: String?
+  postalCode: String?
+  contactEmail: String?
+  contactPhone: String?
+  isActive: bool
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  facility_name_unique_idx:
+    fields: name
+    unique: true 

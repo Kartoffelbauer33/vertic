@@ -1,0 +1,18 @@
+{
+  "actions": [
+    {
+      "type": "deleteTable",
+      "deleteTable": "email_verification_requests"
+    }
+  ],
+  "warnings": [
+    {
+      "type": "tableDropped",
+      "message": "Table \"email_verification_requests\" will be dropped.",
+      "table": "email_verification_requests",
+      "columns": [],
+      "destrucive": true
+    }
+  ],
+  "migrationApiVersion": 1
+}

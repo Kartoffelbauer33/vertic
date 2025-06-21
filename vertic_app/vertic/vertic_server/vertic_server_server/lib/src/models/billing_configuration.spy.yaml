@@ -1,0 +1,18 @@
+class: BillingConfiguration
+table: billing_configurations
+fields:
+  name: String
+  description: String
+  billingType: String # 'monthly', 'yearly', 'custom'
+  billingDay: int # Tag des Monats für monatliche Abrechnung (1-31)
+  billingDayOfYear: int? # Tag des Jahres für jährliche Abrechnung (1-365)
+  customIntervalDays: int? # Für benutzerdefinierte Intervalle
+  isActive: bool
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  billing_config_name_unique_idx:
+    fields: name
+    unique: true
+  billing_config_active_idx:
+    fields: isActive 

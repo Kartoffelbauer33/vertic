@@ -1,0 +1,8 @@
+class: CategoryPurchaseStatus
+fields:
+  category: String
+  hasPurchased: bool
+  canPurchaseAgain: bool
+  isPrintingPending: bool
+  lastPurchaseDate: DateTime?
+  validTickets: List<int> # IDs der gültigen Tickets 

@@ -1,0 +1,29 @@
+class: Permission
+table: permissions
+fields:
+  # Eindeutige Permission-Identifikation
+  name: String
+  displayName: String
+  description: String?
+  
+  # Kategorisierung für UI
+  category: String  # 'user_management', 'staff_management', 'ticket_management', etc.
+  
+  # Sicherheits-Level
+  isSystemCritical: bool, default=false  # Nur für SuperUser-Level Permissions
+  
+  # UI-Eigenschaften
+  iconName: String?  # Icon für UI-Darstellung
+  color: String?     # Hex-Color für Kategorisierung
+  
+  # Audit-Trail
+  createdAt: DateTime
+  updatedAt: DateTime?
+  
+# Serverpod-Indices für Performance
+indexes:
+  permission_name_unique_idx:
+    fields: name
+    unique: true
+  permission_category_idx:
+    fields: category 

@@ -1,0 +1,14 @@
+class: UserPermissionsResponse
+fields:
+  # User-Informationen
+  userId: int
+  isSuperUser: bool
+  
+  # Berechtigungslisten
+  permissions: List<String>
+  modules: List<String>
+  roles: List<String>
+  
+  # Facility/Gym-spezifische Daten
+  facilityAccess: List<int>?
+  gymAccess: List<int>? 

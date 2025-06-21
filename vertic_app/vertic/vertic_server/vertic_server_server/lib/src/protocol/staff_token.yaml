@@ -1,0 +1,8 @@
+class: StaffToken
+table: staff_tokens
+fields:
+  staffUserId: int
+  token: String
+  createdAt: DateTime
+  expiresAt: DateTime
+  valid: bool 

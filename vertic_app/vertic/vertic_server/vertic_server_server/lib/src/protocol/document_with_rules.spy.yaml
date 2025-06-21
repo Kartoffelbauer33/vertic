@@ -1,0 +1,6 @@
+class: DocumentWithRules
+fields:
+  document: RegistrationDocument
+  rules: List<DocumentDisplayRule>
+  isRequiredForUser: bool
+  appliesToUser: bool 

@@ -1,0 +1,8 @@
+class: PrinterTestResponse
+fields:
+  success: bool
+  message: String?
+  error: String?
+  printerStatus: String?
+  paperStatus: String?
+  printJobId: String? 

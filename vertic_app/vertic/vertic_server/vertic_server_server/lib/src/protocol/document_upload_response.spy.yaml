@@ -1,0 +1,6 @@
+class: DocumentUploadResponse
+fields:
+  success: bool
+  documentId: int?
+  message: String
+  errorCode: String? 

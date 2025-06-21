@@ -1,0 +1,7 @@
+class: LoginStatusResponse
+fields:
+  status: String                    # 'not_found', 'blocked', 'verification_pending', 'new_code_sent', 'verified', 'error'
+  message: String?                  # Nachricht für den User
+  reason: String?                   # Sperrungsgrund bei 'blocked' Status
+  expiresAt: String?               # ISO-String für Ablaufzeit bei 'verification_pending'
+  needsNewCode: bool, default=false # Ob ein neuer Code benötigt wird 

@@ -1,0 +1,34 @@
+# Modulkonfiguration pro Facility (Kunde)
+class: FacilityModuleConfig
+table: facility_module_configs
+fields:
+  facilityId: int               # Referenz auf Facility
+  moduleKey: String             # z.B. "billing_module", "advanced_reporting", "integration_api"
+  isEnabled: bool, default=true # Modul ist für diese Facility aktiviert
+  configData: String?           # JSON-Konfigurationsdaten für das Modul
+  subscriptionType: String?     # "trial", "basic", "premium", "enterprise"
+  validFrom: DateTime           # Ab wann ist das Modul gültig
+  validUntil: DateTime?         # Bis wann ist das Modul gültig (null = unbegrenzt)
+  maxUsers: int?                # Maximale Anzahl Benutzer für dieses Modul
+  maxTransactions: int?         # Maximale Anzahl Transaktionen pro Monat
+  notes: String?                # Notizen zur Modulkonfiguration
+  createdBy: int                # User der diese Konfiguration erstellt hat
+  createdAt: DateTime
+  updatedAt: DateTime?
+
+indexes:
+  facility_module_facility_idx:
+    fields: facilityId
+  facility_module_key_idx:
+    fields: moduleKey
+  facility_module_enabled_idx:
+    fields: isEnabled
+  facility_module_unique_idx:
+    fields: facilityId, moduleKey
+    unique: true
+  facility_module_subscription_idx:
+    fields: subscriptionType
+  facility_module_valid_from_idx:
+    fields: validFrom
+  facility_module_valid_until_idx:
+    fields: validUntil 

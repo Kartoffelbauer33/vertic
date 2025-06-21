@@ -1,0 +1,19 @@
+class: QrRotationPolicy
+table: qr_rotation_policies
+fields:
+  policyName: String # Name der Policy (z.B. 'default', 'high_security', 'day_ticket')
+  rotationMode: String # 'immediate', 'daily_usage', 'time_based', 'manual'
+  rotationIntervalHours: int? # Stunden zwischen Rotationen (nur bei time_based)
+  requiresUsageForRotation: bool # Nur rotieren wenn verwendet
+  maxUsageBeforeRotation: int? # Max. Nutzungen vor Zwangsrotation
+  isDefault: bool # Standard-Policy
+  description: String?
+  isActive: bool
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  qr_policy_name_idx:
+    fields: policyName
+    unique: true
+  qr_policy_default_idx:
+    fields: isDefault 

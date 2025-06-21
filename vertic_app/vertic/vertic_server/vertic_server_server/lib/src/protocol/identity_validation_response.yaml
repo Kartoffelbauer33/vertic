@@ -1,0 +1,11 @@
+class: IdentityValidationResponse
+fields:
+  isValid: bool
+  userId: int?
+  qrCodeId: String?
+  userName: String?
+  userEmail: String?
+  isExpired: bool
+  facilityName: String?
+  lastUsed: DateTime?
+  error: String? 

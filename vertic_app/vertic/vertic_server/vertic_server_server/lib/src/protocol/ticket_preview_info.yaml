@@ -1,0 +1,10 @@
+class: TicketPreviewInfo
+fields:
+  ticketTypeId: int
+  ticketTypeName: String
+  price: double
+  description: String
+  isPointBased: bool
+  isSubscription: bool
+  validityPeriod: int
+  category: String 

@@ -1,0 +1,21 @@
+class: TicketVisibilitySetting
+table: ticket_visibility_settings
+fields:
+  ticketTypeId: int? # Fremdschlüssel zum TicketType (null für Kategorie-Einstellungen)
+  facilityId: int? # Fremdschlüssel zur Facility (null = Vertic Universal)
+  categoryType: String? # 'vertic', 'hall', 'einzeltickets', 'punktekarten', 'zeitkarten'
+  isVisibleToClients: bool # Ob sichtbar für Clients
+  displayOrder: int # Reihenfolge der Anzeige (niedrigere Zahl = höhere Priorität)
+  customDescription: String? # Optional: Benutzerdefinierte Beschreibung für Clients
+  isPromoted: bool # Hervorhebung (z.B. "EMPFOHLEN")
+  availableFrom: DateTime? # Ab wann verfügbar (optional)
+  availableUntil: DateTime? # Bis wann verfügbar (optional)
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  ticket_visibility_type_facility_idx:
+    fields: ticketTypeId, facilityId
+  ticket_visibility_category_idx:
+    fields: categoryType, facilityId
+  ticket_visibility_order_idx:
+    fields: displayOrder 

@@ -1,0 +1,12 @@
+class: RbacInitResponse
+fields:
+  # Erfolgsstatus
+  success: bool
+  message: String
+  
+  # Statistiken nach Initialisierung
+  permissionsCreated: int?
+  rolesCreated: int?
+  
+  # Fehlerinformationen
+  error: String? 

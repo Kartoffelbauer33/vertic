@@ -1,0 +1,31 @@
+class: StaffUserRole
+table: staff_user_roles
+fields:
+  # Many-to-Many Verknüpfung
+  staffUserId: int, relation(parent=staff_users, onDelete=cascade)
+  roleId: int, relation(parent=roles, onDelete=cascade)
+  
+  # Audit-Trail
+  assignedAt: DateTime
+  assignedBy: int, relation(parent=staff_users, onDelete=cascade)  # Welcher Admin hat Role vergeben
+  
+  # Status-Management
+  isActive: bool, default=true
+  
+  # Zeitlich begrenzte Rollen (optional)
+  expiresAt: DateTime?
+  
+  # Grund für Rollen-Vergabe
+  reason: String?
+
+# Serverpod-Indices für Performance
+indexes:
+  staff_role_unique_idx:
+    fields: staffUserId, roleId
+    unique: true  # Ein StaffUser kann eine Role nur einmal haben
+  staff_user_roles_idx:
+    fields: staffUserId
+  role_staff_users_idx:
+    fields: roleId
+  active_staff_roles_idx:
+    fields: isActive, expiresAt 

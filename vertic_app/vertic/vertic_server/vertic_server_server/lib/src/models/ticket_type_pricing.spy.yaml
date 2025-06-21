@@ -1,0 +1,16 @@
+class: TicketTypePricing
+table: ticket_type_pricing
+fields:
+  ticketTypeId: int
+  userStatusTypeId: int
+  price: double
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  ticket_type_id_idx:
+    fields: ticketTypeId
+  user_status_type_id_idx:
+    fields: userStatusTypeId
+  unique_combination_idx:
+    fields: "ticketTypeId, userStatusTypeId"
+    unique: true 

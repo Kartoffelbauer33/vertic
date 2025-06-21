@@ -1,0 +1,34 @@
+class: StaffUserPermission
+table: staff_user_permissions
+fields:
+  # Many-to-Many Verknüpfung
+  staffUserId: int, relation(parent=staff_users, onDelete=cascade)
+  permissionId: int, relation(parent=permissions, onDelete=cascade)
+  
+  # Audit-Trail - wer hat wann welche Permission vergeben
+  grantedAt: DateTime
+  grantedBy: int, relation(parent=staff_users, onDelete=cascade)  # Welcher Admin hat Permission vergeben
+  
+  # Zeitlich begrenzte Permissions (optional)
+  expiresAt: DateTime?
+  
+  # Status-Management
+  isActive: bool, default=true
+  
+  # Grund für Permission-Vergabe (für Audit)
+  reason: String?
+  
+  # Notizen zur Permission
+  notes: String?
+
+# Serverpod-Indices für Performance  
+indexes:
+  staff_permission_unique_idx:
+    fields: staffUserId, permissionId
+    unique: true  # Ein StaffUser kann eine Permission nur einmal haben
+  staff_user_permission_idx:
+    fields: staffUserId
+  permission_staff_idx:
+    fields: permissionId
+  active_staff_permissions_idx:
+    fields: isActive, expiresAt 

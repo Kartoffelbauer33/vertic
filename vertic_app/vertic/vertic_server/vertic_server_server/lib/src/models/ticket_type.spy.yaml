@@ -1,0 +1,24 @@
+class: TicketType
+table: ticket_types
+fields:
+  name: String
+  description: String
+  validityPeriod: int # in Tagen, 0 für punktbasierte Tickets
+  defaultPrice: double
+  isPointBased: bool # true für Punktekarten
+  defaultPoints: int? # für Punktekarten
+  isSubscription: bool # true für Abokarten
+  billingInterval: int? # für Abos, z.B. 30 für monatlich
+  # Gym-Zuordnung
+  gymId: int? # null = Vertic Universal, gesetzt = gym-spezifisch
+  isVerticUniversal: bool, default=false # true = gültig in allen Vertic-Hallen
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  ticket_type_name_unique_idx:
+    fields: name
+    unique: true
+  ticket_type_gym_idx:
+    fields: gymId
+  ticket_type_vertic_idx:
+    fields: isVerticUniversal 

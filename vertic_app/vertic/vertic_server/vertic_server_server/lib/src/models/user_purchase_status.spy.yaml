@@ -1,0 +1,19 @@
+class: UserPurchaseStatus
+table: user_purchase_statuses
+fields:
+  userId: int # Fremdschlüssel zum AppUser
+  ticketTypeId: int # Fremdschlüssel zum TicketType
+  lastPurchaseDate: DateTime # Wann das letzte Ticket dieses Typs gekauft wurde
+  isPrintingPending: bool # Ob ein Ticket zum Drucken bereitsteht
+  printJobId: String? # Optional: ID des Druckauftrags
+  printedAt: DateTime? # Wann gedruckt wurde
+  ticketCount: int # Anzahl der gekauften Tickets dieses Typs
+  canPurchaseAgain: bool # Ob weitere Käufe erlaubt sind (z.B. für Eltern)
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  user_purchase_user_type_idx:
+    fields: userId, ticketTypeId
+    unique: true # Ein User kann nur einen Status pro TicketType haben
+  user_purchase_pending_idx:
+    fields: isPrintingPending 

@@ -1,0 +1,8 @@
+class: HallInfo
+table: hall_info
+fields:
+  hallName: String
+  isVisible: bool
+  einzeltickets: TicketCategoryInfo
+  punktekarten: TicketCategoryInfo
+  zeitkarten: TicketCategoryInfo 

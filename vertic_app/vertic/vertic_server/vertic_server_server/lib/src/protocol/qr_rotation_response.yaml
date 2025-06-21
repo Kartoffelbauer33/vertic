@@ -1,0 +1,9 @@
+class: QrRotationResponse
+fields:
+  mode: String
+  intervalHours: int
+  requiresUsageForRotation: bool
+  maxUsageBeforeRotation: int?
+  lastModifiedBy: int?
+  lastModifiedAt: String?
+  availableModes: List<QrRotationModeInfo> 

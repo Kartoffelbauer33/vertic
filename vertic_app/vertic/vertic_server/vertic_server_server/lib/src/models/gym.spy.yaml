@@ -1,0 +1,23 @@
+class: Gym
+table: gyms
+fields:
+  name: String  # z.B. "Greifbar Bregenz"
+  shortCode: String  # z.B. "BRE", "FHA"
+  city: String
+  address: String?
+  description: String?
+  # ECHTE FACILITY-GYM-HIERARCHIE - KEINE HARDCODIERTEN NAMEN MEHR!
+  facilityId: int?  # FK zu Facility - NULL für Vertic Universal
+  isActive: bool, default=true
+  # Vertic-System: true = universelle Tickets, false = nur hallenspezifisch
+  isVerticLocation: bool, default=true
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  gym_short_code_unique_idx:
+    fields: shortCode
+    unique: true
+  gym_name_idx:
+    fields: name
+  gym_facility_idx:
+    fields: facilityId  # Index für Facility-Gym-Relation 

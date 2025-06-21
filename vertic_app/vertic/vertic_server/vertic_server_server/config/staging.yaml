@@ -1,0 +1,115 @@
+# VERTIC KASSENSYSTEM - STAGING ENVIRONMENT CONFIGURATION
+# Professional Serverpod configuration for Hetzner VPS deployment
+# Optimized for reliability, monitoring, and scalability
+
+####################################################################################
+# API SERVER CONFIGURATION
+####################################################################################
+apiServer:
+  port: 8080
+  publicHost: 159.69.144.208  # Hetzner VPS IP Address
+  publicPort: 8080
+  publicScheme: http          # HTTP for staging (HTTPS in production)
+
+####################################################################################
+# INSIGHTS SERVER CONFIGURATION (Monitoring & Analytics)
+####################################################################################
+insightsServer:
+  port: 8081
+  publicHost: 159.69.144.208
+  publicPort: 8081  
+  publicScheme: http
+
+####################################################################################
+# WEB SERVER CONFIGURATION (Admin Interface)
+####################################################################################
+webServer:
+  port: 8082
+  publicHost: 159.69.144.208
+  publicPort: 8082
+  publicScheme: http
+
+####################################################################################
+# DATABASE CONFIGURATION - PostgreSQL 16
+####################################################################################
+database:
+  host: postgres              # Docker container name
+  port: 5432
+  name: vertic                # Production database name  
+  user: postgres
+  password: ${POSTGRES_PASSWORD}  # ✅ SICHER: Environment Variable
+  requireSsl: false           # Local connection, SSL not required
+  timeoutInSeconds: 30
+  maxConnections: 25          # Optimized for CX21 server specs
+
+####################################################################################
+# REDIS CONFIGURATION (Optional - for session management)
+####################################################################################
+redis:
+  enabled: false              # Can be enabled when needed
+  host: host.docker.internal
+  port: 6379
+  # password: ${REDIS_PASSWORD}  # Environment variable in production
+
+####################################################################################
+# SESSION AND SECURITY CONFIGURATION
+####################################################################################
+sessionLogs:
+  persistentEnabled: true     # Store session logs in database
+  consoleEnabled: true        # Console output for debugging
+  
+# Request size limits (in bytes)
+maxRequestSize: 10485760      # 10MB for file uploads
+
+####################################################################################
+# FUTURE CALLS CONFIGURATION (Background Tasks)
+####################################################################################
+futureCallsEnabled: true
+futureCall:
+  concurrencyLimit: 3         # Optimized for server specs
+  scanInterval: 5000          # Check every 5 seconds
+
+####################################################################################
+# LOGGING CONFIGURATION
+####################################################################################
+logging:
+  level: info                 # info|debug|warning|error
+  logQueries: true           # Log database queries for debugging
+  logSlowQueries: true       # Log queries taking > 1000ms
+  logSlowQueryDuration: 1000 # Milliseconds
+
+####################################################################################
+# PERFORMANCE & SCALING CONFIGURATION
+####################################################################################
+performance:
+  isolates: 2                 # Number of isolates (2 for CX21)
+  maxConcurrentConnections: 100
+  requestTimeoutSeconds: 30
+
+####################################################################################
+# HEALTH CHECK CONFIGURATION
+####################################################################################
+healthCheck:
+  enabled: true
+  path: '/health'
+  includeDatabase: true
+  includeRedis: false
+
+####################################################################################
+# CORS CONFIGURATION (for Flutter Web clients)
+####################################################################################
+cors:
+  enabled: true
+  allowedOrigins:
+    - 'http://localhost:*'     # Flutter development
+    - 'http://159.69.144.208:*' # Staging access
+  allowedMethods:
+    - GET
+    - POST  
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowedHeaders:
+    - Content-Type
+    - Authorization
+    - X-Requested-With

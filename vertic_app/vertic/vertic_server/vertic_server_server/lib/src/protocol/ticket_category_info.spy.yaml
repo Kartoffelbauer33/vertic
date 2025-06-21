@@ -1,0 +1,7 @@
+class: TicketCategoryInfo
+table: ticket_category_info
+fields:
+  categoryName: String
+  isVisible: bool
+  ticketCount: int
+  tickets: List<TicketType> 

@@ -1,0 +1,20 @@
+# Request-Model für sicheres User-Update über API
+class: UserUpdateRequest
+fields:
+  # Basis-Daten die aktualisiert werden können
+  firstName: String?
+  lastName: String?
+  email: String?
+  parentEmail: String?
+  phoneNumber: String?
+  address: String?
+  city: String?
+  postalCode: String?
+  birthDate: DateTime?
+  
+  # Notiz für das Update (für Audit-Trail)
+  updateReason: String?
+  
+  # Staff-Informationen (wer macht das Update)
+  staffId: int?
+  staffName: String? 

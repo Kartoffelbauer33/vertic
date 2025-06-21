@@ -1,0 +1,23 @@
+class: UserStatusType
+table: user_status_types
+fields:
+  name: String
+  description: String
+  discountPercentage: double
+  fixedDiscountAmount: double? # Fixer Rabatt in Euro
+  requiresVerification: bool
+  requiresDocumentation: bool
+  validityPeriod: int # in Tagen, 0 für unbegrenzt
+  # Gym-Zuordnung
+  gymId: int? # null = Vertic Universal, gesetzt = gym-spezifisch
+  isVerticUniversal: bool, default=false # true = gültig in allen Vertic-Hallen
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  user_status_type_name_unique_idx:
+    fields: name
+    unique: true
+  user_status_type_gym_idx:
+    fields: gymId
+  user_status_type_vertic_idx:
+    fields: isVerticUniversal 

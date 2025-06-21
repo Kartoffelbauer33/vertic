@@ -1,0 +1,26 @@
+class: UserIdentity
+table: user_identities
+fields:
+  userId: int # Fremdschlüssel zum AppUser
+  qrCodeData: String # Der aktuell gültige QR-Code
+  qrCodeGenerated: DateTime # Wann der QR-Code generiert wurde
+  lastUsed: DateTime? # Wann der QR-Code zuletzt für Check-in verwendet wurde
+  usageCount: int # Wie oft verwendet (für Statistiken)
+  isActive: bool # Ob die Identität aktiv ist
+  # QR-Rotation Policy System
+  rotationPolicyId: int? # Fremdschlüssel zur QrRotationPolicy
+  nextRotationDue: DateTime? # Wann die nächste Rotation fällig ist
+  forceRotationAfterUsage: bool # Rotation nach nächster Nutzung erzwingen
+  # Für spätere Fingerabdruck-Implementierung:
+  unlockExpiry: DateTime? # 30-Sekunden-Fenster nach Entsperrung (zunächst nicht verwendet)
+  requiresUnlock: bool # Ob Entsperrung erforderlich ist (für Entwicklung auf false)
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  user_identity_user_idx:
+    fields: userId
+    unique: true # Ein User hat nur eine aktive Identität
+  user_identity_active_idx:
+    fields: isActive
+  user_identity_rotation_due_idx:
+    fields: nextRotationDue 

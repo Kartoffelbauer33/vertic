@@ -1,0 +1,19 @@
+class: SystemSetting
+table: system_settings
+fields:
+  settingKey: String # Eindeutiger Schlüssel (z.B. 'qr_rotation_policy')
+  settingValue: String # JSON-Wert der Einstellung
+  settingType: String # Typ: 'security', 'ui', 'general', etc.
+  description: String? # Beschreibung der Einstellung
+  isUserConfigurable: bool # Ob User diese Einstellung ändern können
+  isSuperAdminOnly: bool # Nur Super-Admin kann ändern
+  lastModifiedBy: int? # User-ID des letzten Bearbeiters
+  lastModifiedAt: DateTime?
+  createdAt: DateTime
+  updatedAt: DateTime?
+indexes:
+  system_setting_key_idx:
+    fields: settingKey
+    unique: true
+  system_setting_type_idx:
+    fields: settingType 

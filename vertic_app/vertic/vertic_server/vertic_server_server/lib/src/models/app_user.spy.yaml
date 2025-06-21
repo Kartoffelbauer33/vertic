@@ -1,0 +1,80 @@
+# AppUser-Klasse - NUR für Kunden/Besucher (keine Staff/Admin-Funktionen)
+class: AppUser
+table: app_users
+fields:
+  # 🆕 SERVERPOD AUTH INTEGRATION (Phase 3.1)
+  userInfoId: int?  # Verknüpfung zu serverpod_auth UserInfo-Tabelle
+
+  firstName: String
+  lastName: String
+  email: String?  # Email des Users (null nur bei Minderjährigen)
+  parentEmail: String?  # Email des Elternteils (nur bei Minderjährigen)
+  gender: String?
+  address: String?
+  city: String?
+  postalCode: String?
+  phoneNumber: String?
+  birthDate: DateTime?
+  primaryStatusId: int? # Fremdschlüssel zu UserStatus
+  
+  # PROFILBILD - Sicher in der Datenbank
+  profilePhoto: ByteData?        # Foto als ByteData (max 1MB)
+  photoUploadedAt: DateTime?     # Zeitstempel der Foto-Aufnahme
+  photoApprovedBy: int?          # Staff-ID der das Foto freigegeben hat
+  
+  # ERWEITERT: Account Status System (ersetzt email_verification_requests)
+  accountStatus: String, default='pending_verification'  # pending_verification, email_verified, manual_approved, blocked
+  verificationCode: String?         # Aktueller 6-stelliger Code
+  verificationCodeExpiry: DateTime? # Ablaufzeit des Codes
+  verificationAttempts: int, default=0  # Anzahl Versuche
+  passwordHash: String?             # DEPRECATED: Für Email-Auth (wird durch Serverpod Auth ersetzt)
+  
+  # Approval System für Kinder/Kasse
+  isManuallyApproved: bool, default=false    # Von Staff/Kasse freigegeben
+  approvedBy: int?                           # Staff-ID der den User freigegeben hat
+  approvedAt: DateTime?                      # Zeitpunkt der Freigabe
+  approvalReason: String?                    # Grund für manuelle Freigabe
+  
+  # Kinder-System (ERWEITERT)
+  isMinor: bool, default=false         # Unter 18 Jahre
+  requiresParentalConsent: bool, default=false  # Braucht Eltern-Zustimmung
+  parentNotified: bool, default=false  # Parent wurde über Registrierung informiert
+  parentApproved: bool, default=false  # Parent hat Registrierung genehmigt
+  
+  # Sperrung (erweitert)
+  isBlocked: bool, default=false       # Ob der User gesperrt ist (kann keine Tickets kaufen)
+  blockedReason: String?               # Grund für die Sperrung
+  blockedAt: DateTime?                 # Zeitpunkt der Sperrung
+  
+  # Legacy-Felder (für Migration behalten)
+  isEmailVerified: bool, default=false  # DEPRECATED: Use accountStatus instead
+  
+  # Timestamps
+  createdAt: DateTime
+  updatedAt: DateTime?
+  lastLoginAt: DateTime?
+  
+indexes:
+  app_user_email_idx:
+    fields: email
+  app_user_parent_email_idx:
+    fields: parentEmail
+  app_user_userinfo_idx:          # 🆕 Index für Serverpod Auth Integration
+    fields: userInfoId
+    unique: true
+  app_user_status_idx:
+    fields: accountStatus
+  app_user_verification_code_idx:
+    fields: verificationCode
+  app_user_blocked_idx:
+    fields: isBlocked
+  app_user_manual_approval_idx:
+    fields: isManuallyApproved
+  app_user_minor_idx:
+    fields: isMinor
+  app_user_created_idx:
+    fields: createdAt
+  app_user_primary_status_idx:
+    fields: primaryStatusId
+  app_user_photo_idx:
+    fields: photoUploadedAt 

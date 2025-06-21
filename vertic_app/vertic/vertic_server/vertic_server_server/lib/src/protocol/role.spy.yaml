@@ -1,0 +1,31 @@
+class: Role
+table: roles
+fields:
+  # Rollen-Identifikation
+  name: String
+  displayName: String
+  description: String?
+  
+  # UI-Eigenschaften
+  color: String?      # Hex-Color für UI (z.B. #FF5722 für "Manager")
+  iconName: String?   # Icon für UI-Darstellung
+  
+  # Rollen-Management
+  isSystemRole: bool, default=false  # System-Rollen können nicht gelöscht werden
+  isActive: bool, default=true
+  
+  # Sortierung in UI
+  sortOrder: int, default=0
+  
+  # Audit-Trail
+  createdAt: DateTime
+  updatedAt: DateTime?
+  createdBy: int, relation(parent=staff_users, onDelete=cascade)
+
+# Serverpod-Indices für Performance
+indexes:
+  role_name_unique_idx:
+    fields: name
+    unique: true
+  role_active_sort_idx:
+    fields: isActive, sortOrder 

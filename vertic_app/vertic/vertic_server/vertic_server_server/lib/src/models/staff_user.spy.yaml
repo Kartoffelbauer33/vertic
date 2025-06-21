@@ -1,0 +1,100 @@
+# Dedicated Staff-User Tabelle - getrennt von normalen Kunden/AppUsers
+class: StaffUser
+table: staff_users
+fields:
+  # 🆕 SERVERPOD AUTH INTEGRATION (Phase 3.1)
+  userInfoId: int?  # Verknüpfung zu serverpod_auth UserInfo-Tabelle
+  
+  # Basis-Informationen
+  firstName: String
+  lastName: String
+  email: String                    # Eindeutige E-Mail für Staff-Login
+  phoneNumber: String?
+  
+  # Staff-spezifische HR-Daten
+  employeeId: String?              # Personalausweisnummer / Mitarbeiternummer
+  socialSecurityNumber: String?    # Sozialversicherungsnummer (verschlüsselt)
+  birthDate: DateTime?
+  
+  # Arbeitsvertrag & HR
+  contractType: String?            # "fulltime", "parttime", "temporary", "freelance"
+  hourlyRate: double?              # Stundenlohn in Euro
+  monthlySalary: double?           # Monatslohn in Euro (alternativ zu hourlyRate)
+  contractStartDate: DateTime?
+  contractEndDate: DateTime?       # null = unbefristet
+  
+  # Arbeitszeit & Schichten
+  workingHours: int?               # Wochenstunden (z.B. 40)
+  shiftModel: String?              # "flexible", "fixed", "rotating"
+  availabilityData: String?        # JSON mit Verfügbarkeiten
+  
+  # Qualifikationen & Zertifikate
+  qualifications: String?          # JSON Array mit Qualifikationen
+  certifications: String?          # JSON Array mit Zertifikaten (z.B. Erste Hilfe)
+  languages: String?               # JSON Array mit Sprachen
+  
+  # Bank & Gehalt
+  bankIban: String?                # IBAN für Gehaltsüberweisung (verschlüsselt)
+  bankBic: String?                 # BIC
+  bankAccountHolder: String?       # Name des Kontoinhabers
+  taxId: String?                   # Steuer-ID (verschlüsselt)
+  taxClass: String?                # Steuerklasse (1-6)
+  
+  # Adresse & Kontakt
+  address: String?
+  city: String?
+  postalCode: String?
+  emergencyContact: String?        # Notfallkontakt (JSON)
+  
+  # Staff-Hierarchie & Berechtigungen (ersetzt AppUser flags)
+  staffLevel: StaffUserType        # staff, hallAdmin, facilityAdmin, superUser
+  departmentId: int?               # Abteilung (Kasse, Reinigung, etc.)
+  hallId: int?                     # Zugeordnete Halle (kann null sein)
+  facilityId: int?                 # Zugeordnete Facility (kann null sein)
+  
+  # Zugang & Sicherheit (wird durch Serverpod Auth ersetzt in Phase 3.1)
+  passwordHash: String?            # DEPRECATED: Passwort-Hash für Login
+  lastLoginAt: DateTime?
+  loginAttempts: int, default=0    # Fehlgeschlagene Login-Versuche
+  isAccountLocked: bool, default=false
+  lockoutUntil: DateTime?          # Account gesperrt bis
+  
+  # Status & Aktivität
+  employmentStatus: String, default='active'  # active, on_leave, terminated, suspended
+  terminationDate: DateTime?       # Kündigungsdatum
+  terminationReason: String?       # Kündigungsgrund
+  
+  # System & Audit
+  createdBy: int?                  # Wer hat den Staff-User angelegt
+  createdAt: DateTime
+  updatedAt: DateTime?
+  updatedBy: int?                  # Wer hat zuletzt bearbeitet
+  
+  # Notizen & Dokumentation
+  notes: String?                   # Interne HR-Notizen
+  documentsJson: String?           # JSON mit Dokumenten-Referenzen
+  
+indexes:
+  staff_user_email_idx:
+    fields: email
+    unique: true
+  staff_user_employee_id_idx:
+    fields: employeeId
+    unique: true
+  staff_user_userinfo_idx:          # 🆕 Index für Serverpod Auth Integration
+    fields: userInfoId
+    unique: true
+  staff_user_level_idx:
+    fields: staffLevel
+  staff_user_department_idx:
+    fields: departmentId
+  staff_user_hall_idx:
+    fields: hallId
+  staff_user_facility_idx:
+    fields: facilityId
+  staff_user_status_idx:
+    fields: employmentStatus
+  staff_user_created_idx:
+    fields: createdAt
+  staff_user_login_idx:
+    fields: lastLoginAt 

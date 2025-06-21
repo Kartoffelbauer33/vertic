@@ -1,0 +1,21 @@
+class: PermissionStatsResponse
+fields:
+  totalPermissions: int
+  totalRoles: int
+  totalStaffPermissions: int
+  totalRolePermissions: int
+  totalStaffRoles: int
+  
+  # Kategorien-Aufschlüsselung (vereinfacht für Serverpod 2.8)
+  userManagementCount: int, default=0
+  ticketManagementCount: int, default=0
+  staffManagementCount: int, default=0
+  facilityManagementCount: int, default=0
+  systemManagementCount: int, default=0
+  reportsAnalyticsCount: int, default=0
+  documentManagementCount: int, default=0
+  billingManagementCount: int, default=0
+  printerManagementCount: int, default=0
+  auditMonitoringCount: int, default=0
+  
+  timestamp: String 

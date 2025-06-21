@@ -1,0 +1,141 @@
+{
+  "actions": [
+    {
+      "type": "alterTable",
+      "alterTable": {
+        "name": "app_users",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [
+          "isStaff",
+          "isHallAdmin",
+          "isFacilityAdmin",
+          "isSuperUser",
+          "hallId",
+          "facilityId"
+        ],
+        "modifyColumns": [],
+        "addIndexes": [],
+        "deleteIndexes": [
+          "app_user_hall_idx",
+          "app_user_facility_idx"
+        ],
+        "addForeignKeys": [],
+        "deleteForeignKeys": [],
+        "warnings": [
+          {
+            "type": "columnDropped",
+            "message": "Column \"isStaff\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "isStaff"
+            ],
+            "destrucive": true
+          },
+          {
+            "type": "columnDropped",
+            "message": "Column \"isHallAdmin\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "isHallAdmin"
+            ],
+            "destrucive": true
+          },
+          {
+            "type": "columnDropped",
+            "message": "Column \"isFacilityAdmin\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "isFacilityAdmin"
+            ],
+            "destrucive": true
+          },
+          {
+            "type": "columnDropped",
+            "message": "Column \"isSuperUser\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "isSuperUser"
+            ],
+            "destrucive": true
+          },
+          {
+            "type": "columnDropped",
+            "message": "Column \"hallId\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "hallId"
+            ],
+            "destrucive": true
+          },
+          {
+            "type": "columnDropped",
+            "message": "Column \"facilityId\" of table \"app_users\" will be dropped.",
+            "table": "app_users",
+            "columns": [
+              "facilityId"
+            ],
+            "destrucive": true
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "type": "columnDropped",
+      "message": "Column \"isStaff\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "isStaff"
+      ],
+      "destrucive": true
+    },
+    {
+      "type": "columnDropped",
+      "message": "Column \"isHallAdmin\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "isHallAdmin"
+      ],
+      "destrucive": true
+    },
+    {
+      "type": "columnDropped",
+      "message": "Column \"isFacilityAdmin\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "isFacilityAdmin"
+      ],
+      "destrucive": true
+    },
+    {
+      "type": "columnDropped",
+      "message": "Column \"isSuperUser\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "isSuperUser"
+      ],
+      "destrucive": true
+    },
+    {
+      "type": "columnDropped",
+      "message": "Column \"hallId\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "hallId"
+      ],
+      "destrucive": true
+    },
+    {
+      "type": "columnDropped",
+      "message": "Column \"facilityId\" of table \"app_users\" will be dropped.",
+      "table": "app_users",
+      "columns": [
+        "facilityId"
+      ],
+      "destrucive": true
+    }
+  ],
+  "migrationApiVersion": 1
+}

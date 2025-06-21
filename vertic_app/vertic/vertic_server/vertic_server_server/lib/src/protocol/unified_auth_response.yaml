@@ -1,0 +1,12 @@
+class: UnifiedAuthResponse
+fields:
+  success:
+    type: bool
+  message:
+    type: String
+  staffUser:
+    type: StaffUser?
+  userInfoId:
+    type: int?
+  staffToken:
+    type: String? 

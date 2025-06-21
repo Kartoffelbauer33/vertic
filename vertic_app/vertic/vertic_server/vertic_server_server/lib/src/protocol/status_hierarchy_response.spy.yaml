@@ -1,0 +1,13 @@
+class: StatusHierarchyResponse
+table: status_hierarchy_response
+fields:
+  success: bool
+  totalStatusTypes: int
+  totalGyms: int
+  totalFacilities: int
+  universalStatusCount: int
+  # Simple JSON String statt komplexer Maps
+  facilitiesJson: String?
+  statusTypesJson: String?
+  gymsJson: String?
+  error: String? 

@@ -1,0 +1,37 @@
+class: UpdateStaffUserRequest
+fields:
+  # Basis-Informationen
+  firstName:
+    type: String?
+  lastName: 
+    type: String?
+  email:
+    type: String?
+  phoneNumber:
+    type: String?
+  
+  # Staff-Hierarchie
+  staffLevel:
+    type: StaffUserType?
+  hallId:
+    type: int?
+  facilityId:
+    type: int?
+  departmentId:
+    type: int?
+  
+  # HR-Informationen
+  employeeId:
+    type: String?
+  contractType:
+    type: String?
+  hourlyRate:
+    type: double?
+  monthlySalary:
+    type: double?
+  workingHours:
+    type: int?
+  
+  # Status
+  employmentStatus:
+    type: String? 

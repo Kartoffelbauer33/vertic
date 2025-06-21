@@ -1,0 +1,5 @@
+# lib/src/protocol/permission_cache_item.spy.yaml
+class: PermissionCacheItem
+serverOnly: true
+fields:
+  permissionNames: List<String> 

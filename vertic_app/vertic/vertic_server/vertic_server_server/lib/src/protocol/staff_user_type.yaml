@@ -1,0 +1,6 @@
+enum: StaffUserType
+values:
+  - staff
+  - hallAdmin  
+  - facilityAdmin
+  - superUser 

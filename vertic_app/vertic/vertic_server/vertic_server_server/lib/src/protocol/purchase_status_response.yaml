@@ -1,0 +1,9 @@
+class: PurchaseStatusResponse
+table: purchase_status_response
+fields:
+  hasPurchased: bool
+  canPurchaseAgain: bool
+  isPrintingPending: bool
+  lastPurchaseDate: DateTime?
+  ticketId: int?
+  qrCodeData: String? 

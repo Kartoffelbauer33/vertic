@@ -1,0 +1,11 @@
+class: ClientDocumentAgreement
+table: client_document_agreements
+fields:
+  clientId: int # Foreign key to AppUser (client)
+  documentId: int # Foreign key to RegistrationDocument
+  agreedAt: DateTime
+  ipAddress: String? # For legal compliance
+  userAgent: String? # Browser/app info
+  documentVersion: String? # To track document changes over time
+  isRevoked: bool # If agreement was later revoked
+  revokedAt: DateTime? 

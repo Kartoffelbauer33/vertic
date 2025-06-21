@@ -1,0 +1,14 @@
+class: RegistrationDocument
+table: registration_documents
+fields:
+  title: String
+  description: String?
+  documentType: String # datenschutz, hallenrichtlinien, hausordnung, etc.
+  pdfData: ByteData # PDF file content stored in database
+  fileName: String
+  fileSize: int
+  uploadedByStaffId: int? # Staff member who uploaded
+  isActive: bool
+  sortOrder: int # For ordering in display
+  createdAt: DateTime
+  updatedAt: DateTime? 

@@ -1,0 +1,48 @@
+# UserNote-System für CRM-Dokumentation und interne Notizen
+class: UserNote
+table: user_notes
+fields:
+  userId: int            # Fremdschlüssel zu app_users
+  noteType: String       # general, important, warning, positive, complaint, system
+  content: String        # Der Notiz-Inhalt (max 2000 Zeichen)
+  isInternal: bool, default=true  # Interne Notiz (nicht für User sichtbar)
+  priority: String, default='normal'  # low, normal, high, urgent
+  
+  # Staff-Informationen
+  createdByStaffId: int?  # Welcher Staff-User die Notiz erstellt hat
+  createdByName: String?  # Name des Staff-Users (für bessere Nachverfolgung)
+  
+  # Status und Kategorisierung
+  status: String, default='active'  # active, archived, resolved
+  tags: String?           # Komma-getrennte Tags für bessere Kategorisierung
+  
+  # Verknüpfungen zu anderen Entities
+  relatedTicketId: int?   # Optional: Bezug zu einem Ticket
+  relatedStatusId: int?   # Optional: Bezug zu einem UserStatus
+  
+  # Automatische System-Informationen
+  ipAddress: String?      # IP-Adresse für Audit-Trail
+  userAgent: String?      # Browser/App-Info für System-Notizen
+  
+  # Timestamps
+  createdAt: DateTime
+  updatedAt: DateTime?
+  resolvedAt: DateTime?   # Wann wurde das Problem/die Notiz abgeschlossen
+  
+indexes:
+  user_note_user_idx:
+    fields: userId
+  user_note_staff_idx:
+    fields: createdByStaffId
+  user_note_type_idx:
+    fields: noteType
+  user_note_priority_idx:
+    fields: priority
+  user_note_status_idx:
+    fields: status
+  user_note_created_idx:
+    fields: createdAt
+  user_note_ticket_idx:
+    fields: relatedTicketId
+  user_note_user_status_idx:
+    fields: relatedStatusId 

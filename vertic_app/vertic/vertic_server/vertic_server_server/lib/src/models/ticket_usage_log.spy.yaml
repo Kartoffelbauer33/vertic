@@ -1,0 +1,14 @@
+class: TicketUsageLog
+table: ticket_usage_log
+fields:
+  ticketId: int
+  usageDate: DateTime
+  pointsUsed: int # Standardmäßig 1
+  facilityId: int? # Optional - Einrichtungs-ID
+  staffId: int? # Mitarbeiter, der die Verwendung registriert hat
+  createdAt: DateTime
+indexes:
+  ticket_usage_ticket_idx:
+    fields: ticketId
+  ticket_usage_date_idx:
+    fields: usageDate 

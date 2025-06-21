@@ -1,0 +1,14 @@
+name: test_server_client
+description: Vertic Kassensystem - Serverpod Client SDK
+version: 1.0.0
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  serverpod_client: 2.8.0
+  serverpod_auth_client: 2.8.0
+  crypto: ^3.0.3
+
+dev_dependencies:
+  lints: '>=3.0.0 <6.0.0'

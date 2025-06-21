@@ -1,0 +1,6 @@
+class: HierarchicalTicketResponse
+table: hierarchical_ticket_response
+fields:
+  vertic: HallInfo
+  bregenz: HallInfo
+  friedrichshafen: HallInfo 

@@ -1,0 +1,15 @@
+class: RbacStatusResponse
+fields:
+  # Berechtigungsstatistiken
+  totalPermissions: int
+  systemPermissions: int?
+  
+  # Rollenstatistiken  
+  totalRoles: int
+  systemRoles: int?
+  
+  # Benutzer-Rollenzuweisungen
+  totalUserRoles: int
+  
+  # Initialisierungsstatus
+  isInitialized: bool 

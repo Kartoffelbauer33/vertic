@@ -1,0 +1,20 @@
+class: RolePermission
+table: role_permissions
+fields:
+  # Many-to-Many Verknüpfung
+  roleId: int, relation(parent=roles, onDelete=cascade)
+  permissionId: int, relation(parent=permissions, onDelete=cascade)
+  
+  # Audit-Trail
+  assignedAt: DateTime
+  assignedBy: int, relation(parent=staff_users, onDelete=cascade)
+
+# Serverpod-Indices für Performance
+indexes:
+  role_permission_unique_idx:
+    fields: roleId, permissionId
+    unique: true  # Eine Rolle kann eine Permission nur einmal haben
+  role_permissions_idx:
+    fields: roleId
+  permission_roles_idx:
+    fields: permissionId 

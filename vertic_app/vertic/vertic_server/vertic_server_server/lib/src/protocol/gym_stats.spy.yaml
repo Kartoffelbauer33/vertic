@@ -1,0 +1,11 @@
+class: GymStats
+fields:
+  gymId: int?
+  gymName: String
+  shortCode: String
+  city: String
+  isActive: bool
+  ticketCount: int
+  einzeltickets: int
+  punktekarten: int
+  zeitkarten: int 

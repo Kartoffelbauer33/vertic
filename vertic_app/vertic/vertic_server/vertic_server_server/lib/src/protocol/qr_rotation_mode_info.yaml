@@ -1,0 +1,5 @@
+class: QrRotationModeInfo
+fields:
+  id: String
+  name: String
+  description: String 

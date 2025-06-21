@@ -1,0 +1,146 @@
+# 🔐 VERTIC PROJECT - MASTER .GITIGNORE
+# ==========================================
+# Covers: Flutter Apps, Serverpod Server, Database, Development, Production
+
+# ========================================
+# 🎯 DART & FLUTTER
+# ========================================
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/pubspec.lock
+**/doc/api/
+**/*.g.dart
+
+# Flutter Build Artifacts
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/flutter_assets/
+**/ios/Flutter/Flutter.framework/
+**/ios/Flutter/App.framework/
+**/linux/flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/windows/flutter/ephemeral/
+
+# ========================================
+# 🖥️ SERVERPOD SERVER
+# ========================================
+**/generated/
+**/.serverpod/
+**/migrations/*.sql
+**/config/passwords.yaml
+**/config/firebase_service_account_key.json
+
+# ========================================
+# 🗄️ DATABASE & LOGS
+# ========================================
+**/*.db
+**/*.sqlite
+**/*.log
+**/logs/
+**/docker-data/
+**/postgres-data/
+**/redis-data/
+
+# ========================================
+# 🔑 SECURITY & ENVIRONMENT
+# ========================================
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.test
+**/passwords.yaml
+**/secrets/
+**/deployment/aws/secrets/
+**/deployment/gcp/secrets/
+**/deployment/docker/secrets/
+
+# ========================================
+# 💻 IDE & DEVELOPMENT TOOLS
+# ========================================
+**/.idea/
+**/.vscode/
+**/.cursor/
+**/*.iml
+**/*.ipr
+**/*.iws
+**/.DS_Store
+**/Thumbs.db
+**/.atom/
+**/.buildlog/
+**/.history
+**/.svn/
+**/migrate_working_dir/
+
+# ========================================
+# 📱 MOBILE PLATFORM SPECIFIC
+# ========================================
+# iOS
+**/ios/Flutter/.last_build_id
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# Android
+**/android/.gradle/
+**/android/captures/
+**/android/gradle.properties
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+
+# ========================================
+# 🔧 BUILD & DEPLOYMENT
+# ========================================
+**/app.*.symbols
+**/app.*.map.json
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+
+# ========================================
+# 📝 DEVELOPMENT FILES
+# ========================================
+**/*.backup
+**/*.bak
+**/*.tmp
+**/PRIVATE_NOTES.md
+**/TODO_PRIVATE.md
+**/test_*.dart
+**/debug_*.dart
+
+# ========================================
+# 🧹 SYSTEM FILES
+# ========================================
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+Thumbs.db
+ehthumbs.db
+._*
+.Spotlight-V100
+.Trashes
+
+# ========================================
+# 🎯 PROJECT SPECIFIC EXCLUSIONS
+# ========================================
+# Datenbankentwurf (wie in .cursorignore)
+**/Datenbankentwurf/
+
+# Generated Client Protocol
+**/vertic_server_client/lib/src/protocol/
+
+# Test Files (aber NICHT migrations - die brauchen wir für Production!)
+**/test/
+# MIGRATIONS SIND WICHTIG FÜR PRODUCTION - NICHT IGNORIEREN!
+# **/migrations/ 

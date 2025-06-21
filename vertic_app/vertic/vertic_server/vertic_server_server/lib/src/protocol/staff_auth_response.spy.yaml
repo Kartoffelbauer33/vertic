@@ -1,0 +1,5 @@
+class: StaffAuthResponse
+fields:
+  success: bool
+  token: String?
+  user: StaffUser? 

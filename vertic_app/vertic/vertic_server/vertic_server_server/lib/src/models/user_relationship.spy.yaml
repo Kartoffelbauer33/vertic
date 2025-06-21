@@ -1,0 +1,33 @@
+# Parent-Child-Beziehungen zwischen Usern
+class: UserRelationship
+table: user_relationships
+fields:
+  parentUserId: int     # User-ID des Elternteils
+  childUserId: int      # User-ID des Kindes
+  relationshipType: String, default='parent'  # 'parent', 'guardian', 'legal_representative'
+  
+  # Berechtigungen
+  canPurchaseTickets: bool, default=true     # Kann Tickets kaufen
+  canCancelSubscriptions: bool, default=true # Kann Abos kündigen
+  canManagePayments: bool, default=true      # Kann Zahlungsmethoden verwalten
+  canViewHistory: bool, default=true         # Kann Kaufhistorie einsehen
+  
+  # Admin-Felder
+  isActive: bool, default=true
+  approvedBy: int?      # Staff-ID der die Beziehung genehmigte
+  approvedAt: DateTime?
+  approvalReason: String?
+  
+  createdAt: DateTime
+  updatedAt: DateTime?
+
+indexes:
+  user_rel_parent_idx:
+    fields: parentUserId
+  user_rel_child_idx:
+    fields: childUserId
+  user_rel_parent_child_unique_idx:
+    fields: parentUserId, childUserId
+    unique: true
+  user_rel_active_idx:
+    fields: isActive 
