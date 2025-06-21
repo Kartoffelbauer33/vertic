@@ -693,10 +693,10 @@ class TicketEndpoint extends Endpoint {
     }
 
     final hasPermission = await PermissionHelper.hasPermission(
-        session, authUserId, 'can_view_all_tickets');
+        session, authUserId, 'can_view_tickets');
     if (!hasPermission) {
       session.log(
-          '❌ Fehlende Berechtigung: can_view_all_tickets (User: $authUserId)',
+          '❌ Fehlende Berechtigung: can_view_tickets (User: $authUserId)',
           level: LogLevel.warning);
       throw Exception('Keine Berechtigung zum Einsehen aller Tickets');
     }

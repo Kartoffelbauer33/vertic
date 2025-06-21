@@ -20,10 +20,9 @@ class StaffUserManagementEndpoint extends Endpoint {
     }
 
     final hasPermission = await PermissionHelper.hasPermission(
-        session, authUserId, 'can_view_staff_users');
+        session, authUserId, 'can_view_staff');
     if (!hasPermission) {
-      session.log(
-          '❌ Fehlende Berechtigung: can_view_staff_users (User: $authUserId)',
+      session.log('❌ Fehlende Berechtigung: can_view_staff (User: $authUserId)',
           level: LogLevel.warning);
       return [];
     }
@@ -61,10 +60,10 @@ class StaffUserManagementEndpoint extends Endpoint {
     }
 
     final hasPermission = await PermissionHelper.hasPermission(
-        session, authUserId, 'can_create_staff_users');
+        session, authUserId, 'can_create_staff');
     if (!hasPermission) {
       session.log(
-          '❌ Fehlende Berechtigung: can_create_staff_users (User: $authUserId)',
+          '❌ Fehlende Berechtigung: can_create_staff (User: $authUserId)',
           level: LogLevel.warning);
       throw Exception('Keine Berechtigung zum Erstellen von Staff-Benutzern');
     }
@@ -136,10 +135,9 @@ class StaffUserManagementEndpoint extends Endpoint {
     }
 
     final hasPermission = await PermissionHelper.hasPermission(
-        session, authUserId, 'can_edit_staff_users');
+        session, authUserId, 'can_edit_staff');
     if (!hasPermission) {
-      session.log(
-          '❌ Fehlende Berechtigung: can_edit_staff_users (User: $authUserId)',
+      session.log('❌ Fehlende Berechtigung: can_edit_staff (User: $authUserId)',
           level: LogLevel.warning);
       throw Exception('Keine Berechtigung zum Bearbeiten von Staff-Benutzern');
     }
@@ -213,10 +211,10 @@ class StaffUserManagementEndpoint extends Endpoint {
     }
 
     final hasPermission = await PermissionHelper.hasPermission(
-        session, authUserId, 'can_delete_staff_users');
+        session, authUserId, 'can_delete_staff');
     if (!hasPermission) {
       session.log(
-          '❌ Fehlende Berechtigung: can_delete_staff_users (User: $authUserId)',
+          '❌ Fehlende Berechtigung: can_delete_staff (User: $authUserId)',
           level: LogLevel.warning);
       throw Exception('Keine Berechtigung zum Löschen von Staff-Benutzern');
     }
