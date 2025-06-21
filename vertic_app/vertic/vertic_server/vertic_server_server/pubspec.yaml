@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   serverpod: 2.8.0
+  serverpod_postgres: 2.8.0
   serverpod_auth_server: 2.8.0
   crypto: ^3.0.3
   bcrypt: ^1.1.3

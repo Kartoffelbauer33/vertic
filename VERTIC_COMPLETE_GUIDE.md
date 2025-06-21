@@ -498,4 +498,61 @@ pg_dump vertic > backup_$(date +%Y%m%d).sql
 
 Das ist ein **professionelles, skalierbares und sicheres System** mit dem ihr dauerhaft arbeiten könnt. Alle Best Practices sind implementiert!
 
-**Bei Problemen:** Diese Anleitung durchgehen oder direkt auf Server debuggen! 
+**Bei Problemen:** Diese Anleitung durchgehen oder direkt auf Server debuggen!
+
+## **🚨 KRITISCHE PROBLEME BEHOBEN:**
+
+### **✅ PROBLEM: NUR 36 STATT 53 PERMISSIONS**
+**Ursache:** Die SQL-Setup-Datei hatte nur 36 Permissions, aber der Code erwartet 53!
+
+**Fehlende Permissions waren:**
+- `can_view_staff_users`, `can_create_staff_users`, `can_edit_staff_users`, `can_delete_staff_users`
+- `can_view_all_tickets` (für Statistik)
+- `can_view_user_profiles`, `can_edit_user_profiles`, `can_view_user_notes`
+- `can_view_status_types`, `can_create_status_types`, etc.
+- Gym Management Permissions
+
+**Lösung:** SQL-Datei auf 53 Permissions erweitert.
+
+### **✅ PROBLEM: E-MAIL BESTÄTIGUNGSCODES**
+**Lösung 1:** Development-Bypass mit automatischem Code `123456`
+- Client App füllt automatisch `123456` ein wenn `USE_STAGING=true`
+- Server akzeptiert `123456` als gültigen Code
+- Orange Snackbar zeigt "DEVELOPMENT: Code automatisch eingefügt"
+
+**Lösung 2:** Server-Logs und Datei
+- Codes werden in Server-Logs ausgegeben: `📧 VALIDIERUNGSCODE für Client-App email: CODE`
+- Zusätzlich in `/tmp/vertic_email_codes.txt` auf Server gespeichert
+
+## **🔧 SOFORTIGE MASSNAHMEN:**
+
+### **1. 🗃️ NEUE PERMISSIONS INSTALLIEREN:**
+```sql
+-- Führe diese SQL auf dem Server aus:
+-- http://159.69.144.208/pgadmin4
+-- Database: test_db
+
+-- Lösche alte Permissions
+DELETE FROM staff_user_permissions;
+DELETE FROM role_permissions;
+DELETE FROM permissions;
+
+-- Führe die komplette vertic_app/vertic/SQL/01_CLEAN_SETUP.sql aus
+-- Dies erstellt alle 53 Permissions neu
+```
+
+### **2. 📱 APPS NEU STARTEN:**
+```bash
+# Client App mit Development-Bypass:
+cd vertic_app/vertic/vertic_project/vertic_client_app
+flutter run -d windows --dart-define=USE_STAGING=true
+
+# Staff App mit 53 Permissions:
+cd vertic_app/vertic/vertic_project/vertic_staff_app  
+flutter run -d windows --dart-define=USE_STAGING=true
+```
+
+### **3. 🎯 ERWARTETE ERGEBNISSE:**
+- **Staff App:** 53 Permissions statt 36 → Admin Tab und Statistik funktionieren
+- **Client App:** Code `123456` wird automatisch eingefügt
+- **Beide Apps:** Vollständige Funktionalität ohne Fehler 
