@@ -354,6 +354,21 @@ class _RegistrationPageState extends State<RegistrationPage> {
       }
 
       debugPrint('✅ Bestätigungscode gesendet an: $email');
+
+      // 🚀 DEVELOPMENT: Auto-fill Code in Staging
+      const useStaging = String.fromEnvironment('USE_STAGING') == 'true';
+      if (useStaging) {
+        debugPrint('🔧 DEVELOPMENT: Auto-fill mit Standard-Code 123456');
+        _validationCodeController.text = '123456';
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('🔧 DEVELOPMENT: Code automatisch eingefügt (123456)'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('💥 Fehler beim E-Mail-Versand: $e');
       setState(() {

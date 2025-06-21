@@ -31,7 +31,7 @@ DELETE FROM app_users;
 DELETE FROM user_identities;
 
 -- ========================================
--- 2. 🔐 RBAC SYSTEM - KOMPLETTE INITIALISIERUNG
+-- 2. 🔐 RBAC SYSTEM - KOMPLETTE INITIALISIERUNG (53 PERMISSIONS)
 -- ========================================
 
 -- Erstelle alle wichtigsten Permissions
@@ -44,16 +44,30 @@ INSERT INTO permissions (name, "displayName", description, category, "isSystemCr
 ('can_view_user_details', 'Benutzerdetails anzeigen', 'Kann detaillierte Benutzerinformationen anzeigen', 'user_management', false, 'info', NOW()),
 ('can_reset_user_passwords', 'Passwörter zurücksetzen', 'Kann Benutzerpasswörter zurücksetzen', 'user_management', true, 'lock_reset', NOW()),
 ('can_manage_user_permissions', 'Benutzerberechtigungen verwalten', 'Kann Benutzerberechtigungen verwalten', 'user_management', true, 'security', NOW()),
+('can_block_users', 'Benutzer sperren', 'Kann Benutzer sperren', 'user_management', true, 'block', NOW()),
+('can_unblock_users', 'Benutzer entsperren', 'Kann Benutzer entsperren', 'user_management', true, 'check_circle', NOW()),
+('can_view_user_profiles', 'Benutzerprofile anzeigen', 'Kann Benutzerprofile anzeigen', 'user_management', false, 'account_circle', NOW()),
+('can_edit_user_profiles', 'Benutzerprofile bearbeiten', 'Kann Benutzerprofile bearbeiten', 'user_management', true, 'edit', NOW()),
+('can_view_user_notes', 'Benutzernotizen anzeigen', 'Kann Benutzernotizen anzeigen', 'user_management', false, 'note', NOW()),
+('can_create_user_notes', 'Benutzernotizen erstellen', 'Kann Benutzernotizen erstellen', 'user_management', false, 'note_add', NOW()),
+('can_edit_user_notes', 'Benutzernotizen bearbeiten', 'Kann Benutzernotizen bearbeiten', 'user_management', false, 'edit_note', NOW()),
 
--- 🔹 Staff Management (Essential)
+-- 🔹 Staff Management (Essential) - BEIDE VARIANTEN!
 ('can_view_staff', 'Mitarbeiter anzeigen', 'Kann Mitarbeiter anzeigen', 'staff_management', true, 'badge', NOW()),
+('can_view_staff_users', 'Staff-User anzeigen', 'Kann Staff-User anzeigen', 'staff_management', true, 'badge', NOW()),
 ('can_create_staff', 'Mitarbeiter erstellen', 'Kann neue Mitarbeiter erstellen', 'staff_management', true, 'person_add_alt', NOW()),
+('can_create_staff_users', 'Staff-User erstellen', 'Kann neue Staff-User erstellen', 'staff_management', true, 'person_add_alt', NOW()),
 ('can_edit_staff', 'Mitarbeiter bearbeiten', 'Kann Mitarbeiter bearbeiten', 'staff_management', true, 'edit', NOW()),
+('can_edit_staff_users', 'Staff-User bearbeiten', 'Kann Staff-User bearbeiten', 'staff_management', true, 'edit', NOW()),
 ('can_delete_staff', 'Mitarbeiter löschen', 'Kann Mitarbeiter löschen', 'staff_management', true, 'person_remove', NOW()),
+('can_delete_staff_users', 'Staff-User löschen', 'Kann Staff-User löschen', 'staff_management', true, 'person_remove', NOW()),
 ('can_manage_staff_roles', 'Mitarbeiterrollen verwalten', 'Kann Mitarbeiterrollen verwalten', 'staff_management', true, 'admin_panel_settings', NOW()),
+('can_view_staff_permissions', 'Staff-Permissions anzeigen', 'Kann Staff-Permissions anzeigen', 'staff_management', false, 'security', NOW()),
+('can_view_staff_schedules', 'Dienstpläne anzeigen', 'Kann Dienstpläne anzeigen', 'staff_management', false, 'schedule', NOW()),
 
--- 🔹 Ticket Management (Essential)
+-- 🔹 Ticket Management (Essential) - ERWEITERT!
 ('can_view_tickets', 'Tickets anzeigen', 'Kann Tickets anzeigen', 'ticket_management', true, 'confirmation_number', NOW()),
+('can_view_all_tickets', 'Alle Tickets anzeigen', 'Kann alle Tickets anzeigen', 'ticket_management', true, 'confirmation_number', NOW()),
 ('can_create_tickets', 'Tickets erstellen', 'Kann neue Tickets erstellen', 'ticket_management', true, 'add_box', NOW()),
 ('can_edit_tickets', 'Tickets bearbeiten', 'Kann Tickets bearbeiten', 'ticket_management', true, 'edit_note', NOW()),
 ('can_delete_tickets', 'Tickets löschen', 'Kann Tickets löschen', 'ticket_management', true, 'delete_sweep', NOW()),
@@ -84,7 +98,19 @@ INSERT INTO permissions (name, "displayName", description, category, "isSystemCr
 ('can_view_reports', 'Berichte anzeigen', 'Kann Berichte anzeigen', 'reporting_analytics', false, 'assessment', NOW()),
 ('can_access_financial_reports', 'Finanzberichte', 'Kann Finanzberichte einsehen', 'reporting_analytics', true, 'account_balance', NOW()),
 ('can_access_audit_logs', 'Audit-Logs', 'Kann Audit-Logs einsehen', 'reporting_analytics', true, 'fact_check', NOW()),
-('can_export_reports', 'Berichte exportieren', 'Kann Berichte exportieren', 'reporting_analytics', false, 'file_download', NOW());
+('can_export_reports', 'Berichte exportieren', 'Kann Berichte exportieren', 'reporting_analytics', false, 'file_download', NOW()),
+
+-- 🔹 Status Management (Important)
+('can_view_status_types', 'Status-Typen anzeigen', 'Kann Status-Typen anzeigen', 'status_management', false, 'category', NOW()),
+('can_create_status_types', 'Status-Typen erstellen', 'Kann Status-Typen erstellen', 'status_management', true, 'add', NOW()),
+('can_edit_status_types', 'Status-Typen bearbeiten', 'Kann Status-Typen bearbeiten', 'status_management', true, 'edit', NOW()),
+('can_delete_status_types', 'Status-Typen löschen', 'Kann Status-Typen löschen', 'status_management', true, 'delete', NOW()),
+
+-- 🔹 Gym Management (Important)
+('can_view_gyms', 'Gyms anzeigen', 'Kann Gyms anzeigen', 'gym_management', false, 'fitness_center', NOW()),
+('can_create_gyms', 'Gyms erstellen', 'Kann Gyms erstellen', 'gym_management', true, 'add', NOW()),
+('can_edit_gyms', 'Gyms bearbeiten', 'Kann Gyms bearbeiten', 'gym_management', true, 'edit', NOW()),
+('can_delete_gyms', 'Gyms löschen', 'Kann Gyms löschen', 'gym_management', true, 'delete', NOW());
 
 -- ========================================
 -- 3. 👥 ROLLEN-SYSTEM ERSTELLEN
