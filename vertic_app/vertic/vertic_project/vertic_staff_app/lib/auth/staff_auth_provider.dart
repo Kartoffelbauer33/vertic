@@ -246,11 +246,22 @@ class StaffAuthProvider extends ChangeNotifier {
             try {
               final staffUsers = await _client.staffUserManagement
                   .getAllStaffUsers(limit: 100, offset: 0);
-              final currentUser =
-                  staffUsers.firstWhere((user) => user.id == staffUserId);
-              _currentStaffUser = currentUser;
-              debugPrint(
-                  '✅ Staff-User-Daten geladen: ${currentUser.firstName} ${currentUser.lastName}');
+
+              // 🔧 FIX: Verwende firstWhereOrNull statt firstWhere
+              final currentUser = staffUsers.cast<StaffUser?>().firstWhere(
+                    (user) => user?.id == staffUserId,
+                    orElse: () => null,
+                  );
+
+              if (currentUser != null) {
+                _currentStaffUser = currentUser;
+                debugPrint(
+                    '✅ Staff-User-Daten geladen: ${currentUser.firstName} ${currentUser.lastName}');
+              } else {
+                debugPrint(
+                    '⚠️ Staff-User mit ID $staffUserId nicht in Liste gefunden');
+                // Trotzdem authentifiziert lassen, da Token gültig ist
+              }
             } catch (e) {
               debugPrint('⚠️ Konnte Staff-User-Daten nicht laden: $e');
               // Trotzdem authentifiziert lassen, da Token gültig ist

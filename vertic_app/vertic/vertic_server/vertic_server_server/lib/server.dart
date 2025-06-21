@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:serverpod/serverpod.dart';
 import 'package:serverpod_auth_server/serverpod_auth_server.dart' as auth;
 
@@ -61,6 +62,15 @@ void run(List<String> args) async {
     // E-Mail Validierung für Client-App
     sendValidationEmail: (session, email, validationCode) async {
       session.log('📧 VALIDIERUNGSCODE für Client-App $email: $validationCode');
+      // 🚀 DEVELOPMENT: Schreibe Code auch in Datei für einfachen Zugriff
+      try {
+        await File('/tmp/vertic_email_codes.txt').writeAsString(
+          'EMAIL: $email\nCODE: $validationCode\nTIME: ${DateTime.now()}\n\n',
+          mode: FileMode.append,
+        );
+      } catch (e) {
+        session.log('Konnte Email-Code nicht in Datei schreiben: $e');
+      }
       return true; // Für Testing
     },
     // Passwort-Reset für Client-App
