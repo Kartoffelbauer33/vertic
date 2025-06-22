@@ -123,10 +123,10 @@ docker-compose -f docker-compose.prod.yaml up -d
 
 # 2. Apps gegen Remote Server starten
 cd vertic_project/vertic_client_app
-flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080
+flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080/
 
 cd ../vertic_staff_app  
-flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080
+flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080/
 ```
 
 ---
