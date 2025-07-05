@@ -1,0 +1,5 @@
+serverpod generate; serverpod create-migration; dart pub get; dart run bin/main.dart --apply-migrations
+
+ clear; flutter pub get; flutter run
+
+ 

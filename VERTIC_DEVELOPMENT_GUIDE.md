@@ -1,6 +1,8 @@
 # 🚀 VERTIC DEVELOPMENT GUIDE
 
-**Vollständige Anleitung für die Entwicklung am Vertic-System**
+**Vollständige Anleitung für die Entwicklung am Vertic-System**  
+**Version:** 2.1 (E-Mail-Bestätigung Update)  
+**Aktualisiert:** 2025-01-16
 
 ---
 
@@ -10,10 +12,11 @@
 2. [🔧 Lokale Entwicklung](#lokale-entwicklung)
 3. [🌐 Remote Server Entwicklung](#remote-server-entwicklung)
 4. [🗄️ Datenbank Management](#datenbank-management)
-5. [🔐 RBAC System](#rbac-system)
-6. [📱 App Development](#app-development)
-7. [🐳 Docker & Deployment](#docker--deployment)
-8. [🛠️ Troubleshooting](#troubleshooting)
+5. [📧 E-Mail-Bestätigungssystem](#e-mail-bestätigungssystem)
+6. [🔐 RBAC System](#rbac-system)
+7. [📱 App Development](#app-development)
+8. [🐳 Docker & Deployment](#docker--deployment)
+9. [🛠️ Troubleshooting](#troubleshooting)
 
 ---
 
@@ -145,12 +148,16 @@ flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080/
 
 # Superuser erstellen
 02_CREATE_SUPERUSER_FINAL_CORRECTED.sql
+
+# E-Mail-Bestätigung für bestehende User
+UPDATE_SUPERUSER_EMAIL_VERIFICATION.sql
 ```
 
 ### Superuser Login Daten
-- **Email**: `superuser@staff.vertic.local`
+- **Username**: `superuser` ODER **E-Mail**: `superuser@staff.vertic.local`
 - **Password**: `super123`
 - **App**: Staff App
+- **Status**: `active` (E-Mail bestätigt)
 
 ### Datenbank-Backup
 ```bash
@@ -162,6 +169,65 @@ docker exec vertic-postgres pg_dump -U vertic_user test_db > backup_$(date +%Y%m
 ```bash
 cd vertic_app/vertic/vertic_server/vertic_server_server
 serverpod create-migration
+
+# Bei Problemen: Manuelle SQL-Ausführung über PgAdmin
+```
+
+---
+
+## 📧 E-MAIL-BESTÄTIGUNGSSYSTEM
+
+### **✅ VOLLSTÄNDIG IMPLEMENTIERT**
+
+#### **Neue Staff-User-Erstellung mit E-Mail-Bestätigung:**
+```dart
+// Admin erstellt Staff-User
+final result = await client.unifiedAuth.createStaffUserWithEmail(
+  'admin@greifbar-bouldern.at', // Echte E-Mail
+  'admin',                      // Username
+  'sicheresPasswort',           // Password
+  'Max',                        // Vorname
+  'Administrator',              // Nachname
+  StaffUserType.admin,          // Staff-Level
+);
+
+// Automatische Navigation zur E-Mail-Bestätigung
+if (result.requiresEmailVerification == true) {
+  Navigator.push(context, MaterialPageRoute(
+    builder: (context) => EmailVerificationPage(
+      email: email,
+      verificationCode: result.verificationCode!, // STAFF_<timestamp>
+    ),
+  ));
+}
+```
+
+#### **E-Mail-Bestätigungsseite:**
+- ✅ **Automatische Code-Einfügung** (Entwicklungsmodus)
+- ✅ **Orange Development-Hinweis** für Testing
+- ✅ **Sofortige Navigation** zurück nach Bestätigung
+
+#### **Flexibler Staff-Login:**
+```dart
+// Login mit Username ODER E-Mail
+final result = await client.unifiedAuth.staffSignInFlexible(
+  'admin',                      // ODER 'admin@greifbar-bouldern.at'
+  'sicheresPasswort',
+);
+```
+
+### **Datenbank-Schema Erweiterungen:**
+```sql
+-- Neue Spalte in staff_users
+ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp without time zone;
+
+-- Account-Status Management
+employment_status:
+- 'pending_verification' -- Neu erstellt, E-Mail nicht bestätigt
+- 'active'              -- E-Mail bestätigt, kann sich anmelden
+- 'on_leave'            -- Temporär deaktiviert
+- 'terminated'          -- Dauerhaft deaktiviert
+- 'suspended'           -- Administrativ gesperrt
 ```
 
 ---
@@ -209,7 +275,7 @@ flutter run
 flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080
 ```
 
-### Staff App (Admin App)
+### Staff App (Admin App) - UPDATED
 ```bash
 cd vertic_project/vertic_staff_app
 
@@ -219,6 +285,12 @@ flutter run
 # Gegen Remote Server  
 flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080
 ```
+
+#### **Neue Staff-App Features:**
+- ✅ **E-Mail-Bestätigungsseite** (`EmailVerificationPage`)
+- ✅ **Flexible Login-Optionen** (Username oder E-Mail)
+- ✅ **Automatische Code-Einfügung** für Development
+- ✅ **Echte E-Mail-Adressen** in Staff-Management
 
 ### Server Client Update
 **Nach Änderungen am Server:**
@@ -288,7 +360,30 @@ EOF
 serverpod generate
 ```
 
-#### 2. Serverpod Generate Fehler
+#### 2. Migration Fehler (E-Mail-System)
+```bash
+# Problem: "account_cleanup_logs" already exists
+# Lösung: Manuelle SQL-Ausführung über PgAdmin
+
+# 1. Spalte hinzufügen
+ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp without time zone;
+
+# 2. Superuser aktivieren
+UPDATE staff_users 
+SET 
+    "employmentStatus" = 'active',
+    "emailVerifiedAt" = NOW()
+WHERE 
+    "employeeId" = 'superuser';
+
+# 3. Migration als erfolgreich markieren
+INSERT INTO "serverpod_migrations" ("module", "version", "timestamp")
+VALUES ('vertic_server', '20250622230632803', now())
+ON CONFLICT ("module")
+DO UPDATE SET "version" = '20250622230632803', "timestamp" = now();
+```
+
+#### 3. Serverpod Generate Fehler
 ```bash
 # Flutter PATH prüfen
 echo $PATH
@@ -299,29 +394,24 @@ dart pub get
 serverpod generate
 ```
 
-#### 3. Docker Build Fehler
+#### 4. Docker Build Fehler
 ```bash
 # IMMER vom Repository-Root bauen!
 cd Leon_vertic
 docker build -f vertic_app/vertic/vertic_server/vertic_server_server/Dockerfile -t vertic-server .
 ```
 
-#### 4. Database Connection Fehler
+#### 5. E-Mail-Bestätigungsprobleme
 ```bash
-# Postgres Container prüfen
-docker ps | grep postgres
-docker logs vertic-postgres
+# E-Mail-Bestätigungsseite nicht erreichbar:
+# 1. Prüfe ob EmailVerificationPage existiert
+# 2. Prüfe Navigation-Code in RBAC-Management
+# 3. Prüfe Server-Response: requiresEmailVerification = true
 
-# Connection String prüfen
-# config/development.yaml oder production.yaml
-```
-
-#### 5. Permission Fehler in Apps
-```bash
-# RBAC System neu initialisieren
-# 1. 01_CLEAN_SETUP_FINAL_CORRECTED.sql ausführen
-# 2. 02_CREATE_SUPERUSER_FINAL_CORRECTED.sql ausführen
-# 3. Mit superuser@staff.vertic.local / super123 einloggen
+# Code nicht automatisch eingefügt:
+# 1. Development-Mode aktiv?
+# 2. verificationCode in Response vorhanden?
+# 3. _fillDevelopmentCode() Methode aufgerufen?
 ```
 
 ### Debug Befehle
@@ -352,15 +442,16 @@ serverpod --version
 2. **`serverpod generate`** nach JEDER Server-Änderung
 3. **Docker Build vom Repository-Root** ausführen
 4. **generator.yaml mit database: true** ist ZWINGEND
-5. **RBAC System** vor App-Tests initialisieren
-6. **Keine Klartextpasswörter** in Git committen
-7. **Regelmäßige Backups** der Produktionsdatenbank
+5. **E-Mail-Bestätigungssystem** vor App-Tests initialisieren
+6. **Manuelle SQL-Migration** bei Serverpod-Problemen
+7. **Keine Klartextpasswörter** in Git committen
+8. **Regelmäßige Backups** der Produktionsdatenbank
 
 ### Git Workflow
 ```bash
 # Änderungen committen
 git add .
-git commit -m "feat: neue Feature Beschreibung"
+git commit -m "feat: E-Mail-Bestätigungssystem implementiert"
 git push origin main
 
 # Auf Server deployen
@@ -400,10 +491,22 @@ docker-compose -f docker-compose.prod.yaml logs -f
 ### Login Daten
 - **SSH**: `root@159.69.144.208`
 - **pgAdmin**: `guntram@greifbar-bouldern.at`
-- **Superuser**: `superuser@staff.vertic.local` / `super123`
+- **Superuser**: `superuser` / `super123` (Username oder E-Mail möglich)
+
+### Neue E-Mail-Bestätigungsfeatures
+```dart
+// Staff-User mit E-Mail erstellen
+client.unifiedAuth.createStaffUserWithEmail(...)
+
+// E-Mail bestätigen  
+client.unifiedAuth.verifyStaffEmail(email, code)
+
+// Flexibler Login
+client.unifiedAuth.staffSignInFlexible(usernameOrEmail, password)
+```
 
 ---
 
 **🎯 HAPPY CODING!** 
 
-Bei Problemen: Erst diese Dokumentation checken, dann troubleshooten! 🚀 
+Das E-Mail-Bestätigungssystem ist vollständig implementiert und produktionsbereit! Bei Problemen: Erst diese Dokumentation checken, dann troubleshooten! 🚀 

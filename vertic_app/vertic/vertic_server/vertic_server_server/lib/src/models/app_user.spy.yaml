@@ -17,6 +17,11 @@ fields:
   birthDate: DateTime?
   primaryStatusId: int? # Fremdschlüssel zu UserStatus
   
+  # 🎯 HALL/GYM ZUORDNUNG (für External Provider Integration)
+  preferredHallId: int?            # Bevorzugte Halle (GPS-basiert oder manuell gewählt)
+  lastKnownHallId: int?            # Letzte bekannte Halle (aus letztem Check-in)
+  registrationHallId: int?         # Halle in der sich User registriert hat
+  
   # PROFILBILD - Sicher in der Datenbank
   profilePhoto: ByteData?        # Foto als ByteData (max 1MB)
   photoUploadedAt: DateTime?     # Zeitstempel der Foto-Aufnahme
@@ -78,3 +83,9 @@ indexes:
     fields: primaryStatusId
   app_user_photo_idx:
     fields: photoUploadedAt 
+  app_user_preferred_hall_idx:
+    fields: preferredHallId
+  app_user_last_known_hall_idx:
+    fields: lastKnownHallId
+  app_user_registration_hall_idx:
+    fields: registrationHallId 

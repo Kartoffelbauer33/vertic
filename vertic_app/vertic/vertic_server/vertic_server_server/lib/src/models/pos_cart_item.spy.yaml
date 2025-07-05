@@ -1,0 +1,12 @@
+class: PosCartItem
+table: pos_cart_items
+fields:
+  sessionId: int
+  itemType: String
+  itemId: int
+  itemName: String
+  quantity: int, default=1
+  unitPrice: double
+  totalPrice: double
+  discountAmount: double, default=0.0
+  addedAt: DateTime 

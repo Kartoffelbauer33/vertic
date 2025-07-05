@@ -1,0 +1,32 @@
+class: ExternalProviderStats  
+fields:
+  providerId: int
+  providerName: String
+  hallId: int
+  hallName: String
+  
+  # Mitglieder-Statistiken
+  totalActiveMembers: int
+  newMembersThisMonth: int
+  
+  # Check-in Statistiken
+  totalCheckins: int
+  checkinsToday: int
+  checkinsThisWeek: int
+  checkinsThisMonth: int
+  
+  # Erfolgsraten
+  successRate: double             # 0.0 - 1.0
+  averageProcessingTimeMs: int
+  
+  # Top Zeiten
+  peakHour: int?                  # 0-23
+  peakDay: String?                # Monday, Tuesday, etc.
+  
+  # Letzte Aktivität
+  lastCheckinAt: DateTime?
+  
+  # Zeitraum für Statistik
+  periodStart: DateTime
+  periodEnd: DateTime
+  generatedAt: DateTime 

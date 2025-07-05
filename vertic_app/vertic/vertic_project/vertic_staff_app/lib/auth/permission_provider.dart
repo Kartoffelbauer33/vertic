@@ -37,7 +37,18 @@ class PermissionProvider extends ChangeNotifier {
   /// **Lädt die Berechtigungen für einen bestimmten Staff-User vom Server.**
   ///
   /// Nutzt die neue Staff-Auth-Integration ohne Serverpod-Session-Abhängigkeit
+  /// **PERFORMANCE-OPTIMIERT:** Verhindert Doppelaufrufe für gleiche User-ID
+  int? _lastLoadedUserId;
+
   Future<void> fetchPermissionsForStaff(int staffUserId) async {
+    // **PERFORMANCE-CHECK:** Gleiche User-ID bereits geladen?
+    if (_isInitialized && _lastLoadedUserId == staffUserId) {
+      debugPrint(
+        '🔄 Permissions für User $staffUserId bereits geladen - überspringe',
+      );
+      return;
+    }
+
     if (_isLoading) return;
 
     _isLoading = true;
@@ -50,14 +61,18 @@ class PermissionProvider extends ChangeNotifier {
 
       _permissions = userPermissions.toSet();
       _isInitialized = true;
+      _lastLoadedUserId = staffUserId;
 
       debugPrint(
-          '✅ Staff-Berechtigungen geladen für User $staffUserId: ${_permissions.length}');
+        '✅ Staff-Berechtigungen geladen für User $staffUserId: ${_permissions.length}',
+      );
       debugPrint('🔐 Permissions: ${_permissions.join(", ")}');
     } catch (e) {
       debugPrint(
-          '❌ Fehler beim Laden der Staff-Berechtigungen für User $staffUserId: $e');
+        '❌ Fehler beim Laden der Staff-Berechtigungen für User $staffUserId: $e',
+      );
       _permissions = {}; // Im Fehlerfall leeren
+      _lastLoadedUserId = null;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -98,6 +113,7 @@ class PermissionProvider extends ChangeNotifier {
   void clearPermissions() {
     _permissions = {};
     _isInitialized = false;
+    _lastLoadedUserId = null; // Cache zurücksetzen
     notifyListeners();
     debugPrint('🧹 Berechtigungen zurückgesetzt (Logout).');
   }

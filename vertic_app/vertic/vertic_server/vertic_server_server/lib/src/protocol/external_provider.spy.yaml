@@ -1,0 +1,41 @@
+class: ExternalProvider
+table: external_providers
+fields:
+  # Basis-Konfiguration
+  providerName: String            # 'fitpass', 'friction', 'urban_sports_club'
+  displayName: String             # 'Fitpass Premium', 'Friction Access'
+  hallId: int                     # Zugeordnete Halle
+  isActive: bool, default=true    # Provider aktiv/inaktiv
+  
+  # API-Konfiguration (verschlüsselt gespeichert)
+  apiBaseUrl: String?             # z.B. 'https://rest-fitpass-ch.herokuapp.com'
+  apiCredentialsJson: String?     # Verschlüsselte API-Keys als JSON (NULL für Friction!)
+  
+  # Provider-spezifische Einstellungen
+  sportPartnerId: String?         # Für Fitpass: sport_partner ID
+  doorId: String?                 # Für Friction: door_id (meist "27")
+  
+  # Verhalten & Regeln - ERWEITERTE RE-ENTRY OPTIONEN
+  allowReEntry: bool, default=true
+  reEntryWindowType: String, default='hours'    # 'hours' oder 'days'
+  reEntryWindowHours: int, default=3           # Wenn windowType = 'hours'
+  reEntryWindowDays: int, default=1            # Wenn windowType = 'days'
+  requireStaffValidation: bool, default=false
+  
+  # Unterstützte Features (JSON Array)
+  supportedFeatures: String, default='["check_in", "re_entry"]'
+  
+  # Audit & Verwaltung
+  createdBy: int                  # Staff-User ID
+  createdAt: DateTime
+  updatedAt: DateTime?
+  updatedBy: int?
+
+indexes:
+  external_provider_hall_name_idx:
+    fields: hallId, providerName
+    unique: true                  # Ein Provider nur einmal pro Halle
+  external_provider_active_idx:
+    fields: isActive
+  external_provider_hall_idx:
+    fields: hallId 

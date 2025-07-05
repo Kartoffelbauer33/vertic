@@ -1,487 +1,682 @@
-# 🚀 VERTIC GIT MANAGEMENT GUIDE
+# 🔄 VERTIC GIT MANAGEMENT GUIDE
 
-**Vollständige Git-Verwaltung für das Vertic-Projekt**  
-*Sicheres Repository-Management mit Force-Push-Strategien*
-
----
-
-## 📋 ÜBERSICHT
-
-Dieses Dokument erklärt die **komplette Git-Verwaltung** für das Vertic-Projekt, mit besonderem Fokus auf:
-- **Sichere Force-Push-Strategien**
-- **Korrekte Terminal-Pfade**
-- **Repository-Überschreibung ohne Pull**
-- **Sicherheitsrichtlinien**
+**Sichere und effiziente Git-Workflows für das Vertic-Projekt**  
+**Version:** 2.1 (E-Mail-Bestätigung Update)  
+**Aktualisiert:** 2025-01-16
 
 ---
 
-## 🗂️ REPOSITORY STRUKTUR
+## 📋 INHALTSVERZEICHNIS
 
-### **HAUPTVERZEICHNIS**
-```
-Leon_vertic/                           # 📁 Repository-Root (GIT-ROOT)
-├── .git/                             # 🔧 Git-Metadaten
-├── .gitignore                        # 🚫 Ignorierte Dateien
-├── VERTIC_*.md                       # 📚 Dokumentation
-├── archive/                          # 📦 Archivierte Dateien
-├── pubspec.yaml                      # 📄 Flutter-Workspace
-└── vertic_app/                       # 🏗️ Hauptanwendung
-    └── vertic/
-        ├── SQL/                      # 🗄️ Datenbank-Scripts
-        ├── vertic_project/           # 📱 Flutter Apps
-        │   ├── vertic_client_app/    # 👤 Kunden-App
-        │   └── vertic_staff_app/     # 👨‍💼 Personal-App
-        └── vertic_server/            # 🖥️ Backend-Server
-```
-
-### **WICHTIGE GIT-PFADE**
-- **Repository-Root:** `C:\Users\guntr\Desktop\Leon_vertic\`
-- **Git-Befehle ausführen:** Immer vom Repository-Root!
-- **Niemals Git-Befehle aus Unterverzeichnissen!**
+1. [🎯 Git-Strategie](#git-strategie)
+2. [🔐 Sicherheitsrichtlinien](#sicherheitsrichtlinien)
+3. [📧 E-Mail-Bestätigungsfeatures](#e-mail-bestätigungsfeatures)
+4. [🚀 Standard-Workflows](#standard-workflows)
+5. [🌐 Remote Server Deployment](#remote-server-deployment)
+6. [🛠️ Troubleshooting](#troubleshooting)
+7. [📊 Best Practices](#best-practices)
 
 ---
 
-## 🖥️ TERMINAL ÖFFNEN - KORREKTE PFADE
+## 🎯 GIT-STRATEGIE
 
-### **WINDOWS POWERSHELL**
-
-#### **Methode 1: Direkt in Verzeichnis navigieren**
-```powershell
-# Terminal öffnen (Windows + X → PowerShell)
-cd C:\Users\guntr\Desktop\Leon_vertic
-
-# Prüfen ob im Git-Repository
-git status
+### **Repository-Struktur**
+```
+Leon_vertic/ (Hauptrepository)
+├── .git/                          # Git-Metadaten
+├── .gitignore                     # Ignore-Regeln
+├── vertic_app/                    # Hauptanwendung
+│   ├── vertic/
+│   │   ├── vertic_project/
+│   │   │   ├── vertic_client_app/     # Client App (E-Mail-Bestätigung)
+│   │   │   └── vertic_staff_app/      # Staff App (E-Mail-Bestätigung)
+│   │   └── vertic_server/
+│   │       └── vertic_server_server/  # Backend (E-Mail-Endpoints)
+│   └── DOKUMENTATION.md
+└── README.md
 ```
 
-#### **Methode 2: Aus VS Code**
-```powershell
-# VS Code öffnen im Repository-Root
-code C:\Users\guntr\Desktop\Leon_vertic
+### **Branch-Strategie**
+- **main:** Production-ready Code mit E-Mail-Bestätigungssystem
+- **develop:** Development Branch für neue Features
+- **feature/email-verification:** E-Mail-Bestätigungsfeatures (✅ abgeschlossen)
+- **hotfix/:** Kritische Bugfixes
 
-# Terminal in VS Code: Strg + Shift + `
-# Automatisch im korrekten Pfad
+---
+
+## 🔐 SICHERHEITSRICHTLINIEN
+
+### **⚠️ KRITISCHE REGELN - NIEMALS VERGESSEN!**
+
+#### **1. KEINE PASSWÖRTER IN GIT**
+```bash
+# ❌ NIEMALS committen:
+password: "GreifbarB2019"
+POSTGRES_PASSWORD=GreifbarB2019
+DATABASE_PASSWORD: "secret123"
+
+# ✅ IMMER verwenden:
+password: ${POSTGRES_PASSWORD}
+POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
 ```
 
-#### **Methode 3: Aus Datei-Explorer**
-```powershell
-# Im Windows Explorer zu Leon_vertic navigieren
-# Rechtsklick → "In Terminal öffnen"
-# Oder Adresszeile: cmd / powershell eingeben
+#### **2. .gitignore ERWEITERN**
+```gitignore
+# Passwörter & Secrets
+.env
+.env.local
+.env.production
+*.key
+*.pem
+config/secrets.yaml
+
+# E-Mail-Bestätigungskeys (falls verwendet)
+email_verification_keys/
+*.verification.key
+
+# Development
+.vscode/settings.json
+.idea/
+*.log
 ```
 
-### **PFAD VERIFIZIERUNG**
-```powershell
-# Aktueller Pfad anzeigen
-pwd
-# Sollte zeigen: C:\Users\guntr\Desktop\Leon_vertic
+#### **3. GIT HISTORY BEREINIGEN (falls erforderlich)**
+```bash
+# Passwörter aus Git-History entfernen
+git filter-branch --force --index-filter \
+  'git rm --cached --ignore-unmatch config/secrets.yaml' \
+  --prune-empty --tag-name-filter cat -- --all
 
-# Git-Status prüfen
-git status
-# Sollte Repository-Status zeigen, nicht "not a git repository"
-
-# Repository-Root finden
-git rev-parse --show-toplevel
+# Alternative: BFG Repo-Cleaner
+java -jar bfg.jar --delete-files "*.env" --delete-files "secrets.yaml"
+git reflog expire --expire=now --all && git gc --prune=now --aggressive
 ```
 
 ---
 
-## 🚨 FORCE-PUSH STRATEGIEN
+## 📧 E-MAIL-BESTÄTIGUNGSFEATURES
 
-### **WARUM FORCE-PUSH?**
-- **Lokale Entwicklung überschreibt Server**
-- **Keine Merge-Konflikte durch Pull**
-- **Saubere Git-History**
-- **Sicherheit vor ungewollten Änderungen**
+### **🎯 NEUE COMMITS FÜR E-MAIL-SYSTEM**
 
-### **SICHERE FORCE-PUSH BEFEHLE**
+#### **Server-Side Commits:**
+```bash
+# Backend-Endpoints für E-Mail-Bestätigung
+git add vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/unified_auth_endpoint.dart
+git commit -m "feat: E-Mail-Bestätigungsendpoints implementiert
 
-#### **1. STANDARD FORCE-PUSH**
-```powershell
-# Vom Repository-Root (Leon_vertic/)
+- createStaffUserWithEmail: Staff-User mit echter E-Mail erstellen
+- verifyStaffEmail: E-Mail-Bestätigungscode validieren  
+- staffSignInFlexible: Login mit Username ODER E-Mail
+
+Closes #123"
+
+# Datenbank-Schema Erweiterungen
+git add vertic_app/vertic/vertic_server/vertic_server_server/lib/src/models/staff_user.spy.yaml
+git commit -m "feat: E-Mail-Bestätigung Datenbank-Schema
+
+- emailVerifiedAt Feld zu StaffUser hinzugefügt
+- employmentStatus erweitert: pending_verification, active, etc.
+- Migration vorbereitet für E-Mail-Bestätigungssystem"
+
+# Protocol-Erweiterungen
+git add vertic_app/vertic/vertic_server/vertic_server_server/lib/src/protocol/unified_auth_response.yaml
+git commit -m "feat: E-Mail-Bestätigungsprotokoll erweitert
+
+- requiresEmailVerification Flag hinzugefügt
+- verificationCode für Development-Modus
+- Flexible Response für Staff-Erstellung"
+```
+
+#### **Client-Side Commits:**
+```bash
+# E-Mail-Bestätigungsseite für Staff App
+git add vertic_app/vertic/vertic_project/vertic_staff_app/lib/pages/admin/email_verification_page.dart
+git commit -m "feat: E-Mail-Bestätigungsseite für Staff-App
+
+- Automatische Code-Einfügung für Development
+- Orange Development-Hinweis für Testing
+- Sofortige Navigation zurück nach Bestätigung
+- Responsive Design für verschiedene Bildschirmgrößen"
+
+# RBAC Management Integration
+git add vertic_app/vertic/vertic_project/vertic_staff_app/lib/pages/admin/rbac_management_page.dart
+git commit -m "feat: E-Mail-Bestätigung in RBAC Management integriert
+
+- Automatische Navigation zur E-Mail-Bestätigungsseite
+- requiresEmailVerification Check implementiert
+- Echte E-Mail-Adressen in Staff-Management möglich"
+
+# Flexible Login-Optionen
+git add vertic_app/vertic/vertic_project/vertic_staff_app/lib/auth/staff_auth_provider.dart
+git commit -m "feat: Flexibler Staff-Login implementiert
+
+- Login mit Username ODER E-Mail möglich
+- Automatische Erkennung: @ = E-Mail, sonst Username
+- staffSignInFlexible Endpoint integriert"
+```
+
+### **📊 E-MAIL-BESTÄTIGUNGSFEATURES STATUS**
+```bash
+# Aktueller Status prüfen
+git log --oneline --grep="email" --grep="verification" --all
+
+# E-Mail-bezogene Dateien anzeigen
+git ls-files | grep -E "(email|verification)"
+
+# Letzte E-Mail-Bestätigungscommits
+git log --oneline -10 --grep="E-Mail"
+```
+
+---
+
+## 🚀 STANDARD-WORKFLOWS
+
+### **1. FEATURE ENTWICKLUNG (E-Mail-Bestätigung Beispiel)**
+
+#### **Neues Feature starten:**
+```bash
+# Feature-Branch erstellen
+git checkout -b feature/email-verification-enhancements
+git push -u origin feature/email-verification-enhancements
+
+# Entwicklung
+# ... E-Mail-Bestätigungsfeatures implementieren ...
+
+# Commits mit aussagekräftigen Nachrichten
 git add .
-git commit -m "feat: Beschreibung der Änderungen"
-git push origin main --force
+git commit -m "feat: E-Mail-Bestätigungscode-Ablaufzeit implementiert
+
+- Bestätigungscodes laufen nach 24h ab
+- Automatische Cleanup-Routine für abgelaufene Codes
+- Benutzerfreundliche Fehlermeldungen bei abgelaufenen Codes"
+
+# Feature abschließen
+git push origin feature/email-verification-enhancements
 ```
 
-#### **2. FORCE-PUSH MIT LEASE (SICHERER)**
-```powershell
-# Sicherer Force-Push (prüft ob Remote geändert wurde)
-git push origin main --force-with-lease
+#### **Feature in main mergen:**
+```bash
+# Zu main wechseln und aktualisieren
+git checkout main
+git pull origin main
+
+# Feature mergen
+git merge feature/email-verification-enhancements
+git push origin main
+
+# Feature-Branch löschen
+git branch -d feature/email-verification-enhancements
+git push origin --delete feature/email-verification-enhancements
 ```
 
-#### **3. KOMPLETTE REPOSITORY-ÜBERSCHREIBUNG**
-```powershell
-# Wenn du das komplette Remote-Repository überschreiben willst
-git push origin main --force --no-verify
+### **2. HOTFIX WORKFLOW**
+
+#### **Kritischer Bugfix (E-Mail-System):**
+```bash
+# Hotfix-Branch von main
+git checkout main
+git pull origin main
+git checkout -b hotfix/email-verification-fix
+
+# Bugfix implementieren
+# ... E-Mail-Bestätigungsfehler beheben ...
+
+git add .
+git commit -m "fix: E-Mail-Bestätigungscode Validierung korrigiert
+
+- Regex für STAFF_<timestamp> Format korrigiert
+- Fehlerbehandlung für ungültige Codes verbessert
+- Development-Bypass für Code '123456' beibehalten
+
+Fixes #456"
+
+# Hotfix deployen
+git push origin hotfix/email-verification-fix
+
+# In main mergen
+git checkout main
+git merge hotfix/email-verification-fix
+git push origin main
+
+# Hotfix-Branch löschen
+git branch -d hotfix/email-verification-fix
+git push origin --delete hotfix/email-verification-fix
 ```
 
-#### **4. BRANCH KOMPLETT ERSETZEN**
-```powershell
-# Remote-Branch löschen und neu erstellen
-git push origin :main                    # Remote-Branch löschen
-git push origin main                     # Neuen Branch pushen
+### **3. LOKALE ENTWICKLUNG → PRODUCTION**
+
+#### **Vollständiger Workflow:**
+```bash
+# 1. Lokale Änderungen (E-Mail-Features)
+cd vertic_app/vertic/vertic_server/vertic_server_server
+# ... E-Mail-Bestätigungsendpoints entwickeln ...
+serverpod generate
+
+# 2. Testen
+dart run bin/main.dart
+# ... E-Mail-Bestätigungsfeatures testen ...
+
+# 3. Committen
+git add .
+git commit -m "feat: E-Mail-Bestätigungssystem Production-ready
+
+- Alle E-Mail-Bestätigungsendpoints implementiert
+- Datenbank-Migration für emailVerifiedAt Spalte
+- Development-Modus mit automatischer Code-Einfügung
+- Flexible Login-Optionen (Username/E-Mail)
+- Account-Status Management (pending_verification, active)
+
+Testing:
+- ✅ Staff-User-Erstellung mit E-Mail
+- ✅ E-Mail-Bestätigungsseite
+- ✅ Flexibler Login
+- ✅ Account-Aktivierung
+
+Ready for production deployment."
+
+# 4. Pushen
+git push origin main
+
+# 5. Production Deployment
+ssh root@159.69.144.208
+cd /opt/vertic
+git pull origin main
+# ... Deployment-Schritte ...
 ```
 
 ---
 
-## 🔒 SICHERHEITSRICHTLINIEN
+## 🌐 REMOTE SERVER DEPLOYMENT
 
-### **⚠️ KRITISCHE REGELN**
+### **1. SERVER-VORBEREITUNG**
+```bash
+# SSH-Verbindung
+ssh root@159.69.144.208
 
-#### **1. NIEMALS PASSWÖRTER COMMITTEN**
-```powershell
-# VOR JEDEM COMMIT PRÜFEN:
-git diff --cached | grep -i password
-git diff --cached | grep -i secret
-git diff --cached | grep -i key
-
-# .gitignore erweitern
-echo ".env" >> .gitignore
-echo "*.key" >> .gitignore
-echo "config/secrets.yaml" >> .gitignore
-```
-
-#### **2. SENSITIVE DATEIEN ENTFERNEN**
-```powershell
-# Datei aus Git-History entfernen (GEFÄHRLICH!)
-git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch pfad/zur/datei' --prune-empty --tag-name-filter cat -- --all
-
-# Sicherer: Nur aus aktuellem Commit entfernen
-git rm --cached pfad/zur/datei
-git commit -m "Remove sensitive file"
-```
-
-#### **3. FORCE-PUSH SICHERHEITSCHECK**
-```powershell
-# Vor Force-Push: Prüfen was gepusht wird
-git log --oneline origin/main..HEAD
-git diff origin/main..HEAD
-
-# Nur force-pushen wenn sicher!
-git push origin main --force-with-lease
-```
-
----
-
-## 📝 STANDARD WORKFLOWS
-
-### **WORKFLOW 1: NORMALE ENTWICKLUNG**
-```powershell
-# 1. Terminal im Repository-Root öffnen
-cd C:\Users\guntr\Desktop\Leon_vertic
-
-# 2. Aktuelle Änderungen anzeigen
-git status
-git diff
-
-# 3. Dateien hinzufügen
-git add .
-# Oder spezifische Dateien:
-git add vertic_app/vertic/vertic_server/
-
-# 4. Commit erstellen
-git commit -m "feat: Neue Funktionalität hinzugefügt"
-
-# 5. Force-Push (überschreibt Remote)
-git push origin main --force-with-lease
-```
-
-### **WORKFLOW 2: NACH GRÖSSEREN ÄNDERUNGEN**
-```powershell
-# 1. Alle Änderungen prüfen
-git status
-git log --oneline -10
-
-# 2. Sensitive Daten prüfen
-git diff --cached | findstr /i "password secret key"
-
-# 3. Commit mit detaillierter Nachricht
-git add .
-git commit -m "feat: Überarbeitung der Authentifikation
-
-- RBAC-System auf 53 Permissions erweitert
-- Superuser-Erstellung automatisiert
-- Staff-App Permissions-Handling verbessert
-- Client-App E-Mail-Verification-Bypass hinzugefügt"
-
-# 4. Force-Push
-git push origin main --force
-```
-
-### **WORKFLOW 3: NOTFALL-REPOSITORY-RESET**
-```powershell
-# Wenn das Remote-Repository komplett überschrieben werden soll
-# VORSICHT: Löscht alle Remote-Änderungen!
-
-# 1. Lokalen Status prüfen
+# Repository-Status prüfen
+cd /opt/vertic
 git status
 git log --oneline -5
 
-# 2. Remote-Branch komplett ersetzen
-git push origin main --force --no-verify
+# E-Mail-Bestätigungsfeatures prüfen
+git log --oneline --grep="email" -10
+```
 
-# 3. Oder Remote-Branch löschen und neu erstellen
-git push origin :main
-git push origin main
+### **2. SICHERE DEPLOYMENT-SCHRITTE**
+```bash
+# 1. Backup erstellen (mit E-Mail-Bestätigungsdaten)
+sudo -u postgres pg_dump test_db > backup_before_email_update_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. Code aktualisieren
+git stash  # Falls lokale Änderungen vorhanden
+git pull origin main
+git stash pop  # Falls erforderlich
+
+# 3. E-Mail-Bestätigungsfeatures prüfen
+grep -r "createStaffUserWithEmail\|verifyStaffEmail\|staffSignInFlexible" vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/
+
+# 4. Code generieren
+cd vertic_app/vertic/vertic_server/vertic_server_server
+serverpod generate
+
+# 5. E-Mail-Bestätigungsmodelle prüfen
+ls -la lib/src/generated/ | grep -E "(staff_user|unified_auth_response)"
+
+# 6. Container neu bauen und starten
+docker-compose -f docker-compose.staging.yaml build --no-cache
+docker-compose -f docker-compose.staging.yaml up -d
+
+# 7. E-Mail-Bestätigungssystem testen
+curl -X POST http://localhost:8080/unifiedAuth/createStaffUserWithEmail
+curl -X POST http://localhost:8080/unifiedAuth/verifyStaffEmail
+curl -X POST http://localhost:8080/unifiedAuth/staffSignInFlexible
+```
+
+### **3. DEPLOYMENT-VERIFIKATION**
+```bash
+# Container-Status
+docker ps
+docker logs vertic-kassensystem-server --tail 20
+
+# E-Mail-Bestätigungsendpoints testen
+curl http://159.69.144.208:8080/
+
+# E-Mail-Bestätigungsstatus in Datenbank prüfen
+sudo -u postgres psql -d test_db -c "
+SELECT 
+    \"employeeId\", 
+    email, 
+    \"employmentStatus\", 
+    \"emailVerifiedAt\" 
+FROM staff_users 
+ORDER BY \"createdAt\" DESC 
+LIMIT 5;
+"
+
+# Git-Status dokumentieren
+git log --oneline -1 > /tmp/current_deployment.txt
+echo "Deployed at: $(date)" >> /tmp/current_deployment.txt
 ```
 
 ---
 
-## 🔍 GIT STATUS & DEBUGGING
+## 🛠️ TROUBLESHOOTING
 
-### **REPOSITORY-STATUS PRÜFEN**
-```powershell
-# Detaillierter Status
-git status --porcelain
-git status --short
+### **1. MERGE-KONFLIKTE (E-Mail-Features)**
+```bash
+# Konflikt-Situation
+git pull origin main
+# CONFLICT (content): Merge conflict in vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/unified_auth_endpoint.dart
 
-# Änderungen anzeigen
-git diff                    # Unstaged changes
-git diff --cached          # Staged changes
-git diff HEAD              # Alle Änderungen
+# Konflikte manuell lösen
+code vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/unified_auth_endpoint.dart
 
-# Commit-History
-git log --oneline -10
-git log --graph --oneline -10
+# Nach dem Lösen:
+git add vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/unified_auth_endpoint.dart
+git commit -m "resolve: Merge-Konflikt in E-Mail-Bestätigungsendpoints gelöst
+
+- createStaffUserWithEmail und verifyStaffEmail Methoden vereint
+- Beide Implementierungen beibehalten
+- E-Mail-Bestätigungslogik konsolidiert"
 ```
 
-### **REMOTE-REPOSITORY PRÜFEN**
-```powershell
-# Remote-URLs anzeigen
-git remote -v
+### **2. VERSEHENTLICHE COMMITS RÜCKGÄNGIG MACHEN**
+```bash
+# Letzten Commit rückgängig (behalten Änderungen)
+git reset --soft HEAD~1
 
-# Remote-Branch Status
-git branch -r
-git branch -a
+# Letzten Commit komplett rückgängig
+git reset --hard HEAD~1
 
-# Unterschiede zu Remote
-git log --oneline origin/main..HEAD    # Lokale Commits
-git log --oneline HEAD..origin/main    # Remote Commits
+# Bestimmten Commit rückgängig (sicher)
+git revert <commit-hash>
+git commit -m "revert: E-Mail-Bestätigungsfeature temporär entfernt
+
+Grund: Kompatibilitätsprobleme mit bestehender Authentifizierung
+Wird in separatem Branch neu implementiert"
 ```
 
-### **GIT PROBLEME LÖSEN**
-```powershell
-# Git-Repository reparieren
-git fsck
-git gc
+### **3. PASSWÖRTER VERSEHENTLICH COMMITTED**
+```bash
+# SOFORT handeln:
+# 1. Passwort aus Datei entfernen
+sed -i 's/password: "GreifbarB2019"/password: ${POSTGRES_PASSWORD}/g' config/staging.yaml
 
-# Merge-Konflikte vermeiden (Force-Push)
-git reset --hard HEAD
-git clean -fd
-git push origin main --force
+# 2. Commit mit Korrektur
+git add config/staging.yaml
+git commit -m "security: Klartext-Passwort durch Environment Variable ersetzt"
 
-# Repository-Status zurücksetzen
-git reset --hard origin/main
+# 3. Git History bereinigen (falls erforderlich)
+git filter-branch --force --index-filter \
+  'git rm --cached --ignore-unmatch config/staging.yaml' \
+  --prune-empty --tag-name-filter cat -- --all
+
+# 4. Force Push (VORSICHT!)
+git push --force-with-lease origin main
+
+# 5. Passwort auf Server ändern
+ssh root@159.69.144.208
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'NewSecurePassword123';"
 ```
 
----
+### **4. REPOSITORY KORRUPTION**
+```bash
+# Repository-Integrität prüfen
+git fsck --full
 
-## 🚀 DEPLOYMENT-INTEGRATION
+# Repository reparieren
+git gc --aggressive --prune=now
 
-### **LOKALE ENTWICKLUNG → SERVER DEPLOYMENT**
-```powershell
-# 1. Lokale Änderungen committen und pushen
-cd C:\Users\guntr\Desktop\Leon_vertic
-git add .
-git commit -m "feat: Server-Updates"
-git push origin main --force
-
-# 2. Auf Server deployen (separates Terminal/SSH)
-# ssh root@159.69.144.208
-# cd /opt/vertic
-# git pull origin main
-# cd vertic_app/vertic/vertic_server/vertic_server_server
-# serverpod generate
-# docker-compose -f docker-compose.staging.yaml up -d --build
-```
-
-### **DEPLOYMENT-SCRIPT ERSTELLEN**
-```powershell
-# deploy.ps1 im Repository-Root erstellen
-@"
-# Vertic Deployment Script
-Write-Host "🚀 Vertic Deployment gestartet..." -ForegroundColor Green
-
-# Git Push
-Write-Host "📤 Pushing to Git..." -ForegroundColor Yellow
-git add .
-git status
-$commitMsg = Read-Host "Commit Message"
-git commit -m "$commitMsg"
-git push origin main --force-with-lease
-
-Write-Host "✅ Deployment abgeschlossen!" -ForegroundColor Green
-Write-Host "🔗 Nächster Schritt: SSH zum Server für Docker-Deployment" -ForegroundColor Cyan
-"@ | Out-File -FilePath deploy.ps1 -Encoding UTF8
-
-# Script ausführen
-.\deploy.ps1
+# Falls alles fehlschlägt: Neu klonen
+cd ..
+git clone https://github.com/Kartoffelbauer33/vertic.git vertic_backup
+cd vertic_backup
+# Lokale Änderungen manuell übertragen
 ```
 
 ---
 
-## 📊 BRANCH-MANAGEMENT
+## 📊 BEST PRACTICES
 
-### **BRANCH-STRATEGIEN**
-```powershell
-# Aktueller Branch
-git branch
-git branch -a
+### **1. COMMIT-NACHRICHTEN (E-Mail-Bestätigung Beispiele)**
 
-# Neuen Branch erstellen (optional)
-git checkout -b feature/neue-funktion
-git push origin feature/neue-funktion
+#### **Gute Commit-Nachrichten:**
+```bash
+# Feature-Commits
+git commit -m "feat: E-Mail-Bestätigungssystem für Staff-User implementiert
 
-# Zurück zu main
-git checkout main
-git push origin main --force
+- createStaffUserWithEmail Endpoint hinzugefügt
+- verifyStaffEmail Endpoint für Code-Validierung
+- staffSignInFlexible für Username/E-Mail Login
+- emailVerifiedAt Feld in StaffUser Schema
+- employmentStatus Management (pending_verification, active)
+
+Breaking Changes: Keine
+Testing: ✅ Alle E-Mail-Bestätigungsflows getestet
+Migration: Manuelle SQL-Migration erforderlich"
+
+# Bugfix-Commits
+git commit -m "fix: E-Mail-Bestätigungscode Regex korrigiert
+
+Problem: STAFF_<timestamp> Format wurde nicht erkannt
+Lösung: Regex von '^STAFF_[0-9]+$' zu '^STAFF_[0-9]{13}$' geändert
+Testing: ✅ Bestätigungscodes werden korrekt validiert
+
+Fixes #789"
+
+# Documentation-Commits
+git commit -m "docs: E-Mail-Bestätigungssystem Dokumentation erweitert
+
+- Vollständige API-Dokumentation für neue Endpoints
+- Entwicklungsworkflow für E-Mail-Features dokumentiert
+- Troubleshooting-Guide für häufige Probleme
+- Migration-Anleitung für Datenbank-Schema"
 ```
 
-### **BRANCH CLEANUP**
-```powershell
-# Lokale Branches löschen
-git branch -d feature/alte-funktion
+#### **Schlechte Commit-Nachrichten (vermeiden):**
+```bash
+# ❌ Zu vage
+git commit -m "fixes"
+git commit -m "email stuff"
+git commit -m "updates"
 
-# Remote-Branches löschen
-git push origin --delete feature/alte-funktion
+# ❌ Keine Beschreibung
+git commit -m "feat: email verification"
 
-# Alle merged Branches löschen
-git branch --merged | grep -v main | xargs git branch -d
+# ❌ Mehrere unrelated Änderungen
+git commit -m "feat: email verification + bugfixes + documentation + refactoring"
 ```
 
----
+### **2. BRANCH-MANAGEMENT**
 
-## 🔧 ADVANCED GIT TRICKS
+#### **Branch-Naming-Konventionen:**
+```bash
+# Features
+feature/email-verification-system
+feature/staff-user-management
+feature/flexible-login-options
 
-### **COMMIT-HISTORY BEREINIGEN**
-```powershell
-# Letzten Commit ändern
-git commit --amend -m "Neue Commit-Nachricht"
-git push origin main --force
+# Bugfixes
+fix/email-verification-regex
+fix/staff-login-authentication
+fix/database-migration-error
 
-# Mehrere Commits zusammenfassen (Interactive Rebase)
-git rebase -i HEAD~3
-# Dann "squash" für Commits die zusammengefasst werden sollen
-git push origin main --force
+# Hotfixes
+hotfix/critical-email-verification-bug
+hotfix/staff-login-failure
+
+# Documentation
+docs/email-verification-api
+docs/deployment-guide-update
 ```
 
-### **DATEI-SPEZIFISCHE OPERATIONEN**
-```powershell
-# Nur bestimmte Dateien committen
-git add vertic_app/vertic/vertic_server/
-git commit -m "feat: Nur Server-Änderungen"
+### **3. .gitignore OPTIMIERUNG (E-Mail-System)**
+```gitignore
+# Vertic-spezifische Ignores
+vertic_app/vertic/vertic_server/vertic_server_server/.env
+vertic_app/vertic/vertic_server/vertic_server_server/config/secrets.yaml
 
-# Datei aus Git entfernen (aber lokal behalten)
-git rm --cached datei.txt
-git commit -m "Remove file from Git"
+# E-Mail-Bestätigungssystem
+email_verification_codes.txt
+email_templates/secrets/
+*.verification.key
 
-# Datei komplett löschen
-git rm datei.txt
-git commit -m "Delete file"
+# Flutter
+**/android/local.properties
+**/ios/Flutter/flutter_export_environment.sh
+**/lib/generated/
+**/build/
+
+# Serverpod
+**/migrations/*/migration.json
+**/generated/
+**/.serverpod_cache/
+
+# Development
+.vscode/settings.json
+.idea/workspace.xml
+*.log
+debug.log
+
+# Backups
+backup_*.sql
+*.backup
 ```
 
-### **STASH-MANAGEMENT**
-```powershell
-# Änderungen temporär speichern
-git stash push -m "WIP: Zwischenspeichern"
-git stash list
-git stash pop
+### **4. PRE-COMMIT HOOKS (E-Mail-System)**
+```bash
+#!/bin/sh
+# .git/hooks/pre-commit
+
+echo "🔍 Pre-Commit Checks für E-Mail-Bestätigungssystem..."
+
+# 1. Passwort-Check
+if grep -r "password.*:" --include="*.yaml" --include="*.dart" --exclude-dir=.git .; then
+    echo "❌ FEHLER: Klartext-Passwörter gefunden!"
+    echo "   Verwende Environment Variables: \${PASSWORD}"
+    exit 1
+fi
+
+# 2. E-Mail-Bestätigungsendpoints prüfen
+if ! grep -r "createStaffUserWithEmail\|verifyStaffEmail\|staffSignInFlexible" vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/ > /dev/null; then
+    echo "⚠️  WARNUNG: E-Mail-Bestätigungsendpoints nicht gefunden"
+fi
+
+# 3. Serverpod Code-Generation prüfen
+cd vertic_app/vertic/vertic_server/vertic_server_server
+if ! serverpod generate --dry-run > /dev/null 2>&1; then
+    echo "❌ FEHLER: Serverpod Code-Generation fehlgeschlagen"
+    echo "   Führe 'serverpod generate' aus"
+    exit 1
+fi
+
+echo "✅ Pre-Commit Checks erfolgreich"
 ```
 
----
+### **5. RELEASE-MANAGEMENT (E-Mail-System)**
+```bash
+# Release-Branch erstellen
+git checkout -b release/v2.1.0-email-verification
+git push -u origin release/v2.1.0-email-verification
 
-## 🚨 NOTFALL-PROCEDURES
+# Release-Notes erstellen
+cat > RELEASE_NOTES_v2.1.0.md << 'EOF'
+# Vertic v2.1.0 - E-Mail-Bestätigungssystem
 
-### **REPOSITORY KOMPLETT ZURÜCKSETZEN**
-```powershell
-# VORSICHT: Löscht alle lokalen Änderungen!
-git reset --hard HEAD
-git clean -fd
+## 🚀 Neue Features
+- **E-Mail-Bestätigungssystem für Staff-User**
+  - Echte E-Mail-Adressen statt Fake-E-Mails
+  - Automatische Code-Einfügung für Development
+  - Flexible Login-Optionen (Username oder E-Mail)
 
-# Repository auf Remote-Stand zurücksetzen
-git reset --hard origin/main
+## 🔧 API-Änderungen
+- **Neue Endpoints:**
+  - `POST /unifiedAuth/createStaffUserWithEmail`
+  - `POST /unifiedAuth/verifyStaffEmail`
+  - `POST /unifiedAuth/staffSignInFlexible`
+
+## 🗄️ Datenbank-Migration
+```sql
+ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp without time zone;
+UPDATE staff_users SET "employmentStatus" = 'active' WHERE "employeeId" = 'superuser';
 ```
 
-### **FORCE-PUSH RÜCKGÄNGIG MACHEN**
-```powershell
-# Wenn Force-Push schief gelaufen ist
-git reflog                    # Commit-History anzeigen
-git reset --hard HEAD@{1}     # Zu vorherigem Zustand zurück
-git push origin main --force  # Korrektur pushen
-```
+## 📱 Client-Apps
+- **Staff App:** E-Mail-Bestätigungsseite mit automatischer Code-Einfügung
+- **Development-Modus:** Orange Hinweise für Testing
 
-### **REPOSITORY NEU KLONEN**
-```powershell
-# Als letzter Ausweg: Repository neu klonen
-cd C:\Users\guntr\Desktop\
-git clone https://github.com/Kartoffelbauer33/vertic.git Leon_vertic_backup
-# Dann lokale Änderungen manuell übertragen
+## 🔄 Migration von v2.0.x
+1. Datenbank-Migration ausführen (siehe oben)
+2. Server neu starten
+3. Apps neu builden
+
+## 🐛 Bekannte Probleme
+- Serverpod-Migrations können fehlschlagen → Manuelle SQL-Ausführung erforderlich
+
+## 📞 Support
+Bei Problemen: Siehe VERTIC_DEVELOPMENT_GUIDE.md
+EOF
+
+# Release-Tag erstellen
+git tag -a v2.1.0 -m "Release v2.1.0: E-Mail-Bestätigungssystem
+
+- Vollständiges E-Mail-Bestätigungssystem implementiert
+- Staff-User können mit echten E-Mail-Adressen erstellt werden
+- Flexible Login-Optionen (Username/E-Mail)
+- Development-friendly mit automatischer Code-Einfügung
+- Production-ready mit Account-Status Management"
+
+git push origin v2.1.0
 ```
 
 ---
 
 ## 📞 QUICK REFERENCE
 
-### **HÄUFIGSTE BEFEHLE**
-```powershell
-# Repository-Root
-cd C:\Users\guntr\Desktop\Leon_vertic
+### **Häufige Git-Befehle (E-Mail-System)**
+```bash
+# E-Mail-bezogene Commits anzeigen
+git log --oneline --grep="email" --grep="verification" --all
 
-# Standard-Workflow
-git status
-git add .
-git commit -m "feat: Beschreibung"
-git push origin main --force-with-lease
+# E-Mail-Bestätigungsfeatures Status
+git diff HEAD~1 --name-only | grep -E "(email|verification)"
 
-# Sicherheitscheck
-git diff --cached | findstr /i "password"
-git log --oneline -5
+# Letzten E-Mail-Commit rückgängig
+git revert $(git log --oneline --grep="email" -1 --format="%H")
 
-# Notfall-Reset
-git reset --hard HEAD
-git clean -fd
+# E-Mail-Features in anderem Branch
+git checkout feature/email-enhancements
+git cherry-pick <commit-hash>
+
+# Deployment-Status prüfen
+ssh root@159.69.144.208 "cd /opt/vertic && git log --oneline -1"
 ```
 
-### **TERMINAL-SHORTCUTS**
-```powershell
-# PowerShell-Shortcuts
-cd C:\Users\guntr\Desktop\Leon_vertic  # Repository-Root
-pwd                                    # Aktueller Pfad
-ls                                     # Dateien anzeigen
-cls                                    # Terminal leeren
-```
+### **Sicherheits-Checkliste vor jedem Push**
+```bash
+# 1. Passwort-Check
+grep -r "password.*:" --include="*.yaml" --include="*.dart" --exclude-dir=.git .
 
-### **WICHTIGE PFADE**
-- **Repository-Root:** `C:\Users\guntr\Desktop\Leon_vertic\`
-- **Git-Befehle:** Immer vom Repository-Root ausführen!
-- **VS Code:** `code .` vom Repository-Root
+# 2. .env Dateien prüfen
+find . -name ".env*" -not -path "./.git/*"
+
+# 3. E-Mail-Bestätigungsendpoints vorhanden
+grep -r "createStaffUserWithEmail" vertic_app/vertic/vertic_server/vertic_server_server/lib/src/endpoints/
+
+# 4. Serverpod Code generiert
+cd vertic_app/vertic/vertic_server/vertic_server_server && serverpod generate --dry-run
+
+# 5. Commit-Nachricht aussagekräftig
+git log --oneline -1
+```
 
 ---
 
-## 🎯 KRITISCHE ERINNERUNGEN
+**🎯 MIT DIESEM GUIDE:**
+- ✅ **Sichere Git-Workflows** ohne Passwort-Leaks
+- ✅ **E-Mail-Bestätigungsfeatures** ordentlich versioniert
+- ✅ **Professionelle Commit-Nachrichten** für bessere Nachverfolgung
+- ✅ **Effiziente Deployment-Prozesse** für Production
+- ✅ **Troubleshooting-Strategien** für häufige Git-Probleme
 
-### ⚠️ **NIEMALS VERGESSEN:**
-1. **Immer vom Repository-Root** (`Leon_vertic/`) Git-Befehle ausführen
-2. **Force-Push überschreibt Remote** - keine Rückfrage!
-3. **Niemals Passwörter committen** - vor jedem Commit prüfen
-4. **`--force-with-lease` ist sicherer** als `--force`
-5. **Git-Status vor jedem Commit** prüfen
-
-### ✅ **BEWÄHRTE PRAKTIKEN:**
-1. **Regelmäßige Commits** mit aussagekräftigen Nachrichten
-2. **Force-Push nur bei Sicherheit** verwenden
-3. **Sensitive Daten in .gitignore** aufnehmen
-4. **Repository-Status regelmäßig prüfen**
-5. **Bei Unsicherheit: Backup erstellen**
-
----
-
-**🚀 MIT DIESEM GUIDE HAST DU:**
-- ✅ **Vollständige Kontrolle** über das Git-Repository
-- ✅ **Sichere Force-Push-Strategien** ohne Datenverlust
-- ✅ **Klare Terminal-Befehle** für alle Situationen
-- ✅ **Sicherheitsrichtlinien** für sensible Daten
-- ✅ **Notfall-Procedures** für kritische Situationen
-
-**🔒 SICHERHEIT GEHT VOR - FORCE-PUSH MIT BEDACHT!** 
+**🚀 E-MAIL-BESTÄTIGUNGSSYSTEM ERFOLGREICH IN GIT INTEGRIERT!** 

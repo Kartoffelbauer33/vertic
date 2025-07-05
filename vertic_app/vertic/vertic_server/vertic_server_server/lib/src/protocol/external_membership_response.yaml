@@ -1,0 +1,14 @@
+class: ExternalMembershipResponse
+fields:
+  success: bool
+  message: String
+  
+  # Bei erfolgreicher Verknüpfung
+  membershipId: int?
+  providerName: String?
+  externalUserId: String?
+  displayName: String?
+  
+  # Bei Fehlern
+  errorCode: String?              # 'ALREADY_LINKED', 'INVALID_QR', 'PROVIDER_ERROR'
+  errorDetails: String? 

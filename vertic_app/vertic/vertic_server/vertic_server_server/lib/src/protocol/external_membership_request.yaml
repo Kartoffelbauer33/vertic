@@ -1,0 +1,5 @@
+class: ExternalMembershipRequest
+fields:
+  providerName: String            # 'fitpass', 'friction'
+  qrCodeData: String              # QR-Code vom Fremdanbieter
+  notes: String?                  # Optionale Notizen 

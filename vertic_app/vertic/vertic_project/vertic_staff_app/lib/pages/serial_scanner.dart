@@ -33,7 +33,7 @@ class SerialScanner {
     115200,
     38400,
     57600,
-    19200
+    19200,
   ];
 
   SerialScanner({required this.onDataReceived});
@@ -257,19 +257,21 @@ class SerialScanner {
         return;
       }
 
-      // Prüfen, ob der Code ein "." enthält (Format: base64payload.signature)
-      if (!completeData.contains('.')) {
-        // Wenn kein Punkt vorhanden ist, prüfen, ob es ein abgeschnittener Base64-String ist
-        // und versuchen, den Punkt am Ende zu finden
+      // 🔧 FIX: Nur bei LANGEN Base64-Strings (>100 Zeichen) ohne Punkt warten
+      // Normale Barcodes/QR-Codes (kurz) sofort verarbeiten
+      if (!completeData.contains('.') && completeData.length > 100) {
+        // Nur bei langen Codes prüfen, ob es ein abgeschnittener Base64-String ist
         if (_isBase64String(completeData)) {
           // Prüfen, ob genug Zeit seit der letzten Verarbeitung vergangen ist
           final now = DateTime.now();
           if (_lastProcessingTime != null) {
-            final timeSinceLastProcessing =
-                now.difference(_lastProcessingTime!);
+            final timeSinceLastProcessing = now.difference(
+              _lastProcessingTime!,
+            );
             if (timeSinceLastProcessing < const Duration(milliseconds: 300)) {
               debugPrint(
-                  'Zu kurze Zeit seit letzter Verarbeitung, warte auf vollständige Daten...');
+                'Zu kurze Zeit seit letzter Verarbeitung, warte auf vollständige Daten...',
+              );
               // Nicht verarbeiten, sondern auf weitere Daten warten
               _resetBufferTimer();
               return;
@@ -277,7 +279,8 @@ class SerialScanner {
           }
 
           debugPrint(
-              'Möglicher abgeschnittener Base64-String erkannt. Warte auf weitere Daten...');
+            'Möglicher abgeschnittener Base64-String erkannt. Warte auf weitere Daten...',
+          );
           // Nicht verarbeiten, sondern auf weitere Daten warten
           _resetBufferTimer();
           return;
@@ -313,9 +316,21 @@ class SerialScanner {
 
   /// Prüft, ob ein String Base64-kodiert aussieht
   bool _isBase64String(String str) {
-    // Base64 verwendet die Zeichen A-Z, a-z, 0-9, +, / und manchmal = als Padding
-    final regex = RegExp(r'^[A-Za-z0-9+/]*={0,3}$');
-    return regex.hasMatch(str);
+    // 🔧 FIX: Strengere Base64-Erkennung
+    // - Muss mindestens 20 Zeichen lang sein
+    // - Muss eine Mischung aus Groß-/Kleinbuchstaben enthalten
+    // - Normale Barcodes (nur Zahlen) werden nicht als Base64 erkannt
+
+    if (str.length < 20) return false;
+
+    // Prüfe ob nur Zahlen (normale Barcodes) → KEIN Base64
+    if (RegExp(r'^\d+$').hasMatch(str)) return false;
+
+    // Prüfe ob Base64-Pattern UND mindestens ein Buchstabe
+    final hasBase64Pattern = RegExp(r'^[A-Za-z0-9+/]*={0,3}$').hasMatch(str);
+    final hasLetters = RegExp(r'[A-Za-z]').hasMatch(str);
+
+    return hasBase64Pattern && hasLetters;
   }
 
   /// Setzt den Puffer zurück

@@ -13,6 +13,13 @@ import 'src/generated/endpoints.dart';
 /// Die Staff-App verwendet ein komplett getrenntes System
 Future<AuthenticationInfo?> clientAuthenticationHandler(
     Session session, String token) async {
+  // 🔐 STAFF-TOKEN-ERKENNUNG: Staff-Tokens ablehnen
+  if (token.startsWith('staff_')) {
+    session
+        .log('🔐 Staff-Token erkannt - wird vom StaffAuthHelper verarbeitet');
+    return null; // Staff-Tokens werden NICHT über diesen Handler verarbeitet
+  }
+
   session.log('🔑 Client-App Authentication (nicht Staff)');
   return await auth.authenticationHandler(session, token);
 }

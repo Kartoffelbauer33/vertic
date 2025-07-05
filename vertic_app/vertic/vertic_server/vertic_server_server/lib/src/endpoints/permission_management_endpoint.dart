@@ -291,7 +291,15 @@ class PermissionManagementEndpoint extends Endpoint {
 
       // Timestamps setzen
       role.createdAt = DateTime.now();
-      role.createdBy = 1; // TODO: Aktuelle Staff-User-ID verwenden
+
+      // Aktuelle Staff-User-ID ermitteln (REQUIRED für Roles)
+      final currentStaffUserId =
+          await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+      if (currentStaffUserId == null) {
+        throw Exception(
+            'Keine gültige Staff-Authentifizierung gefunden - Rollen-Erstellung erfordert Staff-Login');
+      }
+      role.createdBy = currentStaffUserId;
 
       final newRole = await Role.db.insertRow(session, role);
 
@@ -404,6 +412,13 @@ class PermissionManagementEndpoint extends Endpoint {
         throw Exception('Permission bereits an Rolle zugewiesen');
       }
 
+      // Aktuelle Staff-User-ID ermitteln
+      final currentStaffUserId =
+          await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+      if (currentStaffUserId == null) {
+        throw Exception('Keine gültige Staff-Authentifizierung gefunden');
+      }
+
       // Permission zuweisen
       await RolePermission.db.insertRow(
           session,
@@ -411,7 +426,7 @@ class PermissionManagementEndpoint extends Endpoint {
             roleId: roleId,
             permissionId: permissionId,
             assignedAt: DateTime.now(),
-            assignedBy: 1, // TODO: Aktuelle Staff-User-ID verwenden
+            assignedBy: currentStaffUserId,
           ));
 
       session.log(
@@ -507,6 +522,13 @@ class PermissionManagementEndpoint extends Endpoint {
         throw Exception('Rolle bereits zugewiesen');
       }
 
+      // Aktuelle Staff-User-ID ermitteln
+      final currentStaffUserId =
+          await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+      if (currentStaffUserId == null) {
+        throw Exception('Keine gültige Staff-Authentifizierung gefunden');
+      }
+
       // Rolle zuweisen
       await StaffUserRole.db.insertRow(
           session,
@@ -514,7 +536,7 @@ class PermissionManagementEndpoint extends Endpoint {
             staffUserId: staffUserId,
             roleId: roleId,
             assignedAt: DateTime.now(),
-            assignedBy: 1, // TODO: Aktuelle Staff-User-ID verwenden
+            assignedBy: currentStaffUserId,
             isActive: true,
             expiresAt: expiresAt,
           ));

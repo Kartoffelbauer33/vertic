@@ -1,7 +1,9 @@
 # 🚀 VERTIC HETZNER SERVER - MASTER MANAGEMENT GUIDE
 
 **Umfassende Dokumentation aller kritischen Erkenntnisse aus 8 Stunden Troubleshooting**  
-*Alles was du über den Hetzner Server wissen musst - von Setup bis Deployment*
+*Alles was du über den Hetzner Server wissen musst - von Setup bis Deployment*  
+**Version:** 2.1 (E-Mail-Bestätigung Update)  
+**Aktualisiert:** 2025-01-16
 
 ---
 
@@ -22,7 +24,9 @@
     ↓
 🖥️ Ubuntu Server (159.69.144.208)
     ├── 🐳 Docker Container: vertic-server (Port 8080-8082)
+    │   └── 📧 E-Mail-Bestätigungssystem
     └── 🗄️ PostgreSQL System Service (Port 5432)
+        └── 📧 emailVerifiedAt Spalte
 ```
 
 ### ⚠️ **KRITISCHE ERKENNTNISSE**
@@ -30,7 +34,66 @@
 2. **Docker Container verbindet zu System-PostgreSQL** via `host.docker.internal`
 3. **Docker Build MUSS vom Repository-Root** ausgeführt werden
 4. **Serverpod 2.8.0 braucht generator.yaml** mit `database: true`
-5. **Ubuntu 24.04 hat IPv6-Probleme** - aber läuft jetzt stabil
+5. **E-Mail-Bestätigungssystem** erfordert manuelle Datenbank-Migration
+6. **Ubuntu 24.04 hat IPv6-Probleme** - aber läuft jetzt stabil
+
+---
+
+## 📧 **E-MAIL-BESTÄTIGUNGSSYSTEM INTEGRATION**
+
+### **🗄️ DATENBANK-SCHEMA ERWEITERUNGEN**
+```sql
+-- Neue Spalte in staff_users Tabelle
+ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp without time zone;
+
+-- Account-Status Management
+employment_status:
+- 'pending_verification' -- Neu erstellt, E-Mail nicht bestätigt
+- 'active'              -- E-Mail bestätigt, kann sich anmelden
+- 'on_leave'            -- Temporär deaktiviert
+- 'terminated'          -- Dauerhaft deaktiviert
+- 'suspended'           -- Administrativ gesperrt
+```
+
+### **🚀 NEUE SERVER-ENDPOINTS**
+```
+POST /unifiedAuth/createStaffUserWithEmail
+- Erstellt Staff-User mit echter E-Mail
+- Setzt employmentStatus: 'pending_verification'
+- Generiert Bestätigungscode: STAFF_<timestamp>
+
+POST /unifiedAuth/verifyStaffEmail  
+- Validiert Bestätigungscode
+- Aktiviert Account (employmentStatus: 'active')
+- Setzt emailVerifiedAt: NOW()
+
+POST /unifiedAuth/staffSignInFlexible
+- Login mit Username ODER E-Mail möglich
+- Automatische Erkennung: @ = E-Mail, sonst Username
+```
+
+### **🔧 MIGRATION DURCHFÜHRUNG**
+```bash
+# Auf Server via pgAdmin
+http://159.69.144.208/pgadmin4
+
+# 1. Spalte hinzufügen
+ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp without time zone;
+
+# 2. Superuser aktivieren
+UPDATE staff_users 
+SET 
+    "employmentStatus" = 'active',
+    "emailVerifiedAt" = NOW()
+WHERE 
+    "employeeId" = 'superuser';
+
+# 3. Migration als erfolgreich markieren
+INSERT INTO "serverpod_migrations" ("module", "version", "timestamp")
+VALUES ('vertic_server', '20250622230632803', now())
+ON CONFLICT ("module")
+DO UPDATE SET "version" = '20250622230632803', "timestamp" = now();
+```
 
 ---
 
@@ -76,6 +139,7 @@ journalctl -u sshd -f
 - **System-Service ist stabiler** für Production
 - **Einfachere Backups** und Wartung
 - **pgAdmin4 läuft direkt** auf System-PostgreSQL
+- **E-Mail-Bestätigungsfeatures** erfordern stabile Datenbank
 
 ### **POSTGRESQL MANAGEMENT**
 ```bash
@@ -86,6 +150,16 @@ systemctl restart postgresql
 
 # Direkte Verbindung
 sudo -u postgres psql -d test_db
+
+# E-Mail-Bestätigungsstatus prüfen
+sudo -u postgres psql -d test_db -c "
+SELECT 
+    \"employeeId\", 
+    email, 
+    \"employmentStatus\", 
+    \"emailVerifiedAt\" 
+FROM staff_users;
+"
 
 # Verbindung testen (aus Docker)
 pg_isready -h host.docker.internal -p 5432 -U postgres
@@ -112,7 +186,7 @@ services:
   vertic-server:
     build: ../../../../..  # Build vom Repository-Root!
     ports:
-      - "8080:8080"  # API Server
+      - "8080:8080"  # API Server (inkl. E-Mail-Endpoints)
       - "8081:8081"  # Insights Dashboard  
       - "8082:8082"  # Web Interface
     environment:
@@ -127,8 +201,8 @@ services:
 docker ps
 docker-compose -f docker-compose.staging.yaml ps
 
-# Logs anzeigen
-docker logs vertic-kassensystem-server
+# Logs anzeigen (E-Mail-Bestätigungsaktivitäten)
+docker logs vertic-kassensystem-server | grep -E "(createStaffUserWithEmail|verifyStaffEmail|staffSignInFlexible)"
 docker-compose -f docker-compose.staging.yaml logs -f
 
 # Container neu starten
@@ -143,20 +217,15 @@ cd vertic_app/vertic/vertic_server/vertic_server_server
 docker-compose -f docker-compose.staging.yaml up -d
 ```
 
-### **DOCKER TROUBLESHOOTING**
+### **E-MAIL-BESTÄTIGUNGSSYSTEM TESTEN**
 ```bash
-# Container-Details
-docker inspect vertic-kassensystem-server
+# Health-Check für E-Mail-Endpoints
+curl -X POST http://159.69.144.208:8080/unifiedAuth/createStaffUserWithEmail \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","username":"testuser",...}'
 
-# In Container einsteigen
-docker exec -it vertic-kassensystem-server sh
-
-# Docker-Netzwerk prüfen
-docker network ls
-docker network inspect vertic_kassensystem_network
-
-# Ressourcen-Verbrauch
-docker stats
+# Container-Logs für E-Mail-Aktivitäten
+docker logs vertic-kassensystem-server --tail 100 | grep -E "STAFF_[0-9]+"
 ```
 
 ---
@@ -192,6 +261,13 @@ database:
 type: server
 database: true  # OHNE DIESE ZEILE GEHT NICHTS!
 client_package_path: ../vertic_server_client
+
+# Flutter clients für E-Mail-Bestätigungsseiten
+flutter_clients:
+  - path: ../../vertic_project/vertic_client_app
+    name: vertic_client_app
+  - path: ../../vertic_project/vertic_staff_app  
+    name: vertic_staff_app
 ```
 
 ### **SERVERPOD CODE-GENERIERUNG**
@@ -204,26 +280,34 @@ dart pub get
 # Code generieren (NACH JEDER ÄNDERUNG!)
 serverpod generate
 
-# Prüfen ob Database-Modelle generiert wurden
-ls -la lib/src/generated/ | grep -E "(app_user|staff_user|document_display_rule)"
+# Prüfen ob E-Mail-Bestätigungsmodelle generiert wurden
+ls -la lib/src/generated/ | grep -E "(staff_user|unified_auth_response)"
+
+# E-Mail-Bestätigungsendpoints prüfen
+grep -r "createStaffUserWithEmail\|verifyStaffEmail\|staffSignInFlexible" lib/src/endpoints/
 ```
 
 ---
 
 ## 🚀 DEPLOYMENT WORKFLOW
 
-### **1. LOKALE ENTWICKLUNG → SERVER DEPLOYMENT**
+### **1. LOKALE ENTWICKLUNG → SERVER DEPLOYMENT (UPDATED)**
 ```bash
-# 1. Lokal entwickeln und testen
+# 1. Lokal entwickeln und E-Mail-Features testen
 cd Leon_vertic/vertic_app/vertic/vertic_server/vertic_server_server
 dart run bin/main.dart
 
-# 2. Code committen (OHNE Passwörter!)
+# 2. E-Mail-Bestätigungsfeatures testen
+# - Staff-User mit E-Mail erstellen
+# - E-Mail-Bestätigungsseite testen
+# - Flexibler Login testen
+
+# 3. Code committen (OHNE Passwörter!)
 git add .
-git commit -m "feat: neue Features"
+git commit -m "feat: E-Mail-Bestätigungssystem implementiert"
 git push origin main
 
-# 3. Auf Server deployen
+# 4. Auf Server deployen
 ssh root@159.69.144.208
 cd /opt/vertic
 git pull origin main
@@ -240,19 +324,25 @@ cd /opt/vertic/vertic_app/vertic/vertic_server/vertic_server_server
 bash deploy_to_hetzner.sh
 ```
 
-### **3. DEPLOYMENT VERIFIKATION**
+### **3. DEPLOYMENT VERIFIKATION (UPDATED)**
 ```bash
 # Health-Checks
 curl http://159.69.144.208:8080/
 curl http://159.69.144.208:8081/
 curl http://159.69.144.208:8082/
 
+# E-Mail-Bestätigungsendpoints testen
+curl -X POST http://159.69.144.208:8080/unifiedAuth/createStaffUserWithEmail
+curl -X POST http://159.69.144.208:8080/unifiedAuth/verifyStaffEmail
+curl -X POST http://159.69.144.208:8080/unifiedAuth/staffSignInFlexible
+
 # Container-Status
 docker ps
 docker logs vertic-kassensystem-server --tail 20
 
-# Database-Verbindung
+# Database-Verbindung und E-Mail-Status
 pg_isready -h localhost -p 5432 -U postgres
+sudo -u postgres psql -d test_db -c "SELECT COUNT(*) FROM staff_users WHERE \"employmentStatus\" = 'pending_verification';"
 ```
 
 ---
@@ -264,7 +354,7 @@ pg_isready -h localhost -p 5432 -U postgres
 Inbound Rules:
 ✅ Port 22 (SSH)     - TCP - 0.0.0.0/0
 ✅ Port 80 (HTTP)    - TCP - 0.0.0.0/0
-✅ Port 8080 (API)   - TCP - 0.0.0.0/0
+✅ Port 8080 (API)   - TCP - 0.0.0.0/0 (inkl. E-Mail-Endpoints)
 ✅ Port 8081 (Insights) - TCP - 0.0.0.0/0
 ✅ Port 8082 (Web)   - TCP - 0.0.0.0/0
 ```
@@ -277,7 +367,7 @@ ufw status verbose
 # Ports freigeben
 ufw allow 22/tcp
 ufw allow 80/tcp  
-ufw allow 8080/tcp
+ufw allow 8080/tcp  # E-Mail-Bestätigungsendpoints
 ufw allow 8081/tcp
 ufw allow 8082/tcp
 
@@ -285,11 +375,15 @@ ufw allow 8082/tcp
 ufw reload
 ```
 
-### **PORT-TESTS**
+### **PORT-TESTS (UPDATED)**
 ```bash
 # Intern (auf Server)
 netstat -tlnp | grep -E ':(22|80|8080|8081|8082|5432)'
 ss -tlnp | grep -E ':(8080|8081|8082)'
+
+# E-Mail-Endpoints testen
+curl -X POST http://localhost:8080/unifiedAuth/createStaffUserWithEmail
+curl -X POST http://localhost:8080/unifiedAuth/verifyStaffEmail
 
 # Extern (von Windows)
 Test-NetConnection -ComputerName 159.69.144.208 -Port 8080
@@ -300,7 +394,7 @@ Test-NetConnection -ComputerName 159.69.144.208 -Port 22
 
 ## 📊 MONITORING & LOGS
 
-### **SERVICE STATUS**
+### **SERVICE STATUS (UPDATED)**
 ```bash
 # Alle wichtigen Services
 systemctl status docker postgresql ssh ufw
@@ -309,26 +403,35 @@ systemctl status docker postgresql ssh ufw
 docker ps
 docker stats
 
+# E-Mail-Bestätigungsaktivitäten
+docker logs vertic-kassensystem-server | grep -E "(createStaffUserWithEmail|verifyStaffEmail|STAFF_[0-9]+)"
+
 # Disk Space
 df -h
 du -sh /opt/vertic/
 ```
 
-### **LOG MANAGEMENT**
+### **LOG MANAGEMENT (UPDATED)**
 ```bash
-# Serverpod Server Logs
-docker logs vertic-kassensystem-server --tail 100 -f
+# Serverpod Server Logs mit E-Mail-Filter
+docker logs vertic-kassensystem-server --tail 100 -f | grep -E "(email|STAFF_|verification)"
 
 # System Logs
 journalctl -u docker -f
 journalctl -u postgresql -f
 journalctl -u ssh -f
 
-# Log-Rotation (automatisch)
-# Logs werden täglich rotiert, 7 Tage aufbewahrt
+# E-Mail-Bestätigungsstatistiken
+sudo -u postgres psql -d test_db -c "
+SELECT 
+    \"employmentStatus\", 
+    COUNT(*) 
+FROM staff_users 
+GROUP BY \"employmentStatus\";
+"
 ```
 
-### **PERFORMANCE MONITORING**
+### **PERFORMANCE MONITORING (UPDATED)**
 ```bash
 # CPU & Memory
 top
@@ -338,13 +441,23 @@ free -h
 # Docker Ressourcen
 docker stats vertic-kassensystem-server
 
-# PostgreSQL Performance
-sudo -u postgres psql -d test_db -c "SELECT * FROM pg_stat_activity;"
+# PostgreSQL Performance mit E-Mail-Aktivitäten
+sudo -u postgres psql -d test_db -c "
+SELECT 
+    query, 
+    calls, 
+    total_time, 
+    mean_time 
+FROM pg_stat_statements 
+WHERE query LIKE '%staff_users%' OR query LIKE '%email%'
+ORDER BY total_time DESC 
+LIMIT 10;
+"
 ```
 
 ---
 
-## 🗄️ PGADMIN4 WEB-INTERFACE
+## 🗄️ PGADMIN4 WEB-INTERFACE (UPDATED)
 
 ### **ZUGANG**
 - **URL:** http://159.69.144.208/pgadmin4/
@@ -358,24 +471,39 @@ sudo -u postgres psql -d test_db -c "SELECT * FROM pg_stat_activity;"
 - **Username:** `postgres`
 - **Password:** `GreifbarB2019`
 
-### **PGADMIN MANAGEMENT**
-```bash
-# pgAdmin Status
-systemctl status apache2
-systemctl status pgadmin4
+### **E-MAIL-BESTÄTIGUNGSQUERIES**
+```sql
+-- E-Mail-Bestätigungsstatus aller Staff-User
+SELECT 
+    "employeeId",
+    email,
+    "employmentStatus",
+    "emailVerifiedAt",
+    "createdAt"
+FROM staff_users
+ORDER BY "createdAt" DESC;
 
-# pgAdmin Logs
-tail -f /var/log/pgadmin/pgadmin4.log
+-- Pending E-Mail-Bestätigungen
+SELECT COUNT(*) as pending_verifications
+FROM staff_users 
+WHERE "employmentStatus" = 'pending_verification';
 
-# pgAdmin neu starten
-systemctl restart apache2
+-- Letzte E-Mail-Bestätigungsaktivitäten
+SELECT 
+    "employeeId",
+    email,
+    "emailVerifiedAt"
+FROM staff_users 
+WHERE "emailVerifiedAt" IS NOT NULL
+ORDER BY "emailVerifiedAt" DESC
+LIMIT 10;
 ```
 
 ---
 
-## 🔄 BACKUP & RESTORE
+## 🔄 BACKUP & RESTORE (UPDATED)
 
-### **AUTOMATISCHE BACKUPS**
+### **AUTOMATISCHE BACKUPS (UPDATED)**
 ```bash
 # Backup-Script erstellen
 cat > /opt/vertic/backup.sh << 'EOF'
@@ -384,8 +512,19 @@ BACKUP_DIR="/opt/vertic/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 mkdir -p $BACKUP_DIR
 
-# Database Backup
+# Database Backup mit E-Mail-Bestätigungsdaten
 sudo -u postgres pg_dump test_db > $BACKUP_DIR/vertic_db_$DATE.sql
+
+# E-Mail-Bestätigungsstatistiken
+sudo -u postgres psql -d test_db -c "
+SELECT 
+    'Backup Statistics' as info,
+    COUNT(*) as total_staff_users,
+    COUNT(CASE WHEN \"employmentStatus\" = 'active' THEN 1 END) as active_users,
+    COUNT(CASE WHEN \"employmentStatus\" = 'pending_verification' THEN 1 END) as pending_users,
+    COUNT(CASE WHEN \"emailVerifiedAt\" IS NOT NULL THEN 1 END) as verified_emails
+FROM staff_users;
+" >> $BACKUP_DIR/email_verification_stats_$DATE.txt
 
 # Code Backup
 tar -czf $BACKUP_DIR/vertic_code_$DATE.tar.gz /opt/vertic/vertic_app/
@@ -393,8 +532,9 @@ tar -czf $BACKUP_DIR/vertic_code_$DATE.tar.gz /opt/vertic/vertic_app/
 # Alte Backups löschen (7 Tage)
 find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
 find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+find $BACKUP_DIR -name "*.txt" -mtime +7 -delete
 
-echo "$(date): Backup completed - $DATE"
+echo "$(date): Backup completed - $DATE (with email verification data)"
 EOF
 
 chmod +x /opt/vertic/backup.sh
@@ -403,29 +543,29 @@ chmod +x /opt/vertic/backup.sh
 echo "0 2 * * * /opt/vertic/backup.sh" | crontab -
 ```
 
-### **MANUAL BACKUP**
-```bash
-# Database Backup
-sudo -u postgres pg_dump test_db > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Komplettes System Backup
-tar -czf vertic_full_backup_$(date +%Y%m%d).tar.gz /opt/vertic/
-```
-
-### **RESTORE PROZEDUR**
-```bash
-# Database Restore
-sudo -u postgres psql -d test_db < backup_file.sql
-
-# Code Restore
-cd /opt/vertic
-git reset --hard HEAD
-git pull origin main
-```
-
 ---
 
-## 🚨 NOTFALL-PROCEDURES
+## 🚨 NOTFALL-PROCEDURES (UPDATED)
+
+### **E-MAIL-BESTÄTIGUNGSSYSTEM REPARIEREN**
+```bash
+# 1. E-Mail-Spalte fehlt
+ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp without time zone;
+
+# 2. Alle Staff-User auf 'pending_verification'
+UPDATE staff_users SET "employmentStatus" = 'pending_verification' WHERE "employmentStatus" IS NULL;
+
+# 3. Superuser aktivieren
+UPDATE staff_users 
+SET "employmentStatus" = 'active', "emailVerifiedAt" = NOW()
+WHERE "employeeId" = 'superuser';
+
+# 4. Migration als erfolgreich markieren
+INSERT INTO "serverpod_migrations" ("module", "version", "timestamp")
+VALUES ('vertic_server', '20250622230632803', now())
+ON CONFLICT ("module")
+DO UPDATE SET "version" = '20250622230632803', "timestamp" = now();
+```
 
 ### **KOMPLETTER SERVER-NEUSTART**
 ```bash
@@ -440,77 +580,54 @@ reboot
 systemctl status postgresql docker
 docker ps
 
-# 4. Services starten
+# 4. E-Mail-Bestätigungssystem testen
+curl -X POST http://159.69.144.208:8080/unifiedAuth/createStaffUserWithEmail
+
+# 5. Services starten
 cd /opt/vertic/vertic_app/vertic/vertic_server/vertic_server_server
-docker-compose -f docker-compose.staging.yaml up -d
-```
-
-### **DOCKER PROBLEME**
-```bash
-# Docker komplett neu starten
-systemctl restart docker
-
-# Container-Cache leeren
-docker system prune -f
-
-# Images neu bauen
-cd /opt/vertic
-docker build -f vertic_app/vertic/vertic_server/vertic_server_server/Dockerfile -t vertic-server . --no-cache
-```
-
-### **POSTGRESQL PROBLEME**
-```bash
-# PostgreSQL neu starten
-systemctl restart postgresql
-
-# Verbindung testen
-pg_isready -h localhost -p 5432 -U postgres
-
-# Logs prüfen
-journalctl -u postgresql -f
-```
-
-### **NETZWERK PROBLEME**
-```bash
-# Firewall neu laden
-ufw reload
-
-# Docker-Netzwerk neu erstellen
-docker network rm vertic_kassensystem_network
 docker-compose -f docker-compose.staging.yaml up -d
 ```
 
 ---
 
-## 📱 FLUTTER APP ENTWICKLUNG GEGEN SERVER
+## 📱 FLUTTER APP ENTWICKLUNG GEGEN SERVER (UPDATED)
 
 ### **ENVIRONMENT KONFIGURATION**
 ```dart
 // vertic_staff_app/lib/config/environment.dart
 static const String _stagingServer = 'http://159.69.144.208:8080/';
+
+// E-Mail-Bestätigungsendpoints verfügbar:
+// - createStaffUserWithEmail
+// - verifyStaffEmail  
+// - staffSignInFlexible
 ```
 
-### **APP GEGEN SERVER STARTEN**
+### **APP GEGEN SERVER STARTEN (UPDATED)**
 ```bash
-# Staff App gegen Hetzner Server
+# Staff App gegen Hetzner Server (mit E-Mail-Features)
 cd vertic_project/vertic_staff_app
 flutter run --dart-define=USE_STAGING=true
+
+# E-Mail-Bestätigungsfeatures testen:
+# 1. Neuen Staff-User erstellen
+# 2. Automatische Navigation zur E-Mail-Bestätigungsseite
+# 3. Code automatisch eingefügt
+# 4. E-Mail bestätigen
+# 5. Login mit Username UND E-Mail testen
 
 # Client App gegen Hetzner Server
 cd ../vertic_client_app
 flutter run --dart-define=USE_STAGING=true
-
-# Custom Server URL
-flutter run --dart-define=SERVER_URL=http://159.69.144.208:8080/
 ```
 
-### **APP DEBUGGING**
+### **APP DEBUGGING (UPDATED)**
 ```bash
-# Flutter Logs
-flutter logs
+# Flutter Logs mit E-Mail-Filter
+flutter logs | grep -E "(email|verification|STAFF_)"
 
-# Network Debugging
-flutter run --dart-define=USE_STAGING=true --verbose
+# Network Debugging für E-Mail-Endpoints
+flutter run --dart-define=USE_STAGING=true --verbose | grep -E "(createStaffUserWithEmail|verifyStaffEmail)"
 
 # App mit DevTools
 flutter pub global activate devtools
@@ -519,7 +636,7 @@ flutter pub global run devtools
 
 ---
 
-## 🔧 WARTUNG & UPDATES
+## 🔧 WARTUNG & UPDATES (UPDATED)
 
 ### **REGELMÄSSIGE WARTUNG (MONATLICH)**
 ```bash
@@ -530,6 +647,15 @@ apt update && apt upgrade -y
 docker-compose -f docker-compose.staging.yaml pull
 docker system prune -f
 
+# E-Mail-Bestätigungsstatistiken prüfen
+sudo -u postgres psql -d test_db -c "
+SELECT 
+    \"employmentStatus\", 
+    COUNT(*) 
+FROM staff_users 
+GROUP BY \"employmentStatus\";
+"
+
 # Backup prüfen
 ls -la /opt/vertic/backups/
 
@@ -537,36 +663,40 @@ ls -la /opt/vertic/backups/
 journalctl --vacuum-time=30d
 ```
 
-### **CODE UPDATES**
+### **CODE UPDATES (UPDATED)**
 ```bash
 # Repository aktualisieren
 cd /opt/vertic
 git pull origin main
 
-# Serverpod Code regenerieren
+# Serverpod Code regenerieren (inkl. E-Mail-Features)
 cd vertic_app/vertic/vertic_server/vertic_server_server
 serverpod generate
+
+# E-Mail-Bestätigungsendpoints prüfen
+grep -r "createStaffUserWithEmail\|verifyStaffEmail\|staffSignInFlexible" lib/src/endpoints/
 
 # Container neu bauen
 docker-compose -f docker-compose.staging.yaml build --no-cache
 docker-compose -f docker-compose.staging.yaml up -d
 ```
 
-### **SICHERHEITS-UPDATES**
-```bash
-# Fail2ban Status
-systemctl status fail2ban
-
-# SSH-Logs prüfen
-journalctl -u sshd | grep "Failed password"
-
-# Firewall-Logs
-ufw status verbose
-```
-
 ---
 
-## 🎯 KRITISCHE ERKENNTNISSE - NIEMALS VERGESSEN!
+## 🎯 KRITISCHE ERKENNTNISSE - NIEMALS VERGESSEN! (UPDATED)
+
+### ⚠️ **E-MAIL-BESTÄTIGUNGSSYSTEM**
+```bash
+# ❌ FALSCH (Serverpod Migration):
+dart run bin/main.dart --apply-migrations
+# Scheitert an "account_cleanup_logs already exists"
+
+# ✅ RICHTIG (Manuelle SQL-Migration):
+# 1. pgAdmin öffnen
+# 2. ALTER TABLE staff_users ADD COLUMN "emailVerifiedAt" timestamp;
+# 3. UPDATE staff_users SET "employmentStatus" = 'active' WHERE "employeeId" = 'superuser';
+# 4. Migration als erfolgreich markieren
+```
 
 ### ⚠️ **DOCKER BUILD CONTEXT**
 ```bash
@@ -579,53 +709,39 @@ cd /opt/vertic  # Repository-Root!
 docker build -f vertic_app/vertic/vertic_server/vertic_server_server/Dockerfile -t vertic-server .
 ```
 
-### ⚠️ **POSTGRESQL VERBINDUNG**
-```yaml
-# ❌ FALSCH (Container-zu-Container):
-database:
-  host: postgres
-
-# ✅ RICHTIG (Container-zu-System):
-database:
-  host: host.docker.internal
-```
-
 ### ⚠️ **SERVERPOD GENERATOR**
 ```yaml
 # config/generator.yaml - ZWINGEND ERFORDERLICH!
 type: server
 database: true  # OHNE DIESE ZEILE: "database feature is disabled"
+
+# Flutter clients für E-Mail-Bestätigungsseiten
+flutter_clients:
+  - path: ../../vertic_project/vertic_staff_app
+    name: vertic_staff_app
 ```
 
-### ⚠️ **FIREWALL REIHENFOLGE**
-```bash
-# 1. ERST UFW konfigurieren
-ufw allow 22/tcp
-
-# 2. DANN UFW aktivieren
-ufw --force enable
-
-# 3. NIEMALS SSH-Port blockieren!
-```
-
-### ⚠️ **DEPLOYMENT REIHENFOLGE**
+### ⚠️ **DEPLOYMENT REIHENFOLGE (UPDATED)**
 ```bash
 # 1. Git Pull
 git pull origin main
 
-# 2. Code Generate
+# 2. Code Generate (inkl. E-Mail-Features)
 serverpod generate
 
-# 3. Docker Build (vom Root!)
+# 3. E-Mail-Endpoints prüfen
+grep -r "createStaffUserWithEmail" lib/src/endpoints/
+
+# 4. Docker Build (vom Root!)
 cd /opt/vertic && docker build -f vertic_app/vertic/vertic_server/vertic_server_server/Dockerfile -t vertic-server .
 
-# 4. Container Start
+# 5. Container Start
 cd vertic_app/vertic/vertic_server/vertic_server_server && docker-compose -f docker-compose.staging.yaml up -d
 ```
 
 ---
 
-## 📞 QUICK REFERENCE
+## 📞 QUICK REFERENCE (UPDATED)
 
 ### **WICHTIGE PFADE**
 ```
@@ -636,35 +752,46 @@ cd vertic_app/vertic/vertic_server/vertic_server_server && docker-compose -f doc
 /var/log/pgadmin/                              # pgAdmin Logs
 ```
 
-### **WICHTIGE BEFEHLE**
+### **WICHTIGE BEFEHLE (UPDATED)**
 ```bash
 # SSH
 ssh root@159.69.144.208
 
-# Container Status
-docker ps && docker logs vertic-kassensystem-server --tail 10
+# Container Status mit E-Mail-Features
+docker ps && docker logs vertic-kassensystem-server --tail 10 | grep -E "(email|STAFF_)"
 
 # Services Status
 systemctl status docker postgresql ssh
 
-# Deployment
+# E-Mail-Bestätigungsstatus
+sudo -u postgres psql -d test_db -c "SELECT \"employeeId\", \"employmentStatus\", \"emailVerifiedAt\" FROM staff_users;"
+
+# Deployment mit E-Mail-Features
 cd /opt/vertic && git pull && cd vertic_app/vertic/vertic_server/vertic_server_server && serverpod generate && docker-compose -f docker-compose.staging.yaml up -d --build
 ```
 
 ### **WICHTIGE URLS**
-- **API:** http://159.69.144.208:8080
+- **API:** http://159.69.144.208:8080 (inkl. E-Mail-Endpoints)
 - **Insights:** http://159.69.144.208:8081
 - **Web:** http://159.69.144.208:8082
 - **pgAdmin:** http://159.69.144.208/pgadmin4/
 - **Hetzner Console:** https://console.hetzner.cloud
 
+### **E-MAIL-BESTÄTIGUNGSENDPOINTS**
+```
+POST /unifiedAuth/createStaffUserWithEmail
+POST /unifiedAuth/verifyStaffEmail
+POST /unifiedAuth/staffSignInFlexible
+```
+
 ---
 
 **🎯 MIT DIESER DOKUMENTATION KANNST DU:**
 - ✅ **Server vollständig verwalten** ohne Rätselraten
+- ✅ **E-Mail-Bestätigungssystem überwachen** und debuggen
 - ✅ **Deployments sicher durchführen** mit bewährten Prozeduren
 - ✅ **Probleme schnell lösen** mit konkreten Lösungsansätzen
 - ✅ **System überwachen** und warten
 - ✅ **Notfälle bewältigen** mit klaren Prozeduren
 
-**🚀 ALLE 8 STUNDEN TROUBLESHOOTING-ERKENNTNISSE SIND JETZT DOKUMENTIERT!** 
+**🚀 ALLE 8 STUNDEN TROUBLESHOOTING-ERKENNTNISSE + E-MAIL-BESTÄTIGUNGSSYSTEM SIND JETZT DOKUMENTIERT!** 

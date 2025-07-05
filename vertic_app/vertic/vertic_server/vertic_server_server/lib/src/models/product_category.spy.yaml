@@ -1,0 +1,8 @@
+class: ProductCategory
+table: product_categories
+fields:
+  name: String
+  description: String?
+  displayOrder: int, default=0
+  isActive: bool, default=true
+  hallId: int? 

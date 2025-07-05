@@ -7,6 +7,7 @@ import 'dart:typed_data'; // Für ByteData
 import 'settings_page.dart';
 import 'ticket_purchase_page.dart';
 import '../main.dart'; // Für Zugriff auf client und sessionManager
+import 'external_provider_management_page.dart';
 
 class MainTabController extends StatefulWidget {
   const MainTabController({super.key});
@@ -51,10 +52,10 @@ class _MainTabControllerState extends State<MainTabController> {
     }
   }
 
-  // Vereinfachte Seitenstruktur: Nur Ticket, ID, Settings
+  // Erweiterte Seitenstruktur: Ticket, ID, External Provider, Settings
   List<Widget> _buildPages() {
     return [
-      // Ticket Tab - JETZT ERSTE POSITION für Ticketverkauf-Fokus
+      // Ticket Tab - ERSTE POSITION für Ticketverkauf-Fokus
       _isLoadingUser
           ? const Center(child: CircularProgressIndicator())
           : _user == null
@@ -80,7 +81,20 @@ class _MainTabControllerState extends State<MainTabController> {
                   user: _user!,
                 ),
 
-      // Settings Tab - DRITTE POSITION
+      // External Provider Tab - DRITTE POSITION
+      _isLoadingUser
+          ? const Center(child: CircularProgressIndicator())
+          : _user == null
+              ? const Center(
+                  child: Text('Benutzerdetails nicht verfügbar'),
+                )
+              : ExternalProviderManagementPage(
+                  sessionManager: sessionManager,
+                  client: client,
+                  user: _user!,
+                ),
+
+      // Settings Tab - VIERTE POSITION
       const SettingsPage(),
     ];
   }
@@ -115,6 +129,11 @@ class _MainTabControllerState extends State<MainTabController> {
             icon: Icon(Icons.badge_outlined),
             activeIcon: Icon(Icons.badge),
             label: 'ID',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.card_membership_outlined),
+            activeIcon: Icon(Icons.card_membership),
+            label: 'Provider',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),

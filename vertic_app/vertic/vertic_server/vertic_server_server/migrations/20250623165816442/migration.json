@@ -1,0 +1,114 @@
+{
+  "actions": [
+    {
+      "type": "alterTable",
+      "alterTable": {
+        "name": "app_users",
+        "schema": "public",
+        "addColumns": [
+          {
+            "name": "preferredHallId",
+            "columnType": 6,
+            "isNullable": true,
+            "dartType": "int?"
+          },
+          {
+            "name": "lastKnownHallId",
+            "columnType": 6,
+            "isNullable": true,
+            "dartType": "int?"
+          },
+          {
+            "name": "registrationHallId",
+            "columnType": 6,
+            "isNullable": true,
+            "dartType": "int?"
+          }
+        ],
+        "deleteColumns": [],
+        "modifyColumns": [],
+        "addIndexes": [
+          {
+            "indexName": "app_user_preferred_hall_idx",
+            "elements": [
+              {
+                "type": 0,
+                "definition": "preferredHallId"
+              }
+            ],
+            "type": "btree",
+            "isUnique": false,
+            "isPrimary": false
+          },
+          {
+            "indexName": "app_user_last_known_hall_idx",
+            "elements": [
+              {
+                "type": 0,
+                "definition": "lastKnownHallId"
+              }
+            ],
+            "type": "btree",
+            "isUnique": false,
+            "isPrimary": false
+          },
+          {
+            "indexName": "app_user_registration_hall_idx",
+            "elements": [
+              {
+                "type": 0,
+                "definition": "registrationHallId"
+              }
+            ],
+            "type": "btree",
+            "isUnique": false,
+            "isPrimary": false
+          }
+        ],
+        "deleteIndexes": [],
+        "addForeignKeys": [],
+        "deleteForeignKeys": [],
+        "warnings": []
+      }
+    },
+    {
+      "type": "alterTable",
+      "alterTable": {
+        "name": "external_providers",
+        "schema": "public",
+        "addColumns": [
+          {
+            "name": "reEntryWindowType",
+            "columnType": 0,
+            "isNullable": false,
+            "columnDefault": "'hours'::text",
+            "dartType": "String"
+          },
+          {
+            "name": "reEntryWindowDays",
+            "columnType": 6,
+            "isNullable": false,
+            "columnDefault": "1",
+            "dartType": "int"
+          }
+        ],
+        "deleteColumns": [],
+        "modifyColumns": [
+          {
+            "columnName": "apiCredentialsJson",
+            "addNullable": true,
+            "removeNullable": false,
+            "changeDefault": false
+          }
+        ],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [],
+        "deleteForeignKeys": [],
+        "warnings": []
+      }
+    }
+  ],
+  "warnings": [],
+  "migrationApiVersion": 1
+}

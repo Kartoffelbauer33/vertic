@@ -1,0 +1,12 @@
+class: Product
+table: products
+fields:
+  name: String
+  description: String?
+  categoryId: int
+  price: double
+  barcode: String?
+  sku: String?
+  stockQuantity: int?
+  isActive: bool, default=true
+  hallId: int? 

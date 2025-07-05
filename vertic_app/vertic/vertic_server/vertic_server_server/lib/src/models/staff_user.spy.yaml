@@ -60,9 +60,10 @@ fields:
   lockoutUntil: DateTime?          # Account gesperrt bis
   
   # Status & Aktivität
-  employmentStatus: String, default='active'  # active, on_leave, terminated, suspended
+  employmentStatus: String, default='active'  # active, pending_verification, on_leave, terminated, suspended
   terminationDate: DateTime?       # Kündigungsdatum
   terminationReason: String?       # Kündigungsgrund
+  emailVerifiedAt: DateTime?       # Zeitpunkt der E-Mail-Bestätigung
   
   # System & Audit
   createdBy: int?                  # Wer hat den Staff-User angelegt

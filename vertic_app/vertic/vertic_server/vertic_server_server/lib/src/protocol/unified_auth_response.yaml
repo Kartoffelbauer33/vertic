@@ -9,4 +9,8 @@ fields:
   userInfoId:
     type: int?
   staffToken:
+    type: String?
+  requiresEmailVerification:
+    type: bool?
+  verificationCode:
     type: String? 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
+import 'email_verification_page.dart';
 import '../../auth/permission_wrapper.dart';
+import '../../widgets/password_input_dialog.dart';
 
 /// **🎯 Phase 4.1: RBAC Management UI**
 ///
@@ -2042,68 +2044,19 @@ class _RbacManagementPageState extends State<RbacManagementPage>
   void _showRolePermissionsDialog(Role role) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('🔐 Permissions für "${role.displayName}"'),
-        content: SizedBox(
-          width: 500,
-          height: 400,
-          child: FutureBuilder<List<Permission>>(
-            future: _getRolePermissions(role.id!),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text('Fehler: ${snapshot.error}'),
-                );
-              }
-
-              final permissions = snapshot.data ?? [];
-
-              if (permissions.isEmpty) {
-                return const Center(
-                  child: Text('Keine Permissions zugewiesen'),
-                );
-              }
-
-              return ListView.builder(
-                itemCount: permissions.length,
-                itemBuilder: (context, index) {
-                  final permission = permissions[index];
-                  return ListTile(
-                    leading: Icon(
-                      _getPermissionIconData(permission.category),
-                      color: _getCategoryColor(permission.category),
-                    ),
-                    title: Text(permission.displayName),
-                    subtitle: Text(permission.name),
-                    trailing: permission.isSystemCritical
-                        ? const Icon(Icons.warning, color: Colors.red)
-                        : null,
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Schließen'),
-          ),
-        ],
+      builder: (context) => _RolePermissionManagementDialog(
+        role: role,
+        allPermissions: _allPermissions,
+        onPermissionsChanged: _loadInitialData,
       ),
     );
   }
 
   void _showCreateStaffUserDialog() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-            'Staff-User Erstellung wird über das Unified Auth System implementiert...'),
-        backgroundColor: Colors.orange,
+    showDialog(
+      context: context,
+      builder: (context) => _RbacCreateStaffUserDialog(
+        onStaffUserCreated: _loadInitialData,
       ),
     );
   }
@@ -2256,6 +2209,725 @@ class _RbacManagementPageState extends State<RbacManagementPage>
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 👤 RBAC STAFF USER CREATION DIALOG
+// ═══════════════════════════════════════════════════════════════
+
+class _RbacCreateStaffUserDialog extends StatefulWidget {
+  final VoidCallback onStaffUserCreated;
+
+  const _RbacCreateStaffUserDialog({
+    required this.onStaffUserCreated,
+  });
+
+  @override
+  State<_RbacCreateStaffUserDialog> createState() =>
+      _RbacCreateStaffUserDialogState();
+}
+
+class _RbacCreateStaffUserDialogState
+    extends State<_RbacCreateStaffUserDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  StaffUserType _selectedStaffLevel = StaffUserType.staff;
+  bool _isCreating = false;
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.person_add, color: Colors.green),
+          SizedBox(width: 8),
+          Text('Neuer Staff-User'),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 400,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _firstNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Vorname *',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Vorname ist erforderlich';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _lastNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nachname *',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Nachname ist erforderlich';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'E-Mail *',
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'E-Mail ist erforderlich';
+                    }
+                    if (!value.contains('@') || !value.contains('.')) {
+                      return 'Bitte geben Sie eine gültige E-Mail ein';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<StaffUserType>(
+                  value: _selectedStaffLevel,
+                  decoration: const InputDecoration(
+                    labelText: 'Staff-Level *',
+                    prefixIcon: Icon(Icons.admin_panel_settings),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: StaffUserType.staff,
+                      child: Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Text('Mitarbeiter'),
+                        ],
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: StaffUserType.hallAdmin,
+                      child: Row(
+                        children: [
+                          Icon(Icons.admin_panel_settings,
+                              color: Colors.orange),
+                          SizedBox(width: 8),
+                          Text('Hallen-Administrator'),
+                        ],
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: StaffUserType.facilityAdmin,
+                      child: Row(
+                        children: [
+                          Icon(Icons.business, color: Colors.purple),
+                          SizedBox(width: 8),
+                          Text('Facility-Administrator'),
+                        ],
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: StaffUserType.superUser,
+                      child: Row(
+                        children: [
+                          Icon(Icons.verified, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Super-Administrator'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedStaffLevel = value!;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isCreating ? null : () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        ElevatedButton(
+          onPressed: _isCreating ? null : _createStaffUser,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+          ),
+          child: _isCreating
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Erstellen'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _createStaffUser() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isCreating = true;
+    });
+
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      // 🔐 PHASE 3.3: Sichere Passwort-Eingabe
+      final staffName =
+          '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
+      final username = _firstNameController.text.trim().toLowerCase();
+
+      final password = await PasswordInputDialog.show(
+        context: context,
+        staffName: staffName,
+        username: username,
+      );
+
+      if (password == null) {
+        // User hat abgebrochen
+        setState(() {
+          _isCreating = false;
+        });
+        return;
+      }
+
+      // 🔄 UNIFIED AUTH: Neue E-Mail-basierte Staff-Erstellung
+      final result = await client.unifiedAuth.createStaffUserWithEmail(
+        _emailController.text.trim(), // email (echte E-Mail-Adresse)
+        username, // username
+        password, // Sicheres Passwort vom Dialog
+        _firstNameController.text.trim(), // firstName
+        _lastNameController.text.trim(), // lastName
+        _selectedStaffLevel, // staffLevel
+      );
+
+      if (result.success != true) {
+        throw Exception(result.message ?? 'Unbekannter Fehler');
+      }
+
+      Navigator.pop(context);
+
+      // Wenn E-Mail-Bestätigung erforderlich ist, zeige Bestätigungsseite
+      if (result.requiresEmailVerification == true &&
+          result.verificationCode != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EmailVerificationPage(
+              email: _emailController.text.trim(),
+              verificationCode: result.verificationCode!,
+            ),
+          ),
+        ).then((verified) {
+          if (verified == true) {
+            widget.onStaffUserCreated();
+          }
+        });
+      } else {
+        widget.onStaffUserCreated();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Staff-User ${_firstNameController.text.trim()} ${_lastNameController.text.trim()} wurde erfolgreich erstellt'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _isCreating = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Erstellen: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🔐 ROLE PERMISSION MANAGEMENT DIALOG
+// ═══════════════════════════════════════════════════════════════
+
+class _RolePermissionManagementDialog extends StatefulWidget {
+  final Role role;
+  final List<Permission> allPermissions;
+  final VoidCallback onPermissionsChanged;
+
+  const _RolePermissionManagementDialog({
+    required this.role,
+    required this.allPermissions,
+    required this.onPermissionsChanged,
+  });
+
+  @override
+  State<_RolePermissionManagementDialog> createState() =>
+      _RolePermissionManagementDialogState();
+}
+
+class _RolePermissionManagementDialogState
+    extends State<_RolePermissionManagementDialog> {
+  List<Permission> _assignedPermissions = [];
+  List<Permission> _availablePermissions = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+  String _selectedCategory = 'all';
+  Set<String> _availableCategories = {'all'};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPermissions();
+  }
+
+  Future<void> _loadPermissions() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      // Lade die aktuell zugewiesenen Permissions der Rolle
+      _assignedPermissions =
+          await client.permissionManagement.getRolePermissions(widget.role.id!);
+
+      // Erstelle Liste der verfügbaren (nicht zugewiesenen) Permissions
+      final assignedIds = _assignedPermissions.map((p) => p.id).toSet();
+      _availablePermissions = widget.allPermissions
+          .where((p) => !assignedIds.contains(p.id))
+          .toList();
+
+      // Kategorien extrahieren
+      _availableCategories = {'all'};
+      for (final permission in widget.allPermissions) {
+        _availableCategories.add(permission.category);
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Fehler beim Laden: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  List<Permission> get _filteredAvailablePermissions {
+    var permissions = _selectedCategory == 'all'
+        ? _availablePermissions
+        : _availablePermissions
+            .where((p) => p.category == _selectedCategory)
+            .toList();
+
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      permissions = permissions
+          .where((p) =>
+              p.displayName.toLowerCase().contains(query) ||
+              p.name.toLowerCase().contains(query) ||
+              (p.description?.toLowerCase().contains(query) ?? false))
+          .toList();
+    }
+
+    return permissions;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: 800,
+        height: 600,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(Icons.security, color: Colors.indigo),
+                SizedBox(width: 8),
+                Text(
+                  'Permissions für "${widget.role.displayName}"',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close),
+                ),
+              ],
+            ),
+            Divider(),
+            SizedBox(height: 16),
+
+            if (_isLoading)
+              Expanded(child: Center(child: CircularProgressIndicator()))
+            else
+              Expanded(
+                child: Row(
+                  children: [
+                    // Zugewiesene Permissions (Links)
+                    Expanded(
+                      child: _buildAssignedPermissionsPanel(),
+                    ),
+                    SizedBox(width: 16),
+                    // Verfügbare Permissions (Rechts)
+                    Expanded(
+                      child: _buildAvailablePermissionsPanel(),
+                    ),
+                  ],
+                ),
+              ),
+
+            SizedBox(height: 16),
+            // Actions
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Schließen'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssignedPermissionsPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text(
+                  'Zugewiesene Permissions (${_assignedPermissions.length})',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _assignedPermissions.isEmpty
+                ? Center(child: Text('Keine Permissions zugewiesen'))
+                : ListView.builder(
+                    padding: EdgeInsets.all(8),
+                    itemCount: _assignedPermissions.length,
+                    itemBuilder: (context, index) {
+                      final permission = _assignedPermissions[index];
+                      return Card(
+                        margin: EdgeInsets.only(bottom: 4),
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(
+                            _getPermissionIcon(permission.category),
+                            color: _getCategoryColor(permission.category),
+                            size: 20,
+                          ),
+                          title: Text(
+                            permission.displayName,
+                            style: TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(
+                            permission.name,
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(Icons.remove_circle,
+                                color: Colors.red, size: 20),
+                            onPressed: () =>
+                                _removePermissionFromRole(permission),
+                            tooltip: 'Permission entfernen',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvailablePermissionsPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.add_circle, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text(
+                      'Verfügbare Permissions (${_filteredAvailablePermissions.length})',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                // Suchfeld
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Permissions suchen...',
+                    prefixIcon: Icon(Icons.search, size: 20),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    isDense: true,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                ),
+                SizedBox(height: 8),
+                // Kategorie-Filter
+                DropdownButtonFormField<String>(
+                  value: _selectedCategory,
+                  decoration: InputDecoration(
+                    labelText: 'Kategorie',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    isDense: true,
+                  ),
+                  items: _availableCategories.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(
+                          category == 'all' ? 'Alle Kategorien' : category),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategory = value!;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _filteredAvailablePermissions.isEmpty
+                ? Center(child: Text('Keine verfügbaren Permissions'))
+                : ListView.builder(
+                    padding: EdgeInsets.all(8),
+                    itemCount: _filteredAvailablePermissions.length,
+                    itemBuilder: (context, index) {
+                      final permission = _filteredAvailablePermissions[index];
+                      return Card(
+                        margin: EdgeInsets.only(bottom: 4),
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(
+                            _getPermissionIcon(permission.category),
+                            color: _getCategoryColor(permission.category),
+                            size: 20,
+                          ),
+                          title: Text(
+                            permission.displayName,
+                            style: TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(
+                            permission.name,
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(Icons.add_circle,
+                                color: Colors.green, size: 20),
+                            onPressed: () =>
+                                _assignPermissionToRole(permission),
+                            tooltip: 'Permission zuweisen',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _assignPermissionToRole(Permission permission) async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final success = await client.permissionManagement.assignPermissionToRole(
+        widget.role.id!,
+        permission.id!,
+      );
+
+      if (success) {
+        setState(() {
+          _assignedPermissions.add(permission);
+          _availablePermissions.remove(permission);
+        });
+
+        widget.onPermissionsChanged();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Permission "${permission.displayName}" wurde zugewiesen'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Zuweisung fehlgeschlagen');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Zuweisen: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _removePermissionFromRole(Permission permission) async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final success =
+          await client.permissionManagement.removePermissionFromRole(
+        widget.role.id!,
+        permission.id!,
+      );
+
+      if (success) {
+        setState(() {
+          _assignedPermissions.remove(permission);
+          _availablePermissions.add(permission);
+        });
+
+        widget.onPermissionsChanged();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Permission "${permission.displayName}" wurde entfernt'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        throw Exception('Entfernung fehlgeschlagen');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Entfernen: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  IconData _getPermissionIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'admin':
+        return Icons.admin_panel_settings;
+      case 'user':
+        return Icons.person;
+      case 'system':
+        return Icons.settings;
+      case 'finance':
+        return Icons.attach_money;
+      case 'reports':
+        return Icons.analytics;
+      default:
+        return Icons.security;
+    }
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'admin':
+        return Colors.red;
+      case 'user':
+        return Colors.blue;
+      case 'system':
+        return Colors.purple;
+      case 'finance':
+        return Colors.green;
+      case 'reports':
+        return Colors.orange;
+      default:
+        return Colors.grey;
     }
   }
 }

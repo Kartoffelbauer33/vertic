@@ -1,0 +1,13 @@
+class: PosSession
+table: pos_sessions
+fields:
+  staffUserId: int
+  customerId: int?
+  hallId: int
+  deviceId: String  # REQUIRED Geräte-ID für gerätespezifische Sessions
+  status: String, default='active'
+  totalAmount: double, default=0.0
+  discountAmount: double, default=0.0
+  paymentMethod: String?
+  createdAt: DateTime
+  completedAt: DateTime? 

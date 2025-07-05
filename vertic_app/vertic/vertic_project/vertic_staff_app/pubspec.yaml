@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.2.3 <4.0.0'
+  sdk: '>=3.8.1 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -33,12 +33,12 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
   # Serverpod und Client-Abhängigkeiten
-  serverpod_flutter: ^2.8.0
-  serverpod_auth_shared_flutter: ^2.8.0  # Für AuthenticationKeyManager (SESSION-FIX)
+  serverpod_flutter: ^2.9.1
+  serverpod_auth_shared_flutter: ^2.9.1  # Für AuthenticationKeyManager (SESSION-FIX)
   # Auth-Dependencies entfernt - Nutzen jetzt Custom Staff-Auth-System
   test_server_client: 
     path: ../../vertic_server/vertic_server_client
-  intl: ^0.19.0
+  intl: ^0.20.2
   provider: ^6.1.1  # Für State Management
   shared_preferences: ^2.2.2  # Für Token-Speicherung
   # Scanner-Abhängigkeiten
@@ -47,6 +47,8 @@ dependencies:
   crypto: ^3.0.3  # Für die Kryptografie-Funktionen
   fl_chart: ^0.64.0  # Für Diagramme und Statistiken
   file_picker: ^8.0.0+1  # Für Datei-Upload
+  # Gerätespezifische Session-Verwaltung
+  device_info_plus: ^11.5.0  # Für Geräte-Identifikation
 
 dev_dependencies:
   flutter_test:

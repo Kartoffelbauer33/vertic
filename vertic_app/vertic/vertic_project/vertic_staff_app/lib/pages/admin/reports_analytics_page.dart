@@ -48,7 +48,7 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _initializeDateRange();
 
     // Verzögerung um sicherzustellen dass Auth-Token korrekt gesetzt ist
@@ -195,6 +195,7 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
           Tab(icon: Icon(Icons.trending_up), text: 'Umsatz'),
           Tab(icon: Icon(Icons.confirmation_number), text: 'Tickets'),
           Tab(icon: Icon(Icons.people), text: 'Benutzer'),
+          Tab(icon: Icon(Icons.extension), text: 'External'),
           Tab(icon: Icon(Icons.download), text: 'Export'),
         ],
       ),
@@ -346,6 +347,7 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
         _buildRevenueTab(),
         _buildTicketsTab(),
         _buildUsersTab(),
+        _buildExternalProvidersTab(),
         _buildExportTab(),
       ],
     );
@@ -777,6 +779,143 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
     );
   }
 
+  Widget _buildExternalProvidersTab() {
+    return PermissionWrapper(
+      requiredPermission: 'can_view_provider_stats',
+      placeholder: _buildAccessDenied('External Provider Analytics'),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'External Provider Analytics',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 16),
+
+            // Info Card
+            Card(
+              color: Colors.blue[50],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.info, color: Colors.blue[600]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'External Provider Analytics sind im separaten Management-Bereich verfügbar. '
+                        'Wechseln Sie zu "External Provider Management" für detaillierte Statistiken.',
+                        style: TextStyle(color: Colors.blue[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Quick Stats Placeholder
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.5,
+              children: [
+                _buildQuickStatCard(
+                  'Fitpass Check-ins',
+                  '0', // TODO: Load real data
+                  Icons.fitness_center,
+                  Colors.orange,
+                ),
+                _buildQuickStatCard(
+                  'Friction Check-ins',
+                  '0', // TODO: Load real data
+                  Icons.sports_gymnastics,
+                  Colors.blue,
+                ),
+                _buildQuickStatCard(
+                  'Erfolgsrate',
+                  '0%', // TODO: Load real data
+                  Icons.check_circle,
+                  Colors.green,
+                ),
+                _buildQuickStatCard(
+                  'Aktive Provider',
+                  '0', // TODO: Load real data
+                  Icons.extension,
+                  Colors.purple,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Navigation Button
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // TODO: Navigate to External Provider Management
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text('Navigation zu External Provider Management...'),
+                      backgroundColor: Colors.indigo,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.extension),
+                label: const Text('Zum External Provider Management'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickStatCard(
+      String title, String value, IconData icon, Color color) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildExportTab() {
     return PermissionWrapper(
       requiredPermission: 'can_export_reports',
@@ -811,6 +950,13 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
               Icons.people,
               Colors.orange,
               () => _exportUsers(),
+            ),
+            _buildExportCard(
+              'External Provider Daten',
+              'Check-in-Logs und Provider-Statistiken',
+              Icons.extension,
+              Colors.indigo,
+              () => _exportExternalProviders(),
             ),
             _buildExportCard(
               'Vollständiger Bericht',
@@ -957,6 +1103,16 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
       ),
     );
     // TODO: Implementiere anonymisierten Export
+  }
+
+  void _exportExternalProviders() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🌐 External Provider Daten werden exportiert...'),
+        backgroundColor: Colors.indigo,
+      ),
+    );
+    // TODO: Implementiere External Provider Export
   }
 
   void _exportComprehensiveReport() {

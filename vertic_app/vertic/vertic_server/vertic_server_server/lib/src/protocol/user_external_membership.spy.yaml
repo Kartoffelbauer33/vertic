@@ -1,0 +1,44 @@
+class: UserExternalMembership
+table: user_external_memberships
+fields:
+  # Verknüpfung
+  userId: int                     # AppUser ID (unser System)
+  providerId: int                 # ExternalProvider ID
+  
+  # Fremdanbieter-Daten
+  externalUserId: String          # ID/Kennummer beim Fremdanbieter
+  membershipEmail: String?        # E-Mail beim Fremdanbieter (optional)
+  membershipData: String?         # Zusätzliche Daten als JSON
+  
+  # Verifikation & Status
+  isActive: bool, default=true
+  verificationMethod: String, default='qr_scan'  # 'qr_scan', 'manual_entry'
+  verifiedAt: DateTime?
+  lastCheckinAt: DateTime?
+  
+  # Statistiken
+  totalCheckins: int, default=0
+  lastSuccessfulCheckin: DateTime?
+  lastFailedCheckin: DateTime?
+  failureCount: int, default=0
+  
+  # System
+  createdAt: DateTime
+  updatedAt: DateTime?
+  
+  # Notizen für Support
+  notes: String?
+
+indexes:
+  user_membership_user_provider_idx:
+    fields: userId, providerId
+    unique: true                  # Ein User kann nur eine Mitgliedschaft pro Provider haben
+  user_membership_external_id_idx:
+    fields: providerId, externalUserId
+    unique: true                  # Eine externe ID kann nur einem User zugeordnet werden
+  user_membership_active_idx:
+    fields: isActive
+  user_membership_provider_idx:
+    fields: providerId
+  user_membership_user_idx:
+    fields: userId 

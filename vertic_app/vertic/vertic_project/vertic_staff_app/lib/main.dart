@@ -8,10 +8,11 @@ import 'auth/staff_auth_provider.dart';
 import 'pages/login_page.dart';
 import 'pages/admin/admin_dashboard_page.dart';
 import 'pages/customer_management_page.dart';
-import 'pages/scanner_page.dart';
+import 'pages/pos_system_page.dart';
 import 'pages/statistics_page.dart';
 import 'auth/permission_wrapper.dart';
 import 'config/environment.dart';
+import 'services/background_scanner_service.dart';
 
 // Globale Client-Instanz (SessionManager entfernt!)
 late Client client;
@@ -19,15 +20,15 @@ late Client client;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔗 **CLIENT-KONFIGURATION mit AuthenticationKeyManager für SESSION-FIX**
+  // 🔗 **CLIENT-KONFIGURATION mit Staff-spezifischem AuthenticationKeyManager**
   //
-  // SICHERHEITSKONZEPT:
-  // - FlutterAuthenticationKeyManager für sichere Token-Speicherung
-  // - Serverpod 2.8 konforme Session-Verwaltung
-  // - Automatische Token-Übertragung bei API-Calls
+  // STAFF-SICHERHEITSKONZEPT:
+  // - StaffAuthenticationKeyManager für Staff-Token-Verwaltung
+  // - Getrennt von Client-App-Authentifizierung
+  // - Direkte HTTP-Header-Übertragung an StaffAuthHelper
   client = Client(
     Environment.serverUrl,
-    authenticationKeyManager: FlutterAuthenticationKeyManager(),
+    authenticationKeyManager: StaffAuthenticationKeyManager(),
   )..connectivityMonitor = FlutterConnectivityMonitor();
 
   // Debug-Info ausgeben
@@ -44,6 +45,7 @@ void main() async {
         Provider<Client>.value(value: client),
         ChangeNotifierProvider(create: (_) => StaffAuthProvider(client)),
         ChangeNotifierProvider(create: (_) => PermissionProvider(client)),
+        ChangeNotifierProvider(create: (_) => BackgroundScannerService(client)),
       ],
       child: const MyApp(),
     ),
@@ -62,25 +64,38 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
-    // 🔐 RBAC-Integration: Permissions laden wenn Staff-User sich anmeldet
+    // 🔐 RBAC-Integration: Permissions nur EINMAL bei Login laden
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final staffAuth = Provider.of<StaffAuthProvider>(context, listen: false);
-      final permissionProvider =
-          Provider.of<PermissionProvider>(context, listen: false);
+      final permissionProvider = Provider.of<PermissionProvider>(
+        context,
+        listen: false,
+      );
 
-      // Listener für Staff-Auth-Änderungen
-      staffAuth.addListener(() {
-        if (staffAuth.isAuthenticated && staffAuth.currentStaffUser != null) {
-          // Staff-User ist eingeloggt → Permissions laden
-          debugPrint('🔐 Staff-User angemeldet → Lade RBAC Permissions...');
-          permissionProvider
-              .fetchPermissionsForStaff(staffAuth.currentStaffUser!.id!);
-        } else {
+      // **PERFORMANCE-FIX:** Permissions nur bei Auth-Status-Änderung laden
+      void _handleAuthChange() {
+        if (staffAuth.isAuthenticated &&
+            staffAuth.currentStaffUser != null &&
+            !permissionProvider.isInitialized) {
+          // Staff-User ist eingeloggt UND Permissions noch nicht geladen
+          debugPrint(
+            '🔐 Staff-User angemeldet → Lade RBAC Permissions EINMALIG...',
+          );
+          permissionProvider.fetchPermissionsForStaff(
+            staffAuth.currentStaffUser!.id!,
+          );
+        } else if (!staffAuth.isAuthenticated) {
           // Staff-User ist ausgeloggt → Permissions löschen
           debugPrint('🔓 Staff-User abgemeldet → Lösche Permissions');
           permissionProvider.clearPermissions();
         }
-      });
+      }
+
+      // Initial check für bereits eingeloggte User
+      _handleAuthChange();
+
+      // Listener für zukünftige Auth-Änderungen
+      staffAuth.addListener(_handleAuthChange);
     });
   }
 
@@ -91,14 +106,16 @@ class _MyAppState extends State<MyApp> {
         return MaterialApp(
           title: 'Vertic Staff',
           theme: ThemeData(
-            colorScheme:
-                ColorScheme.fromSeed(seedColor: const Color(0xFF00897B)),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF00897B),
+            ),
             useMaterial3: true,
           ),
           // 🎯 Routing basiert auf Staff-Auth-Status
-          home: staffAuth.isAuthenticated
-              ? const StaffHomePage()
-              : const LoginPage(),
+          home:
+              staffAuth.isAuthenticated
+                  ? const StaffHomePage()
+                  : const LoginPage(),
           debugShowCheckedModeBanner: false,
         );
       },
@@ -115,6 +132,123 @@ class StaffHomePage extends StatefulWidget {
 
 class _StaffHomePageState extends State<StaffHomePage> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 🔧 BACKGROUND SCANNER: Context registrieren für Toast-Notifications
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final backgroundScanner = Provider.of<BackgroundScannerService>(
+        context,
+        listen: false,
+      );
+      backgroundScanner.registerContext(context);
+      debugPrint('🔧 Background Scanner Context registriert');
+
+      // ⚠️ COM-PORT STARTUP WARNING
+      _checkComPortConnectionAndWarn(backgroundScanner);
+
+      // 🔐 PERMISSION-CACHE: Bei Permission-Änderung Navigation-Cache leeren
+      final permissionProvider = Provider.of<PermissionProvider>(
+        context,
+        listen: false,
+      );
+      permissionProvider.addListener(_onPermissionsChanged);
+    });
+  }
+
+  /// **Callback bei Permission-Änderungen**
+  void _onPermissionsChanged() {
+    if (mounted) {
+      setState(() {
+        // Navigation-Cache leeren für Neu-Berechnung
+        _cachedNavigationItems = null;
+        _lastKnownPermissions = null;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    // Listener wieder entfernen
+    final permissionProvider = Provider.of<PermissionProvider>(
+      context,
+      listen: false,
+    );
+    permissionProvider.removeListener(_onPermissionsChanged);
+    super.dispose();
+  }
+
+  /// **⚠️ COM-PORT STARTUP WARNING**
+  void _checkComPortConnectionAndWarn(BackgroundScannerService scanner) {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+
+      // Prüfe ob gespeicherter COM-Port nicht mehr erreichbar ist
+      if (scanner.selectedPort?.isNotEmpty == true && !scanner.isConnected) {
+        _showComPortWarningDialog(scanner);
+      }
+    });
+  }
+
+  /// **📡 COM-PORT WARNING DIALOG**
+  void _showComPortWarningDialog(BackgroundScannerService scanner) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+              const SizedBox(width: 12),
+              Text('Scanner nicht verbunden'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Der gespeicherte COM-Port "${scanner.selectedPort}" ist nicht erreichbar.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Möchten Sie einen anderen COM-Port auswählen?',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Später'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigiere zu Scanner-Einstellungen im Admin-Tab
+                setState(() => _selectedIndex = 3); // Admin Tab
+                // TODO: Automatisch Scanner-Einstellungen öffnen
+              },
+              icon: const Icon(Icons.settings),
+              label: const Text('Scanner-Einstellungen'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,8 +279,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
         staffAuth.currentStaffUser?.staffLevel == StaffUserType.superUser;
 
     return <Widget>[
-      const ScannerPage(),
-      const Center(child: Text('Verkauf')),
+      const PosSystemPage(),
       const StatisticsPage(),
       CustomerManagementPage(isSuperUser: isSuperUser),
       PermissionWrapper(
@@ -156,46 +289,72 @@ class _StaffHomePageState extends State<StaffHomePage> {
       _buildSettingsPage(context),
     ].where((widget) {
       if (widget is PermissionWrapper) {
-        final permissionProvider =
-            Provider.of<PermissionProvider>(context, listen: false);
+        final permissionProvider = Provider.of<PermissionProvider>(
+          context,
+          listen: false,
+        );
         return permissionProvider.hasPermission(widget.requiredPermission);
       }
       return true;
     }).toList();
   }
 
+  /// **🔐 OPTIMIZED NAVIGATION ITEMS mit Permission-Cache**
+  /// Cached Navigation-Items basierend auf Permissions
+  List<BottomNavigationBarItem>? _cachedNavigationItems;
+  Set<String>? _lastKnownPermissions;
+
   List<BottomNavigationBarItem> _buildNavigationItems(BuildContext context) {
+    final permissionProvider = Provider.of<PermissionProvider>(
+      context,
+      listen: false,
+    );
+
+    // **PERFORMANCE-OPTIMIERUNG:** Nur bei Permission-Änderung neu berechnen
+    if (_cachedNavigationItems != null &&
+        _lastKnownPermissions != null &&
+        _lastKnownPermissions == permissionProvider.permissions) {
+      return _cachedNavigationItems!;
+    }
+
+    // Navigation Items neu berechnen
     final items = <BottomNavigationBarItem>[
       const BottomNavigationBarItem(
-          icon: Icon(Icons.qr_code_scanner), label: 'Scanner'),
+        icon: Icon(Icons.point_of_sale),
+        label: 'Verkauf',
+      ),
       const BottomNavigationBarItem(
-          icon: Icon(Icons.point_of_sale), label: 'Verkauf'),
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.insert_chart), label: 'Statistik'),
+        icon: Icon(Icons.insert_chart),
+        label: 'Statistik',
+      ),
       const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Kunden'),
     ];
 
-    final permissionProvider =
-        Provider.of<PermissionProvider>(context, listen: false);
-
     // 🔐 RBAC: Admin-Dashboard nur mit Permission anzeigen
-    final hasAdminPermission =
-        permissionProvider.hasPermission('can_access_admin_dashboard');
-    debugPrint('🔐 Admin-Permission Check: $hasAdminPermission');
-    debugPrint('🔐 Alle Permissions: ${permissionProvider.permissions}');
+    final hasAdminPermission = permissionProvider.hasPermission(
+      'can_access_admin_dashboard',
+    );
 
     if (hasAdminPermission) {
-      items.add(const BottomNavigationBarItem(
-        icon: Icon(Icons.admin_panel_settings),
-        label: 'Admin',
-      ));
-      debugPrint('✅ Admin Tab hinzugefügt');
-    } else {
-      debugPrint('❌ Admin Tab nicht hinzugefügt - Permission fehlt');
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.admin_panel_settings),
+          label: 'Admin',
+        ),
+      );
     }
 
-    items.add(const BottomNavigationBarItem(
-        icon: Icon(Icons.settings), label: 'Einstellungen'));
+    items.add(
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.settings),
+        label: 'Einstellungen',
+      ),
+    );
+
+    // Cache aktualisieren
+    _cachedNavigationItems = items;
+    _lastKnownPermissions = Set.from(permissionProvider.permissions);
+
     return items;
   }
 
@@ -231,29 +390,34 @@ class _StaffHomePageState extends State<StaffHomePage> {
                                   children: [
                                     Text(
                                       staffAuth.currentStaffDisplayName,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
+                                      style:
+                                          Theme.of(
+                                            context,
+                                          ).textTheme.titleLarge,
                                     ),
                                     Text(
                                       staffAuth.currentStaffEmail,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium,
+                                      style:
+                                          Theme.of(
+                                            context,
+                                          ).textTheme.bodyMedium,
                                     ),
                                     const SizedBox(height: 4),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withValues(alpha: 0.1),
+                                        color: Theme.of(
+                                          context,
+                                        ).primaryColor.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
                                         _getStaffLevelDisplayName(
-                                            currentUser.staffLevel),
+                                          currentUser.staffLevel,
+                                        ),
                                         style: TextStyle(
                                           color: Theme.of(context).primaryColor,
                                           fontWeight: FontWeight.bold,
@@ -282,36 +446,39 @@ class _StaffHomePageState extends State<StaffHomePage> {
 
                 // 🔓 Logout-Button
                 ElevatedButton.icon(
-                  onPressed: staffAuth.isLoading
-                      ? null
-                      : () async {
-                          try {
-                            await staffAuth.signOut();
-                            if (mounted) {
-                              // Navigation erfolgt automatisch über Consumer
-                              debugPrint('✅ Staff-Logout erfolgreich');
+                  onPressed:
+                      staffAuth.isLoading
+                          ? null
+                          : () async {
+                            try {
+                              await staffAuth.signOut();
+                              if (mounted) {
+                                // Navigation erfolgt automatisch über Consumer
+                                debugPrint('✅ Staff-Logout erfolgreich');
+                              }
+                            } catch (e) {
+                              debugPrint('❌ Staff-Logout Fehler: $e');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Logout-Fehler: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             }
-                          } catch (e) {
-                            debugPrint('❌ Staff-Logout Fehler: $e');
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Logout-Fehler: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                  icon: staffAuth.isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.logout),
+                          },
+                  icon:
+                      staffAuth.isLoading
+                          ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.logout),
                   label: Text(
-                      staffAuth.isLoading ? 'Wird abgemeldet...' : 'Abmelden'),
+                    staffAuth.isLoading ? 'Wird abgemeldet...' : 'Abmelden',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,

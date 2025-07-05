@@ -523,13 +523,13 @@ class _CreateStaffDialogState extends State<CreateStaffDialog> {
         return;
       }
 
-      // 🔄 UNIFIED AUTH: Direkte Parameter mit sicherem Passwort
-      final result = await client.unifiedAuth.createStaffUser(
+      // 🔄 UNIFIED AUTH: Neue E-Mail-basierte Staff-Erstellung
+      final result = await client.unifiedAuth.createStaffUserWithEmail(
+        _emailController.text.trim(), // email (echte E-Mail-Adresse)
         username, // username (wird als employeeId verwendet)
         password, // Sicheres Passwort vom Dialog
         _firstNameController.text.trim(), // firstName
         _lastNameController.text.trim(), // lastName
-        _emailController.text.trim(), // realEmail
         _selectedStaffLevel, // staffLevel
       );
 

@@ -889,6 +889,333 @@ class TicketEndpoint extends Endpoint {
     }
   }
 
+  /// POS-System: Kauft bestes Ticket für spezifischen Kunden (für Staff-App)
+  Future<Ticket?> purchaseRecommendedTicketForCustomer(
+      Session session, String category, int customerId) async {
+    // 🔑 NUR STAFF-AUTHENTICATION für POS-System
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log(
+          '[DEBUG] purchaseRecommendedTicketForCustomer: Kein Staff-User!',
+          level: LogLevel.error);
+      return null;
+    }
+
+    session.log(
+        '[DEBUG] purchaseRecommendedTicketForCustomer: StaffUser=$staffUserId, Customer=$customerId, Category=$category');
+
+    try {
+      // Ziel-Kunde laden
+      final customer = await AppUser.db.findById(session, customerId);
+      if (customer == null) {
+        session.log(
+            '[DEBUG] purchaseRecommendedTicketForCustomer: Kunde mit ID $customerId nicht gefunden',
+            level: LogLevel.error);
+        return null;
+      }
+
+      // Kunde-Validierung (gesperrt)
+      if (customer.isBlocked == true) {
+        session.log(
+            '[DEBUG] purchaseRecommendedTicketForCustomer: Kunde gesperrt: ${customer.email} (${customer.blockedReason})',
+            level: LogLevel.warning);
+        throw Exception(
+            'Kunde ist gesperrt und kann keine Tickets kaufen. Grund: ${customer.blockedReason ?? "Nicht angegeben"}');
+      }
+
+      // Aktiven Status des Kunden holen
+      final userStatus = await UserStatus.db.findFirstRow(
+        session,
+        where: (s) =>
+            s.userId.equals(customerId) &
+            s.isVerified.equals(true) &
+            (s.expiryDate > DateTime.now()),
+        orderBy: (s) => s.expiryDate,
+        orderDescending: true,
+      );
+      final userStatusTypeId = userStatus?.statusTypeId ?? 1; // 1 = Standard
+
+      // Intelligente Ticket-Auswahl für POS (erweiterte Logik)
+      TicketType? recommendedTicket = await _getBestTicketForPosCustomer(
+          session, category, customer, userStatusTypeId);
+
+      if (recommendedTicket == null) {
+        session.log(
+            '[DEBUG] purchaseRecommendedTicketForCustomer: Kein passender Tickettyp für Kunde $customerId, Kategorie $category gefunden',
+            level: LogLevel.error);
+        return null;
+      }
+
+      session.log(
+          '[DEBUG] purchaseRecommendedTicketForCustomer: Gewählter TicketType: ${recommendedTicket.name} (ID: ${recommendedTicket.id}) für Kunde ${customer.firstName} ${customer.lastName}');
+
+      // Ticket für Kunden erstellen
+      return await _createTicketForUser(
+          session, customer, recommendedTicket, userStatusTypeId);
+    } catch (e) {
+      session.log(
+          '[DEBUG] purchaseRecommendedTicketForCustomer: Fehler beim Kauf: $e',
+          level: LogLevel.error);
+      return null;
+    }
+  }
+
+  /// Intelligente Ticket-Auswahl für POS-System (erweiterte Logik)
+  Future<TicketType?> _getBestTicketForPosCustomer(Session session,
+      String category, AppUser customer, int userStatusTypeId) async {
+    try {
+      // Alle verfügbaren Tickets laden
+      final allTicketTypes = await TicketType.db.find(session);
+
+      // Nach Kategorie filtern
+      List<TicketType> categoryTickets;
+      switch (category.toLowerCase()) {
+        case 'einzeltickets':
+        case 'single':
+          categoryTickets = allTicketTypes
+              .where((t) => !t.isSubscription && !t.isPointBased)
+              .toList();
+          break;
+        case 'monatsabos':
+        case 'monthly':
+          categoryTickets = allTicketTypes
+              .where((t) => t.isSubscription && t.billingInterval == 30)
+              .toList();
+          break;
+        case 'jahresabos':
+        case 'yearly':
+          categoryTickets = allTicketTypes
+              .where((t) => t.isSubscription && t.billingInterval == 365)
+              .toList();
+          break;
+        case 'punktekarten':
+        case 'points':
+          categoryTickets =
+              allTicketTypes.where((t) => t.isPointBased).toList();
+          break;
+        default:
+          categoryTickets = allTicketTypes;
+      }
+
+      if (categoryTickets.isEmpty) {
+        session.log('Keine Tickets für Kategorie $category gefunden');
+        return null;
+      }
+
+      // Für Einzeltickets: Intelligente altersbasierte Auswahl
+      if (category.toLowerCase() == 'einzeltickets' ||
+          category.toLowerCase() == 'single') {
+        return await _getAgeBasedSingleTicketForPosCustomer(
+            session, customer, categoryTickets, userStatusTypeId);
+      }
+
+      // Für andere Kategorien: Erstes verfügbares
+      session.log(
+          'POS: Wähle erstes verfügbares Ticket für Kategorie $category: ${categoryTickets.first.name}');
+      return categoryTickets.first;
+    } catch (e) {
+      session.log('Fehler bei intelligenter Ticket-Auswahl: $e',
+          level: LogLevel.error);
+      return null;
+    }
+  }
+
+  /// Altersbasierte Einzelticket-Auswahl für POS-System
+  Future<TicketType?> _getAgeBasedSingleTicketForPosCustomer(
+      Session session,
+      AppUser customer,
+      List<TicketType> singleTickets,
+      int userStatusTypeId) async {
+    // Alter berechnen
+    int age = 30; // Default
+    if (customer.birthDate != null) {
+      final now = DateTime.now();
+      age = now.year - customer.birthDate!.year;
+      if (now.month < customer.birthDate!.month ||
+          (now.month == customer.birthDate!.month &&
+              now.day < customer.birthDate!.day)) {
+        age--;
+      }
+    }
+
+    // User-Status laden für Ermäßigungen
+    bool isErmaessigt = false;
+    try {
+      final statusType =
+          await UserStatusType.db.findById(session, userStatusTypeId);
+      if (statusType != null) {
+        isErmaessigt = statusType.discountPercentage > 0 ||
+            (statusType.fixedDiscountAmount != null &&
+                statusType.fixedDiscountAmount! > 0);
+      }
+    } catch (e) {
+      session.log('Fehler beim Laden des UserStatusType: $e');
+    }
+
+    // 🔧 FIX: Verwende die tatsächlichen Ticket-Namen aus der Datenbank
+    // Zeige verfügbare Tickets für Debugging
+    session.log(
+        'POS: Verfügbare Einzeltickets: ${singleTickets.map((t) => t.name).join(', ')}');
+
+    // Intelligente Auswahl basierend auf tatsächlichen Ticket-Namen
+    TicketType? selectedTicket;
+
+    // 1. Priorisierung nach Alter und Status
+    if (age <= 12) {
+      // Kinder: Suche nach "Tageskarte" oder günstigstem Ticket
+      selectedTicket = _findBestTicketByKeywords(
+          singleTickets, ['tageskarte', 'kind', 'child']);
+    } else if (age <= 17) {
+      // Jugendliche: Suche nach "Tageskarte" oder "Jugend"
+      selectedTicket = _findBestTicketByKeywords(
+          singleTickets, ['tageskarte', 'jugend', 'youth']);
+    } else if (age >= 65) {
+      // Senioren: Suche nach "Tageskarte" oder "Senior"
+      selectedTicket =
+          _findBestTicketByKeywords(singleTickets, ['tageskarte', 'senior']);
+    } else {
+      // Erwachsene: Bevorzuge "Tageskarte" oder "Tagesticket"
+      selectedTicket = _findBestTicketByKeywords(
+          singleTickets, ['tageskarte', 'tagesticket']);
+    }
+
+    // 2. Fallback: Günstigstes Einzelticket
+    if (selectedTicket == null) {
+      selectedTicket = _findCheapestTicket(singleTickets);
+    }
+
+    // 3. Letzter Fallback: Erstes verfügbares
+    if (selectedTicket == null && singleTickets.isNotEmpty) {
+      selectedTicket = singleTickets.first;
+    }
+
+    if (selectedTicket != null) {
+      session.log(
+          'POS: Intelligente Auswahl für ${customer.firstName} ${customer.lastName} (Alter: $age, Ermäßigt: $isErmaessigt) → ${selectedTicket.name}');
+    } else {
+      session.log('POS: Keine passenden Einzeltickets gefunden!');
+    }
+
+    return selectedTicket;
+  }
+
+  /// **🔍 HILFSMETHODE: Finde bestes Ticket basierend auf Keywords**
+  TicketType? _findBestTicketByKeywords(
+      List<TicketType> tickets, List<String> keywords) {
+    for (final keyword in keywords) {
+      final match = tickets
+          .where((t) => t.name.toLowerCase().contains(keyword.toLowerCase()))
+          .toList();
+      if (match.isNotEmpty) {
+        // Sortiere nach Preis (günstigstes zuerst)
+        match.sort((a, b) => a.defaultPrice.compareTo(b.defaultPrice));
+        return match.first;
+      }
+    }
+    return null;
+  }
+
+  /// **💰 HILFSMETHODE: Finde günstigstes Ticket**
+  TicketType? _findCheapestTicket(List<TicketType> tickets) {
+    if (tickets.isEmpty) return null;
+
+    tickets.sort((a, b) => a.defaultPrice.compareTo(b.defaultPrice));
+    return tickets.first;
+  }
+
+  /// **🎯 NEUE METHODE: Empfohlenen TicketType für POS-System abrufen (ohne Kauf)**
+  Future<TicketType?> getRecommendedTicketTypeForCustomer(
+      Session session, String category, int customerId) async {
+    // 🔑 NUR STAFF-AUTHENTICATION für POS-System
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log(
+          '[DEBUG] getRecommendedTicketTypeForCustomer: Kein Staff-User!',
+          level: LogLevel.error);
+      return null;
+    }
+
+    session.log(
+        '[DEBUG] getRecommendedTicketTypeForCustomer: StaffUser=$staffUserId, Customer=$customerId, Category=$category');
+
+    try {
+      // Ziel-Kunde laden
+      final customer = await AppUser.db.findById(session, customerId);
+      if (customer == null) {
+        session.log(
+            '[DEBUG] getRecommendedTicketTypeForCustomer: Kunde mit ID $customerId nicht gefunden',
+            level: LogLevel.error);
+        return null;
+      }
+
+      // Aktiven Status des Kunden holen
+      final userStatus = await UserStatus.db.findFirstRow(
+        session,
+        where: (s) =>
+            s.userId.equals(customerId) &
+            s.isVerified.equals(true) &
+            (s.expiryDate > DateTime.now()),
+        orderBy: (s) => s.expiryDate,
+        orderDescending: true,
+      );
+      final userStatusTypeId = userStatus?.statusTypeId ?? 1; // 1 = Standard
+
+      // Verwende die bestehende private Methode für intelligente Auswahl
+      return await _getBestTicketForPosCustomer(
+          session, category, customer, userStatusTypeId);
+    } catch (e) {
+      session.log('[DEBUG] getRecommendedTicketTypeForCustomer: Fehler: $e',
+          level: LogLevel.error);
+      return null;
+    }
+  }
+
+  /// Berechnet optimalen Preis für POS-Kunde basierend auf Status
+  Future<double> calculateOptimalPriceForCustomer(
+      Session session, int ticketTypeId, int customerId) async {
+    try {
+      // Ticket-Type laden
+      final ticketType = await TicketType.db.findById(session, ticketTypeId);
+      if (ticketType == null) return 0.0;
+
+      // Kunde laden für Status
+      final customer = await AppUser.db.findById(session, customerId);
+      if (customer == null) return ticketType.defaultPrice;
+
+      // Aktuellen User-Status holen
+      final userStatus = await UserStatus.db.findFirstRow(
+        session,
+        where: (s) =>
+            s.userId.equals(customerId) &
+            s.isVerified.equals(true) &
+            (s.expiryDate > DateTime.now()),
+        orderBy: (s) => s.expiryDate,
+        orderDescending: true,
+      );
+      final userStatusTypeId = userStatus?.statusTypeId ?? 1;
+
+      // Spezialpreis prüfen
+      final pricing = await TicketTypePricing.db.findFirstRow(
+        session,
+        where: (p) =>
+            p.ticketTypeId.equals(ticketTypeId) &
+            p.userStatusTypeId.equals(userStatusTypeId),
+      );
+
+      final finalPrice = pricing?.price ?? ticketType.defaultPrice;
+
+      session.log(
+          'POS: Preisberechnung für ${customer.firstName} ${customer.lastName}: ${ticketType.name} → ${finalPrice}€ (Status: $userStatusTypeId)');
+
+      return finalPrice;
+    } catch (e) {
+      session.log('Fehler bei Preisberechnung: $e', level: LogLevel.error);
+      return 0.0;
+    }
+  }
+
   /// Kauft automatisch das beste Ticket für eine Kategorie (Einzelticket, Punktekarte, etc.)
   Future<Ticket?> purchaseRecommendedTicket(
       Session session, String category) async {

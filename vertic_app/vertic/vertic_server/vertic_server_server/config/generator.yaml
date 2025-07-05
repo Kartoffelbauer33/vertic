@@ -1,14 +1,17 @@
 type: server
 
-# Client package paths - Docker container paths
-client_package_path: /workspace/vertic_app/vertic/vertic_server/vertic_server_client
+# Database support aktivieren (KRITISCH!)
+database: true
+
+# Client package paths - LOKALE Entwicklung
+client_package_path: ../vertic_server_client
 
 # Server test tools path  
 server_test_tools_path: test/integration/test_tools
 
-# Additional Flutter client projects (for mobile apps) - Docker paths
+# Additional Flutter client projects (for mobile apps) - LOKALE Pfade
 flutter_clients:
-  - path: /workspace/vertic_app/vertic/vertic_project/vertic_client_app
+  - path: ../../vertic_project/vertic_client_app
     name: vertic_client_app
-  - path: /workspace/vertic_app/vertic/vertic_project/vertic_staff_app  
+  - path: ../../vertic_project/vertic_staff_app  
     name: vertic_staff_app

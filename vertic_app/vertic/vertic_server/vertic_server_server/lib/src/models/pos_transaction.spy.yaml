@@ -1,0 +1,12 @@
+class: PosTransaction
+table: pos_transactions
+fields:
+  sessionId: int
+  customerId: int?
+  staffUserId: int
+  hallId: int
+  totalAmount: double
+  paymentMethod: String
+  receiptNumber: String
+  items: String
+  completedAt: DateTime 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:test_server_client/test_server_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:serverpod_flutter/serverpod_flutter.dart';
 
 /// 🔐 **StaffAuthProvider - Zentrale Staff-Authentication-Verwaltung**
 ///
@@ -84,7 +85,7 @@ class StaffAuthProvider extends ChangeNotifier {
       debugPrint('🔐 Staff-Login-Versuch: $emailOrUsername');
 
       final result = await _client.unifiedAuth
-          .staffSignInUnified(emailOrUsername, password);
+          .staffSignInFlexible(emailOrUsername, password);
 
       if (result.success == true && result.staffUser != null) {
         // StaffUser direkt aus Response verwenden
@@ -93,18 +94,19 @@ class StaffAuthProvider extends ChangeNotifier {
             result.userInfoId?.toString(); // Neuen Staff-Token verwenden
         _isAuthenticated = true;
 
-        // 🔐 **SESSION-FIX: Unified Auth System Integration**
+        // 🔐 **STAFF-AUTH-FIX: Authorization Header für Staff-Token setzen**
         //
-        // NEUES SICHERHEITSKONZEPT (Phase 3.1):
-        // - Unified Auth verwendet Serverpod 2.8 native Authentication
-        // - Keine separaten Tokens mehr nötig - Serverpod Session reicht
-        // - RBAC bleibt vollständig aktiv über userInfoId-Verknüpfung
-        // - Scope-basierte Unterscheidung ('staff' vs 'client')
-        if (_authToken != null && _client.authenticationKeyManager != null) {
-          await _client.authenticationKeyManager!.put(_authToken!);
+        // STAFF-AUTHENTIFIZIERUNG (Phase 3.3):
+        // - Staff-Token wird über benutzerdefinierten StaffAuthenticationKeyManager gesetzt
+        // - Token wird als Base64-codierter Authorization-Header übertragen
+        // - Backend StaffAuthHelper erkennt den Token korrekt
+        if (_authToken != null) {
+          // Staff-Token über benutzerdefinierten Manager setzen
+          await _client.authenticationKeyManager?.put(_authToken!);
+
           debugPrint(
-              '🔐 UserInfoId für API-Calls gesetzt: ${_authToken!.length > 8 ? _authToken!.substring(0, 8) + '...' : _authToken!}');
-          debugPrint('✅ Unified Auth Session-Synchronisation abgeschlossen');
+              '🔐 Staff-Token über StaffAuthenticationKeyManager gesetzt: ${_authToken!.length > 16 ? _authToken!.substring(0, 16) + '...' : _authToken!}');
+          debugPrint('✅ Staff-Auth für HTTP-Header-Übertragung konfiguriert');
         }
 
         // Session persistent speichern
@@ -357,5 +359,31 @@ class StaffAuthProvider extends ChangeNotifier {
       case StaffUserType.staff:
         return 40;
     }
+  }
+}
+
+/// 🔐 **Benutzerdefinierter AuthenticationKeyManager für Staff-Tokens**
+///
+/// Dieser Manager formatiert Staff-Tokens korrekt als Base64-codierte
+/// Authorization-Header, damit sie vom StaffAuthHelper erkannt werden.
+class StaffAuthenticationKeyManager extends AuthenticationKeyManager {
+  String? _staffToken;
+
+  @override
+  Future<String?> get() async {
+    return _staffToken;
+  }
+
+  @override
+  Future<void> put(String key) async {
+    _staffToken = key;
+    debugPrint(
+        '🔐 Staff-Token gesetzt: ${key.length > 16 ? key.substring(0, 16) + '...' : key}');
+  }
+
+  @override
+  Future<void> remove() async {
+    _staffToken = null;
+    debugPrint('🔓 Staff-Token entfernt');
   }
 }

@@ -12,36 +12,38 @@ import '../helpers/staff_auth_helper.dart';
 /// **LÖSUNG:** Staff = Username-basiert, Client = Email-basiert
 /// **VORTEILE:** Einheitliche `session.authenticated` API für alle Endpoints
 ///
-/// **ARCHITEKTUR:**
-/// - Staff: Username wird als "username@staff.vertic.local" in Serverpod gespeichert
+/// **ARCHITEKTUR (UPDATED):**
+/// - Staff: Echte E-Mail-Adressen + Username für flexibles Login
 /// - Client: Email wird normal in Serverpod gespeichert
 /// - Getrennte Tabellen (StaffUser, AppUser) bleiben erhalten
 /// - RBAC-System bleibt vollständig funktional
+/// - Staff kann sich mit Username ODER E-Mail anmelden
 class UnifiedAuthEndpoint extends Endpoint {
-  /// **STAFF-DOMAIN für Fake-Emails**
+  /// **STAFF-DOMAIN für Fake-Emails (DEPRECATED)**
+  /// Wird nicht mehr verwendet - Staff verwendet jetzt echte E-Mail-Adressen
   static const String staffDomain = '@staff.vertic.local';
 
   // ═══════════════════════════════════════════════════════════════
   // 🔐 STAFF AUTHENTICATION (Username-basiert)
   // ═══════════════════════════════════════════════════════════════
 
-  /// **STAFF: Create User with Username (Admin-managed)**
+  /// **STAFF: Create User with Email Verification (Admin-managed)**
   ///
-  /// Erstellt einen Staff-User der Username statt Email verwendet
-  /// und sofort aktiviert ist (keine Email-Bestätigung)
-  Future<UnifiedAuthResponse> createStaffUser(
+  /// Erstellt einen Staff-User mit E-Mail-Bestätigung (wie Client-System)
+  /// Der User muss seine E-Mail bestätigen bevor er sich anmelden kann
+  Future<UnifiedAuthResponse> createStaffUserWithEmail(
     Session session,
+    String email,
     String username,
     String password,
     String firstName,
     String lastName,
-    String? realEmail,
     StaffUserType staffLevel,
   ) async {
     try {
-      // 🔐 ADMIN PERMISSION CHECK
+      // 🔐 STAFF PERMISSION CHECK mit StaffAuthHelper
       final authUserId =
-          await UnifiedAuthHelper.getAuthenticatedUserId(session);
+          await StaffAuthHelper.getAuthenticatedStaffUserId(session);
       if (authUserId == null) {
         return UnifiedAuthResponse(
           success: false,
@@ -60,10 +62,7 @@ class UnifiedAuthEndpoint extends Endpoint {
         );
       }
 
-      // 1. **Fake-Email für Serverpod generieren**
-      final fakeEmail = username + staffDomain;
-
-      // 2. **Prüfe ob Username bereits existiert**
+      // 1. **Prüfe ob Username bereits existiert**
       final existingStaff = await StaffUser.db.findFirstRow(
         session,
         where: (t) => t.employeeId.equals(username),
@@ -77,52 +76,74 @@ class UnifiedAuthEndpoint extends Endpoint {
         );
       }
 
-      // 3. **Erstelle UserInfo direkt in der Datenbank**
+      // 2. **Prüfe ob E-Mail bereits existiert**
+      final existingEmailAuth = await auth.EmailAuth.db.findFirstRow(
+        session,
+        where: (t) => t.email.equals(email),
+      );
+
+      if (existingEmailAuth != null) {
+        return UnifiedAuthResponse(
+          success: false,
+          message: 'E-Mail-Adresse bereits registriert',
+          staffUser: null,
+        );
+      }
+
+      // 3. **UserInfo erstellen mit E-Mail-Bestätigung erforderlich**
       final userInfo = auth.UserInfo(
-        userIdentifier: fakeEmail, // Fake-Email als userIdentifier
-        email: fakeEmail,
+        userIdentifier: email, // Echte Email als userIdentifier
+        email: email,
         userName: username,
         fullName: '$firstName $lastName',
         created: DateTime.now(),
-        blocked: false,
+        blocked: true, // 🔒 BLOCKED bis E-Mail bestätigt wird!
         scopeNames: ['staff'], // Staff-Scope für Berechtigungsunterscheidung
       );
 
       final createdUserInfo =
           await auth.UserInfo.db.insertRow(session, userInfo);
 
-      // 4. **Erstelle EmailAuth für Password**
+      // 4. **EmailAuth für Password erstellen**
       final emailAuth = auth.EmailAuth(
         userId: createdUserInfo.id!,
-        email: fakeEmail,
+        email: email,
         hash: _hashPassword(password),
       );
 
       await auth.EmailAuth.db.insertRow(session, emailAuth);
 
-      // 5. **StaffUser in eigener Tabelle erstellen**
+      // 5. **StaffUser in eigener Tabelle erstellen (PENDING bis E-Mail bestätigt)**
       final staffUser = StaffUser(
         userInfoId: createdUserInfo.id!, // 🔗 Verknüpfung zu Serverpod Auth
         firstName: firstName,
         lastName: lastName,
-        email: realEmail ?? fakeEmail, // Echte Email oder Fake-Email
+        email: email, // Echte Email
         employeeId: username,
         staffLevel: staffLevel,
-        employmentStatus: 'active',
+        employmentStatus:
+            'pending_verification', // 📧 Warten auf E-Mail-Bestätigung
         createdAt: DateTime.now(),
         createdBy: authUserId,
       );
 
       final savedStaffUser = await StaffUser.db.insertRow(session, staffUser);
 
+      // 6. **E-Mail-Bestätigungstoken erstellen (vereinfacht für Entwicklung)**
+      final verificationCode = 'STAFF_${DateTime.now().millisecondsSinceEpoch}';
+
       session.log(
-          '✅ Staff-User mit Username erstellt: $username → UserInfo.id=${createdUserInfo.id}');
+          '✅ Staff-User erstellt (pending verification): $username ($email) → UserInfo.id=${createdUserInfo.id}');
+      session
+          .log('📧 E-Mail-Bestätigung erforderlich - Code: $verificationCode');
 
       return UnifiedAuthResponse(
         success: true,
-        message: 'Staff-User erfolgreich erstellt',
+        message: 'Staff-User erstellt. E-Mail-Bestätigung erforderlich.',
         staffUser: savedStaffUser,
         userInfoId: createdUserInfo.id,
+        requiresEmailVerification: true,
+        verificationCode: verificationCode,
       );
     } catch (e, stackTrace) {
       session.log('❌ Staff-User-Erstellung fehlgeschlagen: $e',
@@ -136,28 +157,143 @@ class UnifiedAuthEndpoint extends Endpoint {
     }
   }
 
-  /// **STAFF: Sign In with Username**
+  /// **STAFF: Verify Email for Staff User**
   ///
-  /// Staff meldet sich mit Username + Passwort an
-  /// Verwendet Serverpod native Authentication intern
-  Future<UnifiedAuthResponse> staffSignInUnified(
+  /// Bestätigt die E-Mail-Adresse eines Staff-Users und aktiviert den Account
+  Future<UnifiedAuthResponse> verifyStaffEmail(
     Session session,
-    String username,
-    String password,
+    String email,
+    String verificationCode,
   ) async {
     try {
-      session.log('🔐 Staff-Login (Unified): $username');
+      // Vereinfachte Verifizierung für Entwicklung
+      // TODO: Echte E-Mail-Verifizierung implementieren
+      if (!verificationCode.startsWith('STAFF_')) {
+        return UnifiedAuthResponse(
+          success: false,
+          message: 'Ungültiger Bestätigungscode',
+          staffUser: null,
+        );
+      }
 
-      // 1. **Fake-Email für Serverpod generieren**
-      final fakeEmail = username + staffDomain;
-
-      // 2. **Überprüfe Email-Auth**
+      // UserInfo entsperren
       final emailAuth = await auth.EmailAuth.db.findFirstRow(
         session,
-        where: (t) => t.email.equals(fakeEmail),
+        where: (t) => t.email.equals(email),
       );
 
       if (emailAuth == null) {
+        return UnifiedAuthResponse(
+          success: false,
+          message: 'E-Mail-Adresse nicht gefunden',
+          staffUser: null,
+        );
+      }
+
+      final userInfo = await auth.UserInfo.db.findById(
+        session,
+        emailAuth.userId,
+      );
+
+      if (userInfo != null) {
+        await auth.UserInfo.db.updateRow(
+          session,
+          userInfo.copyWith(blocked: false),
+        );
+      }
+
+      // StaffUser auf aktiv setzen
+      final staffUser = await StaffUser.db.findFirstRow(
+        session,
+        where: (t) => t.userInfoId.equals(emailAuth.userId),
+      );
+
+      if (staffUser == null) {
+        return UnifiedAuthResponse(
+          success: false,
+          message: 'Staff-User nicht gefunden',
+          staffUser: null,
+        );
+      }
+
+      final activatedStaffUser = await StaffUser.db.updateRow(
+        session,
+        staffUser.copyWith(
+          employmentStatus: 'active',
+          emailVerifiedAt: DateTime.now(),
+        ),
+      );
+
+      session.log(
+          '✅ Staff-User E-Mail bestätigt und aktiviert: ${staffUser.employeeId} ($email)');
+
+      return UnifiedAuthResponse(
+        success: true,
+        message: 'E-Mail erfolgreich bestätigt. Account ist jetzt aktiv.',
+        staffUser: activatedStaffUser,
+        userInfoId: userInfo?.id,
+      );
+    } catch (e, stackTrace) {
+      session.log('❌ E-Mail-Bestätigung fehlgeschlagen: $e',
+          level: LogLevel.error);
+      session.log('Stack: $stackTrace', level: LogLevel.debug);
+      return UnifiedAuthResponse(
+        success: false,
+        message: 'Fehler bei E-Mail-Bestätigung: $e',
+        staffUser: null,
+      );
+    }
+  }
+
+  /// **STAFF: Sign In with Username or Email**
+  ///
+  /// Staff kann sich mit Username ODER E-Mail anmelden
+  /// Flexibles Login-System für beide Varianten
+  Future<UnifiedAuthResponse> staffSignInFlexible(
+    Session session,
+    String usernameOrEmail,
+    String password,
+  ) async {
+    try {
+      session.log('🔐 Staff-Login (Flexibel): $usernameOrEmail');
+
+      auth.EmailAuth? emailAuth;
+      StaffUser? staffUser;
+
+      // 1. **Prüfe ob es eine E-Mail-Adresse ist**
+      if (usernameOrEmail.contains('@')) {
+        // Login mit E-Mail
+        emailAuth = await auth.EmailAuth.db.findFirstRow(
+          session,
+          where: (t) => t.email.equals(usernameOrEmail),
+        );
+
+        if (emailAuth != null) {
+          staffUser = await StaffUser.db.findFirstRow(
+            session,
+            where: (t) =>
+                t.userInfoId.equals(emailAuth!.userId) &
+                t.employmentStatus.equals('active'),
+          );
+        }
+      } else {
+        // Login mit Username - suche über StaffUser
+        staffUser = await StaffUser.db.findFirstRow(
+          session,
+          where: (t) =>
+              t.employeeId.equals(usernameOrEmail) &
+              t.employmentStatus.equals('active'),
+        );
+
+        if (staffUser != null) {
+          emailAuth = await auth.EmailAuth.db.findFirstRow(
+            session,
+            where: (t) => t.userId.equals(staffUser!.userInfoId),
+          );
+        }
+      }
+
+      if (emailAuth == null || staffUser == null) {
         return UnifiedAuthResponse(
           success: false,
           message: 'Benutzer nicht gefunden',
@@ -165,7 +301,7 @@ class UnifiedAuthEndpoint extends Endpoint {
         );
       }
 
-      // 3. **Password validieren**
+      // 2. **Password validieren**
       if (!_verifyPassword(password, emailAuth.hash)) {
         return UnifiedAuthResponse(
           success: false,
@@ -174,31 +310,13 @@ class UnifiedAuthEndpoint extends Endpoint {
         );
       }
 
-      // 4. **StaffUser aus eigener Tabelle laden**
-      final staffUser = await StaffUser.db.findFirstRow(
-        session,
-        where: (t) =>
-            t.userInfoId.equals(emailAuth.userId) &
-            t.employmentStatus.equals('active'),
-      );
-
-      if (staffUser == null) {
-        session.log(
-            '❌ StaffUser nicht gefunden für UserInfo.id=${emailAuth.userId}');
-        return UnifiedAuthResponse(
-          success: false,
-          message: 'Staff-User nicht aktiv',
-          staffUser: null,
-        );
-      }
-
-      // 5. **Login-Zeitstempel aktualisieren**
+      // 3. **Login-Zeitstempel aktualisieren**
       await StaffUser.db.updateRow(
         session,
         staffUser.copyWith(lastLoginAt: DateTime.now()),
       );
 
-      // 🔐 **WICHTIG: Staff-Token für andere Endpoints erstellen**
+      // 4. **Staff-Token für andere Endpoints erstellen**
       final staffToken = _generateStaffToken(staffUser.id!, emailAuth.userId);
       await StaffAuthHelper.setStaffSession(
         session,
@@ -207,7 +325,7 @@ class UnifiedAuthEndpoint extends Endpoint {
       );
 
       session.log(
-          '✅ Staff-Login erfolgreich: ${staffUser.employeeId} (UserInfo.id=${emailAuth.userId})');
+          '✅ Staff-Login erfolgreich: ${staffUser.employeeId} (${staffUser.email}) → UserInfo.id=${emailAuth.userId}');
       session.log('🔐 Staff-Token erstellt für weitere API-Calls');
 
       return UnifiedAuthResponse(
@@ -218,7 +336,7 @@ class UnifiedAuthEndpoint extends Endpoint {
         staffToken: staffToken,
       );
     } catch (e, stackTrace) {
-      session.log('❌ Staff-Login (Unified) fehlgeschlagen: $e',
+      session.log('❌ Staff-Login (Flexibel) fehlgeschlagen: $e',
           level: LogLevel.error);
       session.log('Stack: $stackTrace', level: LogLevel.debug);
       return UnifiedAuthResponse(

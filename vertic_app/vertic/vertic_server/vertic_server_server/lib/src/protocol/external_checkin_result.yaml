@@ -1,0 +1,27 @@
+class: ExternalCheckinResult
+fields:
+  # Ergebnis
+  success: bool
+  accessGranted: bool
+  message: String                 # Benutzerfreundliche Nachricht
+  
+  # User-Informationen (falls verfügbar)
+  userName: String?
+  userCity: String?
+  userAvatar: String?             # Base64 oder URL
+  
+  # Provider-Informationen  
+  providerName: String
+  membershipType: String?         # z.B. "Fitpass Premium"
+  
+  # Technical Details
+  statusCode: int
+  externalStatusCode: int?
+  processingTimeMs: int
+  
+  # Re-Entry Information
+  isReEntry: bool
+  lastCheckinAt: DateTime?
+  
+  # Fehler-Details (falls erforderlich)
+  errorDetails: String? 

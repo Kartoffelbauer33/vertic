@@ -1,0 +1,44 @@
+class: ExternalCheckinLog
+table: external_checkin_logs
+fields:
+  # Verknüpfung
+  membershipId: int               # UserExternalMembership ID
+  hallId: int                     # In welcher Halle
+  
+  # Check-in Details
+  checkinType: String             # 'external_qr', 'app_scan', 'manual'
+  qrCodeData: String?             # Original QR-Code Daten
+  
+  # API Response Details
+  externalResponse: String?       # Original API Response als JSON
+  externalStatusCode: int?        # HTTP Status von externe API
+  
+  # Ergebnis
+  accessGranted: bool
+  failureReason: String?          # Bei Fehlern: Grund
+  
+  # System Details
+  staffId: int?                   # Welcher Staff hat gescannt
+  scannerDeviceId: String?        # Device-Identifier
+  processingTimeMs: int?          # Verarbeitungszeit
+  
+  # Zeitstempel
+  checkinAt: DateTime
+  
+  # Re-Entry Detection
+  isReEntry: bool, default=false
+  originalCheckinId: int?         # Verweis auf ersten Check-in des Tages
+
+indexes:
+  external_checkin_membership_idx:
+    fields: membershipId
+  external_checkin_hall_idx:
+    fields: hallId
+  external_checkin_date_idx:
+    fields: checkinAt
+  external_checkin_access_idx:
+    fields: accessGranted
+  external_checkin_staff_idx:
+    fields: staffId
+  external_checkin_reentry_idx:
+    fields: membershipId, checkinAt  # Für Re-Entry-Erkennung 

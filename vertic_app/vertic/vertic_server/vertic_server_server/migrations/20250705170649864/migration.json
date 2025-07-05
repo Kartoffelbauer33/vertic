@@ -1,0 +1,48 @@
+{
+  "actions": [
+    {
+      "type": "alterTable",
+      "alterTable": {
+        "name": "pos_sessions",
+        "schema": "public",
+        "addColumns": [],
+        "deleteColumns": [],
+        "modifyColumns": [
+          {
+            "columnName": "deviceId",
+            "addNullable": false,
+            "removeNullable": true,
+            "changeDefault": false
+          }
+        ],
+        "addIndexes": [],
+        "deleteIndexes": [],
+        "addForeignKeys": [],
+        "deleteForeignKeys": [],
+        "warnings": [
+          {
+            "type": "notNullAdded",
+            "message": "Column deviceId of table pos_sessions is modified to be not null. If there are existing rows with null values, this migration will fail.",
+            "table": "pos_sessions",
+            "columns": [
+              "deviceId"
+            ],
+            "destrucive": false
+          }
+        ]
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "type": "notNullAdded",
+      "message": "Column deviceId of table pos_sessions is modified to be not null. If there are existing rows with null values, this migration will fail.",
+      "table": "pos_sessions",
+      "columns": [
+        "deviceId"
+      ],
+      "destrucive": false
+    }
+  ],
+  "migrationApiVersion": 1
+}

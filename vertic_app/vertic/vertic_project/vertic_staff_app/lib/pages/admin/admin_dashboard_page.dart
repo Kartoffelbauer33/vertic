@@ -16,16 +16,14 @@ import 'system_messages_page.dart';
 import 'qr_rotation_settings_page.dart';
 import 'reports_analytics_page.dart';
 import 'system_configuration_page.dart';
+import 'external_provider_management_page.dart';
+import 'scanner_settings_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   final bool isSuperUser;
   final int? hallId;
 
-  const AdminDashboardPage({
-    super.key,
-    this.isSuperUser = false,
-    this.hallId,
-  });
+  const AdminDashboardPage({super.key, this.isSuperUser = false, this.hallId});
 
   @override
   State<AdminDashboardPage> createState() => AdminDashboardPageState();
@@ -73,40 +71,43 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange),
-            const SizedBox(width: 8),
-            const Text('Ungespeicherte Änderungen'),
-          ],
-        ),
-        content: Text(_unsavedContext != null
-            ? 'Sie haben ungespeicherte Änderungen in "$_unsavedContext". Möchten Sie diese verwerfen und zur Hauptseite zurückkehren?'
-            : 'Sie haben ungespeicherte Änderungen. Möchten Sie diese verwerfen und zur Hauptseite zurückkehren?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Bleibe auf der aktuellen Seite
-            },
-            child: const Text('Abbrechen'),
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange),
+                const SizedBox(width: 8),
+                const Text('Ungespeicherte Änderungen'),
+              ],
+            ),
+            content: Text(
+              _unsavedContext != null
+                  ? 'Sie haben ungespeicherte Änderungen in "$_unsavedContext". Möchten Sie diese verwerfen und zur Hauptseite zurückkehren?'
+                  : 'Sie haben ungespeicherte Änderungen. Möchten Sie diese verwerfen und zur Hauptseite zurückkehren?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  // Bleibe auf der aktuellen Seite
+                },
+                child: const Text('Abbrechen'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  // Gehe zur Hauptseite und verwerfe Änderungen
+                  setState(() {
+                    _currentPage = null;
+                    _hasUnsavedChanges = false;
+                    _unsavedContext = null;
+                  });
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                child: const Text('Änderungen verwerfen'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Gehe zur Hauptseite und verwerfe Änderungen
-              setState(() {
-                _currentPage = null;
-                _hasUnsavedChanges = false;
-                _unsavedContext = null;
-              });
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Änderungen verwerfen'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -197,6 +198,18 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
           onBack: () => setState(() => _currentPage = null),
           onUnsavedChanges: _setUnsavedChanges,
         );
+      case 'external_provider_management':
+        return ExternalProviderManagementPage(
+          isSuperUser: widget.isSuperUser,
+          hallId: widget.hallId,
+          onBack: () => setState(() => _currentPage = null),
+          onUnsavedChanges: _setUnsavedChanges,
+        );
+      case 'scanner_settings':
+        return ScannerSettingsPage(
+          onBack: () => setState(() => _currentPage = null),
+          onUnsavedChanges: _setUnsavedChanges,
+        );
       default:
         return _buildDashboard();
     }
@@ -218,18 +231,18 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
             widget.isSuperUser
                 ? 'Vertic Zentral-Verwaltung'
                 : '${_getHallName(widget.hallId)} - Verwaltung',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             widget.isSuperUser
                 ? 'Universelle Ticket-Verwaltung für alle Vertic-Hallen'
                 : 'Verwaltung für ${_getHallName(widget.hallId)}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -250,15 +263,18 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                 // Unified Ticket Management
                 _buildAdminListTile(
                   context,
-                  icon: widget.isSuperUser
-                      ? Icons.verified
-                      : Icons.confirmation_number,
-                  title: widget.isSuperUser
-                      ? 'Unified Ticket Management'
-                      : 'Hallen-Tickets',
-                  subtitle: widget.isSuperUser
-                      ? 'Vertic Universal-Tickets und Gym-spezifische Tickets'
-                      : 'Tickets für ${_getHallName(widget.hallId)} verwalten',
+                  icon:
+                      widget.isSuperUser
+                          ? Icons.verified
+                          : Icons.confirmation_number,
+                  title:
+                      widget.isSuperUser
+                          ? 'Unified Ticket Management'
+                          : 'Hallen-Tickets',
+                  subtitle:
+                      widget.isSuperUser
+                          ? 'Vertic Universal-Tickets und Gym-spezifische Tickets'
+                          : 'Tickets für ${_getHallName(widget.hallId)} verwalten',
                   color: widget.isSuperUser ? Colors.teal : Colors.blue,
                   onTap: () => setState(() => _currentPage = 'unified_tickets'),
                 ),
@@ -272,8 +288,8 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                     title: 'Gym-Verwaltung',
                     subtitle: 'Standorte erstellen und verwalten',
                     color: Colors.deepOrange,
-                    onTap: () =>
-                        setState(() => _currentPage = 'gym_management'),
+                    onTap:
+                        () => setState(() => _currentPage = 'gym_management'),
                   ),
                   const Divider(),
 
@@ -284,8 +300,8 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                     title: '🔐 RBAC Management',
                     subtitle: 'Permissions, Rollen und Zuweisungen verwalten',
                     color: Colors.indigo,
-                    onTap: () =>
-                        setState(() => _currentPage = 'rbac_management'),
+                    onTap:
+                        () => setState(() => _currentPage = 'rbac_management'),
                   ),
                   const Divider(),
 
@@ -314,8 +330,10 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                     subtitle:
                         'Steuern Sie, welche Tickets für Clients sichtbar sind',
                     color: Colors.cyan,
-                    onTap: () => setState(
-                        () => _currentPage = 'ticket_visibility_settings'),
+                    onTap:
+                        () => setState(
+                          () => _currentPage = 'ticket_visibility_settings',
+                        ),
                   ),
                   const Divider(),
                 ],
@@ -325,12 +343,25 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                   context,
                   icon: Icons.print,
                   title: 'Drucker-Einstellungen',
-                  subtitle: widget.isSuperUser
-                      ? 'Bondrucker für alle Hallen konfigurieren'
-                      : 'Bondrucker für ${_getHallName(widget.hallId)} konfigurieren',
+                  subtitle:
+                      widget.isSuperUser
+                          ? 'Bondrucker für alle Hallen konfigurieren'
+                          : 'Bondrucker für ${_getHallName(widget.hallId)} konfigurieren',
                   color: Colors.brown,
-                  onTap: () =>
-                      setState(() => _currentPage = 'printer_settings'),
+                  onTap:
+                      () => setState(() => _currentPage = 'printer_settings'),
+                ),
+                const Divider(),
+
+                // 🔧 Scanner-Einstellungen (für alle Admins)
+                _buildAdminListTile(
+                  context,
+                  icon: Icons.qr_code_scanner,
+                  title: '🔧 Scanner-Einstellungen',
+                  subtitle: 'COM-Port, Scan-Typen und Hardware-Konfiguration',
+                  color: Colors.purple,
+                  onTap:
+                      () => setState(() => _currentPage = 'scanner_settings'),
                 ),
                 const Divider(),
 
@@ -341,8 +372,9 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                   title: 'Dokumentenverwaltung',
                   subtitle: 'Registrierungs-Dokumente verwalten und hochladen',
                   color: Colors.blueGrey,
-                  onTap: () =>
-                      setState(() => _currentPage = 'document_management'),
+                  onTap:
+                      () =>
+                          setState(() => _currentPage = 'document_management'),
                 ),
                 const Divider(),
 
@@ -393,8 +425,10 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                     subtitle:
                         'Allgemeine Einstellungen und Parameter (nur SuperUser)',
                     color: Colors.indigo,
-                    onTap: () =>
-                        setState(() => _currentPage = 'system_configuration'),
+                    onTap:
+                        () => setState(
+                          () => _currentPage = 'system_configuration',
+                        ),
                   ),
                   const Divider(),
 
@@ -406,11 +440,27 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                     subtitle:
                         'Sicherheitsrichtlinien für QR-Code-Rotation konfigurieren',
                     color: Colors.deepPurple,
-                    onTap: () =>
-                        setState(() => _currentPage = 'qr_rotation_settings'),
+                    onTap:
+                        () => setState(
+                          () => _currentPage = 'qr_rotation_settings',
+                        ),
                   ),
                   const Divider(),
                 ],
+
+                // External Provider Management - ✅ PHASE 4 IMPLEMENTIERT
+                _buildAdminListTile(
+                  context,
+                  icon: Icons.extension,
+                  title: '🌐 External Provider Management',
+                  subtitle: 'Fitpass, Friction und andere Provider verwalten',
+                  color: Colors.indigo,
+                  onTap:
+                      () => setState(
+                        () => _currentPage = 'external_provider_management',
+                      ),
+                ),
+                const Divider(),
 
                 // Berichte & Analytics - ✅ VOLLSTÄNDIG IMPLEMENTIERT
                 _buildAdminListTile(
@@ -419,8 +469,8 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                   title: 'Berichte & Analytics',
                   subtitle: 'Umsatzberichte, Statistiken und Datenexport',
                   color: Colors.teal,
-                  onTap: () =>
-                      setState(() => _currentPage = 'reports_analytics'),
+                  onTap:
+                      () => setState(() => _currentPage = 'reports_analytics'),
                 ),
                 const Divider(),
 
@@ -436,7 +486,8 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content: Text('Wartung - In Entwicklung')),
+                          content: Text('Wartung - In Entwicklung'),
+                        ),
                       );
                     },
                   ),
@@ -452,7 +503,6 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                 //   onTap: () => setState(() => _currentPage = 'staff_management'),
                 // ),
                 // const Divider(),
-
                 const SizedBox(height: 16),
               ],
             ),
@@ -477,18 +527,11 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(
-          icon,
-          color: color,
-          size: 24,
-        ),
+        child: Icon(icon, color: color, size: 24),
       ),
       title: Text(
         title,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
-        ),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
       ),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
