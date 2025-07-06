@@ -1,0 +1,40 @@
+class: Country
+table: countries
+fields:
+  # Grunddaten
+  code: String                    # ISO 3166-1 Alpha-2 (DE, AT, CH)
+  name: String                    # Deutschland, Österreich, Schweiz
+  displayName: String             # Anzeigename in der UI
+  
+  # Währung & Locale
+  currency: String, default='EUR' # EUR, CHF
+  locale: String                  # de-DE, de-AT, de-CH
+  
+  # Compliance-Einstellungen
+  requiresTSE: bool, default=false           # Deutschland: TSE-Pflicht
+  requiresRKSV: bool, default=false          # Österreich: RKSV-Pflicht
+  vatRegistrationThreshold: double?          # Umsatzschwelle für MwSt-Pflicht
+  
+  # System-Einstellungen
+  isActive: bool, default=true               # Land ist verfügbar
+  isDefault: bool, default=false             # Standard-Land für neue Standorte
+  supportLevel: String, default='basic'     # basic, full, planned
+  
+  # Compliance-Metadaten
+  taxSystemType: String                      # vat, gst, sales_tax
+  receiptRequirements: String?               # JSON mit Beleg-Anforderungen
+  exportFormats: String?                     # JSON mit verfügbaren Export-Formaten
+  
+  # Audit & Verwaltung
+  createdAt: DateTime?
+  updatedAt: DateTime?
+  createdByStaffId: int?
+
+indexes:
+  countries_code_unique:
+    fields: code
+    unique: true
+  countries_active_idx:
+    fields: isActive
+  countries_default_idx:
+    fields: isDefault 

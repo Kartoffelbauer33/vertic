@@ -8,10 +8,25 @@ fields:
   postalCode: String?
   contactEmail: String?
   contactPhone: String?
+  
+  # 🏛️ DACH-Compliance: Land-Zuordnung (SuperUser-only)
+  countryId: int?                    # Zugewiesenes Land für Compliance
+  isCountryLocked: bool, default=false  # Verhindert Änderung durch Facility-Admins
+  
   isActive: bool
   createdAt: DateTime
   updatedAt: DateTime?
+  
+  # Audit-Informationen
+  countryAssignedByStaffId: int?     # Welcher SuperUser hat das Land zugewiesen
+  countryAssignedAt: DateTime?       # Wann wurde das Land zugewiesen
 indexes:
   facility_name_unique_idx:
     fields: name
-    unique: true 
+    unique: true
+  facility_country_idx:
+    fields: countryId
+  facility_country_locked_idx:
+    fields: isCountryLocked
+  facility_active_idx:
+    fields: isActive 

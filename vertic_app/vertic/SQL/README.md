@@ -21,11 +21,12 @@
 | Datei | Zweck | Wann verwenden? |
 |-------|-------|----------------|
 | `01_CLEAN_SETUP_FINAL_CORRECTED.sql` | 🎯 **HAUPT-SETUP** | **IMMER ZUERST** - Erstellt alles |
+| `ADD_DACH_COMPLIANCE_PERMISSIONS.sql` | 🇩🇪🇦🇹 **DACH-COMPLIANCE** | **NACH HAUPT-SETUP** - Fügt DACH-Permissions hinzu |
 | `REPAIR_TOOLS.sql` | 🛠️ **REPARATUR** | Nur bei Login-Problemen |
 | `ADD_EXTERNAL_PROVIDER_PERMISSIONS.sql` | 🔗 **FREMDANBIETER** | Nur für Fitpass/Friction Integration |
 | `UPDATE_SUPERUSER_EMAIL_VERIFICATION.sql` | 📧 **EMAIL-UPDATE** | Nur für Email-Verification System |
 
-**Das war's! Nur 4 Dateien - keine Verwirrung mehr.** 🎉
+**Das war's! Nur 5 Dateien - keine Verwirrung mehr.** 🎉
 
 ---
 

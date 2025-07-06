@@ -100,6 +100,12 @@ class ProductManagementEndpoint extends Endpoint {
     double? costPrice,
     int? stockQuantity,
     bool isFoodItem = false,
+    // 🏛️ DACH-Compliance Parameter
+    int? taxClassId,
+    int? defaultCountryId,
+    bool requiresTSESignature = false,
+    bool requiresAgeVerification = false,
+    bool isSubjectToSpecialTax = false,
   }) async {
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
@@ -142,13 +148,19 @@ class ProductManagementEndpoint extends Endpoint {
         stockQuantity: stockQuantity,
         isActive: true,
         isFoodItem: isFoodItem,
+        // 🏛️ DACH-Compliance Felder
+        taxClassId: taxClassId,
+        defaultCountryId: defaultCountryId,
+        requiresTSESignature: requiresTSESignature,
+        requiresAgeVerification: requiresAgeVerification,
+        isSubjectToSpecialTax: isSubjectToSpecialTax,
         createdByStaffId: staffUserId,
         createdAt: DateTime.now(),
       );
 
       final savedProduct = await Product.db.insertRow(session, newProduct);
       session.log(
-          'Neues Produkt erstellt: ${savedProduct.name} (ID: ${savedProduct.id})');
+          '🏛️ Neues Produkt erstellt: ${savedProduct.name} (ID: ${savedProduct.id}) - TaxClass: $taxClassId, Country: $defaultCountryId');
       return savedProduct;
     } catch (e) {
       session.log('Fehler beim Erstellen des Produkts: $e',

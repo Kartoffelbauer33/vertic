@@ -1,0 +1,46 @@
+class: TaxClass
+table: tax_classes
+fields:
+  # Grunddaten
+  name: String                        # "Klettereintritt", "Gastronomie", "Getränke"
+  description: String?                # Detaillierte Beschreibung
+  internalCode: String                # CLIMBING_ENTRY, FOOD_BASIC, BEVERAGES
+  
+  # Länder-Zuordnung
+  countryId: int                      # Foreign Key zu countries
+  
+  # Steuer-Details
+  taxRate: double                     # 19.0, 7.0, 13.0, 10.0, 8.1, 2.6
+  taxType: String                     # VAT, SALES_TAX, GST
+  
+  # Compliance-Klassifizierung
+  productCategory: String             # SERVICES, GOODS, FOOD, BEVERAGES
+  requiresTSESignature: bool, default=false  # Deutschland: TSE-Pflicht für diese Klasse
+  requiresRKSVChain: bool, default=false     # Österreich: RKSV-Verkettung
+  
+  # Business Logic
+  isDefault: bool, default=false      # Standard-Steuerklasse für neue Produkte
+  appliesToMemberships: bool, default=false  # Für Mitgliedschaften verwendbar
+  appliesToOneTimeEntries: bool, default=true # Für Einzeleintritte verwendbar
+  appliesToProducts: bool, default=true      # Für Waren verwendbar
+  
+  # System-Status
+  isActive: bool, default=true        # Steuerklasse ist verfügbar
+  effectiveFrom: DateTime?            # Gültig ab (für Steueränderungen)
+  effectiveTo: DateTime?              # Gültig bis (für Steueränderungen)
+  
+  # Metadaten
+  displayOrder: int, default=0        # Anzeigereihenfolge in UI
+  colorHex: String, default='#607D8B' # Farbe für UI-Anzeige
+  iconName: String, default='receipt' # Icon für UI-Anzeige
+  
+  # Audit & Verwaltung
+  createdAt: DateTime?
+  updatedAt: DateTime?
+  createdByStaffId: int?
+
+indexes:
+  tax_classes_country_idx:
+    fields: countryId
+  tax_classes_active_idx:
+    fields: isActive 

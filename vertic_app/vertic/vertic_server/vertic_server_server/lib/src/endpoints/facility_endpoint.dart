@@ -223,4 +223,194 @@ class FacilityEndpoint extends Endpoint {
       return null;
     }
   }
+
+  // ==================== DACH-COMPLIANCE: COUNTRY ASSIGNMENT ====================
+
+  /// **🏛️ SuperUser-only: Facility einem Land zuweisen**
+  Future<bool> assignCountryToFacility(
+    Session session,
+    int facilityId,
+    int countryId, {
+    bool lockCountry = false,
+  }) async {
+    // 🔐 RBAC SECURITY CHECK - SuperUser required
+    final authUserId = await _getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Country-Assignment verweigert',
+          level: LogLevel.warning);
+      return false;
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+        session,
+        authUserId,
+        'can_manage_country_assignments' // SuperUser-only permission
+        );
+    if (!hasPermission) {
+      session.log(
+          '❌ Fehlende SuperUser-Berechtigung für Country-Assignment (User: $authUserId)',
+          level: LogLevel.warning);
+      return false;
+    }
+
+    try {
+      // Prüfe ob Facility existiert
+      final facility = await Facility.db.findById(session, facilityId);
+      if (facility == null) {
+        throw Exception('Facility mit ID $facilityId nicht gefunden');
+      }
+
+      // Prüfe ob Country existiert und aktiv ist
+      final country = await Country.db.findById(session, countryId);
+      if (country == null) {
+        throw Exception('Land mit ID $countryId nicht gefunden');
+      }
+      if (!country.isActive) {
+        throw Exception('Land ${country.displayName} ist nicht aktiv');
+      }
+
+      // Facility aktualisieren mit Country-Zuordnung
+      final updatedFacility = facility.copyWith(
+        countryId: countryId,
+        isCountryLocked: lockCountry,
+        countryAssignedByStaffId: authUserId,
+        countryAssignedAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await Facility.db.updateRow(session, updatedFacility);
+
+      session.log(
+        '🏛️ Country-Assignment: Facility "${facility.name}" → Land "${country.displayName}" (${lockCountry ? "LOCKED" : "unlocked"}) by Staff $authUserId',
+        level: LogLevel.info,
+      );
+
+      return true;
+    } catch (e) {
+      session.log('❌ Fehler bei Country-Assignment: $e', level: LogLevel.error);
+      return false;
+    }
+  }
+
+  /// **🏛️ SuperUser-only: Country-Lock für Facility ändern**
+  Future<bool> toggleFacilityCountryLock(
+    Session session,
+    int facilityId,
+    bool isLocked,
+  ) async {
+    // 🔐 RBAC SECURITY CHECK - SuperUser required
+    final authUserId = await _getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Country-Lock-Toggle verweigert',
+          level: LogLevel.warning);
+      return false;
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+        session,
+        authUserId,
+        'can_manage_country_assignments' // SuperUser-only permission
+        );
+    if (!hasPermission) {
+      session.log(
+          '❌ Fehlende SuperUser-Berechtigung für Country-Lock-Toggle (User: $authUserId)',
+          level: LogLevel.warning);
+      return false;
+    }
+
+    try {
+      final facility = await Facility.db.findById(session, facilityId);
+      if (facility == null) {
+        throw Exception('Facility mit ID $facilityId nicht gefunden');
+      }
+
+      final updatedFacility = facility.copyWith(
+        isCountryLocked: isLocked,
+        updatedAt: DateTime.now(),
+      );
+
+      await Facility.db.updateRow(session, updatedFacility);
+
+      session.log(
+        '🔒 Country-Lock-Toggle: Facility "${facility.name}" → ${isLocked ? "LOCKED" : "UNLOCKED"} by Staff $authUserId',
+        level: LogLevel.info,
+      );
+
+      return true;
+    } catch (e) {
+      session.log('❌ Fehler bei Country-Lock-Toggle: $e',
+          level: LogLevel.error);
+      return false;
+    }
+  }
+
+  /// **🏛️ Facilities nach Land filtern**
+  Future<List<Facility>> getFacilitiesByCountry(
+      Session session, int countryId) async {
+    // 🔐 RBAC SECURITY CHECK
+    final authUserId = await _getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Facilities-by-Country verweigert',
+          level: LogLevel.warning);
+      return [];
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+        session, authUserId, 'can_view_facilities');
+    if (!hasPermission) {
+      session.log(
+          '❌ Fehlende Berechtigung für Facilities-by-Country (User: $authUserId)',
+          level: LogLevel.warning);
+      return [];
+    }
+
+    try {
+      return await Facility.db.find(
+        session,
+        where: (f) => f.countryId.equals(countryId) & f.isActive.equals(true),
+        orderBy: (f) => f.name,
+      );
+    } catch (e) {
+      session.log(
+          '❌ Fehler beim Abrufen der Facilities für Country $countryId: $e',
+          level: LogLevel.error);
+      return [];
+    }
+  }
+
+  /// **🏛️ Facilities ohne Land-Zuordnung abrufen**
+  Future<List<Facility>> getFacilitiesWithoutCountry(Session session) async {
+    // 🔐 RBAC SECURITY CHECK
+    final authUserId = await _getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Facilities-without-Country verweigert',
+          level: LogLevel.warning);
+      return [];
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+        session, authUserId, 'can_view_facilities');
+    if (!hasPermission) {
+      session.log(
+          '❌ Fehlende Berechtigung für Facilities-without-Country (User: $authUserId)',
+          level: LogLevel.warning);
+      return [];
+    }
+
+    try {
+      // TODO: Korrekte Serverpod-Syntax für NULL-Checks implementieren
+      final allFacilities = await Facility.db.find(
+        session,
+        where: (f) => f.isActive.equals(true),
+        orderBy: (f) => f.name,
+      );
+
+      // Filter in Dart - nicht optimal, aber funktional
+      return allFacilities.where((f) => f.countryId == null).toList();
+    } catch (e) {
+      session.log('❌ Fehler beim Abrufen der Facilities ohne Country: $e',
+          level: LogLevel.error);
+      return [];
+    }
+  }
 }

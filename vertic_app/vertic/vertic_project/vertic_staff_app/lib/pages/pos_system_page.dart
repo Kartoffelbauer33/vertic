@@ -2525,6 +2525,12 @@ class _AddProductDialogState extends State<AddProductDialog> {
   List<ProductCategory> _availableCategories = [];
   ProductCategory? _selectedCategory;
 
+  // **🏛️ DACH-Compliance: Steuerklassen-Verwaltung**
+  List<TaxClass> _availableTaxClasses = [];
+  TaxClass? _selectedTaxClass;
+  bool _isTaxClassesLoading = true;
+  Country? _facilityCountry; // Land der aktuellen Facility
+
   @override
   void initState() {
     super.initState();
@@ -2541,6 +2547,9 @@ class _AddProductDialogState extends State<AddProductDialog> {
 
       // **🏷️ Kategorien laden**
       _loadProductCategories();
+
+      // **🏛️ Facility-Land ermitteln und Steuerklassen laden**
+      _loadFacilityCountryAndTaxClasses();
     });
   }
 
@@ -2600,6 +2609,133 @@ class _AddProductDialogState extends State<AddProductDialog> {
       if (mounted) {
         setState(() {
           _isCategoriesLoading = false;
+        });
+      }
+    }
+  }
+
+  /// **🏛️ Facility-Land ermitteln und Steuerklassen laden**
+  Future<void> _loadFacilityCountryAndTaxClasses() async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      // TODO: Hier sollte die aktuelle Facility-ID aus der Session kommen
+      // Für jetzt nehmen wir die erste verfügbare Facility
+      final facilities = await client.facility.getAllFacilities();
+
+      if (facilities.isNotEmpty) {
+        final currentFacility = facilities.first;
+
+        if (currentFacility.countryId != null) {
+          // Alle Länder laden und das Facility-Land finden
+          final countries = await client.taxManagement.getAllCountries();
+          final country = countries.firstWhere(
+            (c) => c.id == currentFacility.countryId,
+            orElse: () =>
+                countries.first, // Falls nicht gefunden, nehme das erste Land
+          );
+
+          if (mounted) {
+            setState(() {
+              _facilityCountry = country;
+            });
+
+            // Steuerklassen für das Facility-Land laden
+            await _loadTaxClassesForFacilityCountry(country.id!);
+
+            debugPrint('🏛️ Facility-Land erkannt: ${country.displayName}');
+          }
+        } else {
+          // Facility hat noch kein Land zugeordnet
+          debugPrint(
+            '⚠️ Facility hat noch kein Land zugeordnet - verwende Deutschland als Standard',
+          );
+          await _loadDefaultGermanyTaxClasses();
+        }
+      } else {
+        debugPrint(
+          '⚠️ Keine Facilities gefunden - verwende Deutschland als Standard',
+        );
+        await _loadDefaultGermanyTaxClasses();
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Laden des Facility-Landes: $e');
+      // Fallback auf Deutschland
+      await _loadDefaultGermanyTaxClasses();
+    }
+  }
+
+  /// **🇩🇪 Standard Deutschland-Steuerklassen laden (Fallback)**
+  Future<void> _loadDefaultGermanyTaxClasses() async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final countries = await client.taxManagement.getAllCountries();
+
+      if (countries.isNotEmpty) {
+        final germany = countries.firstWhere(
+          (country) => country.code == 'DE',
+          orElse: () => countries.first,
+        );
+
+        if (mounted) {
+          setState(() {
+            _facilityCountry = germany;
+          });
+
+          await _loadTaxClassesForFacilityCountry(germany.id!);
+          debugPrint('🇩🇪 Deutschland als Standard-Land geladen');
+        }
+      } else {
+        debugPrint('⚠️ Keine Länder in der Datenbank gefunden');
+        if (mounted) {
+          setState(() {
+            _isTaxClassesLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Laden der Standard-Steuerklassen: $e');
+      if (mounted) {
+        setState(() {
+          _isTaxClassesLoading = false;
+        });
+      }
+    }
+  }
+
+  /// **🏛️ Steuerklassen für Facility-Land laden**
+  Future<void> _loadTaxClassesForFacilityCountry(int countryId) async {
+    try {
+      setState(() => _isTaxClassesLoading = true);
+
+      final client = Provider.of<Client>(context, listen: false);
+      final taxClasses = await client.taxManagement.getTaxClassesForCountry(
+        countryId,
+      );
+
+      if (mounted) {
+        setState(() {
+          _availableTaxClasses = taxClasses;
+          _isTaxClassesLoading = false;
+
+          // Standard-Steuerklasse auswählen
+          if (taxClasses.isNotEmpty) {
+            _selectedTaxClass = taxClasses.firstWhere(
+              (taxClass) => taxClass.isDefault,
+              orElse: () => taxClasses.first,
+            );
+          }
+        });
+
+        debugPrint(
+          '🏛️ ${taxClasses.length} Steuerklassen für ${_facilityCountry?.displayName} geladen',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Laden der Steuerklassen: $e');
+      if (mounted) {
+        setState(() {
+          _isTaxClassesLoading = false;
         });
       }
     }
@@ -2798,6 +2934,180 @@ class _AddProductDialogState extends State<AddProductDialog> {
                     },
                   ),
 
+            const SizedBox(height: 16),
+
+            // **🏛️ DACH-Compliance: Land-Auswahl**
+            Text(
+              'Steuerliche Zuordnung',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+
+            // **🏛️ Facility-Land-Anzeige**
+            if (_facilityCountry != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  border: Border.all(color: Colors.blue[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.business, color: Colors.blue[700]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Standort-Land: ${_facilityCountry!.displayName}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue[700],
+                            ),
+                          ),
+                          Text(
+                            'Steuersystem: ${_facilityCountry!.taxSystemType.toUpperCase()}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        if (_facilityCountry!.requiresTSE)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'TSE',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red[800],
+                              ),
+                            ),
+                          ),
+                        if (_facilityCountry!.requiresRKSV) ...[
+                          if (_facilityCountry!.requiresTSE)
+                            const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'RKSV',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange[800],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            _availableTaxClasses.isEmpty
+                ? const Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Steuerklassen werden geladen...'),
+                    ],
+                  )
+                : DropdownButtonFormField<TaxClass>(
+                    value: _selectedTaxClass,
+                    decoration: const InputDecoration(
+                      labelText: 'Steuerklasse *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.receipt_long),
+                      helperText: 'Steuersatz und Compliance-Einstellungen',
+                    ),
+                    items: _availableTaxClasses.map((taxClass) {
+                      return DropdownMenuItem<TaxClass>(
+                        value: taxClass,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Color(
+                                  int.parse(
+                                    taxClass.colorHex.replaceFirst('#', '0xFF'),
+                                  ),
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${taxClass.name} (${taxClass.taxRate.toStringAsFixed(1)}%)',
+                              ),
+                            ),
+                            if (taxClass.isDefault)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green[100],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Standard',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.green[800],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (taxClass) {
+                      setState(() {
+                        _selectedTaxClass = taxClass;
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null) {
+                        return 'Bitte wählen Sie eine Steuerklasse';
+                      }
+                      return null;
+                    },
+                  ),
+
             const SizedBox(height: 24),
 
             // Action Buttons
@@ -2946,10 +3256,13 @@ class _AddProductDialogState extends State<AddProductDialog> {
   Future<void> _createProduct() async {
     if (_nameController.text.trim().isEmpty ||
         _priceController.text.trim().isEmpty ||
-        _selectedCategory == null) {
+        _selectedCategory == null ||
+        _selectedTaxClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Name, Preis und Kategorie sind erforderlich'),
+          content: Text(
+            '⚠️ Name, Preis, Kategorie, Land und Steuerklasse sind erforderlich',
+          ),
         ),
       );
       return;
@@ -2976,6 +3289,13 @@ class _AddProductDialogState extends State<AddProductDialog> {
         description: _scannedData?['openFoodFactsData']?['description'],
         categoryId: _selectedCategory!.id,
         isFoodItem: _scannedData?['openFoodFactsData'] != null,
+        // 🏛️ DACH-Compliance Parameter
+        taxClassId: _selectedTaxClass!.id,
+        defaultCountryId: _facilityCountry!.id,
+        requiresTSESignature: _selectedTaxClass!.requiresTSESignature,
+        requiresAgeVerification:
+            false, // TODO: UI für Altersverifikation hinzufügen
+        isSubjectToSpecialTax: false, // TODO: UI für Sondersteuern hinzufügen
       );
 
       widget.onProductCreated(newProduct);

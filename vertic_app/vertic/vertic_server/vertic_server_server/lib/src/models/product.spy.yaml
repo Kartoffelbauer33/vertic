@@ -22,6 +22,16 @@ fields:
   isActive: bool, default=true   # Artikel ist im Verkauf verfügbar
   isFoodItem: bool, default=false # Lebensmittel (für Open Food Facts)
   
+  # 🏛️ DACH-Compliance Integration
+  taxClassId: int?               # Foreign Key zu tax_classes (nullable für Migration)
+  defaultCountryId: int?         # Standard-Land für Steuerberechnung
+  complianceSettings: String?    # JSON mit länderspezifischen Einstellungen
+  
+  # Compliance-Flags
+  requiresTSESignature: bool, default=false   # Deutschland: TSE-Signatur erforderlich
+  requiresAgeVerification: bool, default=false # Alkohol/Tabak Altersprüfung
+  isSubjectToSpecialTax: bool, default=false  # Sondersteuer (Alkohol, Tabak)
+  
   # Open Food Facts Integration
   openFoodFactsId: String?       # Produkt-ID von Open Food Facts
   imageUrl: String?              # Produkt-Foto URL
@@ -43,4 +53,11 @@ indexes:
   products_creator_idx:
     fields: createdByStaffId
   products_hall_idx:
-    fields: hallId 
+    fields: hallId
+  # 🏛️ DACH-Compliance Indexes
+  products_tax_class_idx:
+    fields: taxClassId
+  products_country_idx:
+    fields: defaultCountryId
+  products_tse_required_idx:
+    fields: requiresTSESignature 
