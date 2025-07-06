@@ -1,9 +1,8 @@
 -- =====================================================
--- VERTIC DATABASE CLEAN SETUP SCRIPT - FINAL CORRECTED
+-- VERTIC COMPLETE DATABASE SETUP - ALL IN ONE
 -- Database: test_db
--- 🧹 KOMPLETT BEREINIGUNG & NEU-INITIALISIERUNG  
--- ✅ BASIERT AUF TATSÄCHLICHEN TABELLENSTRUKTUREN
--- ✅ KORRIGIERTE STAFF-LEVEL ENUM WERTE (0,1,2,3)
+-- 🎯 KOMPLETTES SETUP IN EINEM SCRIPT
+-- ✅ RBAC-System + Superuser + Verifikation
 -- =====================================================
 
 -- ========================================
@@ -43,11 +42,8 @@ INSERT INTO staff_users (
     'System', 'Administrator', 'system@temp.local', 3, 'active', NOW()
 );
 
--- Hole die System-User ID für spätere Verwendung
--- (Wird in den folgenden Statements verwendet)
-
 -- ========================================
--- 3. 🔐 RBAC SYSTEM - PERMISSIONS (53 STÜCK)
+-- 3. 🔐 RBAC SYSTEM - PERMISSIONS (60+ STÜCK)
 -- ========================================
 
 -- Erstelle alle Permissions (KORREKTE SPALTEN!)
@@ -126,21 +122,32 @@ INSERT INTO permissions (name, "displayName", description, category, "isSystemCr
 ('can_view_gyms', 'Gyms anzeigen', 'Kann Gyms anzeigen', 'gym_management', false, 'fitness_center', '#607D8B', NOW()),
 ('can_create_gyms', 'Gyms erstellen', 'Kann Gyms erstellen', 'gym_management', true, 'add', '#4CAF50', NOW()),
 ('can_edit_gyms', 'Gyms bearbeiten', 'Kann Gyms bearbeiten', 'gym_management', true, 'edit', '#FF9800', NOW()),
-('can_delete_gyms', 'Gyms löschen', 'Kann Gyms löschen', 'gym_management', true, 'delete', '#F44336', NOW());
+('can_delete_gyms', 'Gyms löschen', 'Kann Gyms löschen', 'gym_management', true, 'delete', '#F44336', NOW()),
+
+-- 🔹 Product Management (POS Artikel-Verwaltung)
+('can_view_products', 'Artikel anzeigen', 'Kann Artikel im POS anzeigen', 'product_management', false, 'inventory', '#607D8B', NOW()),
+('can_create_products', 'Artikel erstellen', 'Kann neue Artikel über Scanner hinzufügen', 'product_management', true, 'add_shopping_cart', '#4CAF50', NOW()),
+('can_edit_products', 'Artikel bearbeiten', 'Kann bestehende Artikel bearbeiten', 'product_management', true, 'edit', '#FF9800', NOW()),
+('can_delete_products', 'Artikel löschen', 'Kann Artikel löschen', 'product_management', true, 'delete', '#F44336', NOW()),
+('can_manage_product_categories', 'Kategorien verwalten', 'Kann Artikel-Kategorien erstellen und bearbeiten', 'product_management', true, 'category', '#9C27B0', NOW()),
+('can_manage_product_stock', 'Lagerbestand verwalten', 'Kann Lagerbestände anpassen', 'product_management', false, 'inventory_2', '#FF5722', NOW()),
+('can_scan_product_barcodes', 'Barcode scannen', 'Kann Barcodes für Artikel-Erfassung scannen', 'product_management', false, 'qr_code_scanner', '#2196F3', NOW()),
+('can_access_favorites_category', 'Favoriten-Kategorie verwalten', 'Kann Artikel zur Favoriten-Kategorie hinzufügen', 'product_management', false, 'star', '#FFC107', NOW());
 
 -- ========================================
--- 4. 👥 ROLLEN-SYSTEM ERSTELLEN (KORREKTE SPALTEN!)
+-- 4. 👥 ROLLEN-SYSTEM ERSTELLEN
 -- ========================================
 
 INSERT INTO roles (name, "displayName", description, "color", "iconName", "isSystemRole", "isActive", "sortOrder", "createdAt", "createdBy") VALUES
 ('Super Admin', 'Super Administrator', 'Vollzugriff auf alle Systemfunktionen', '#F44336', 'admin_panel_settings', true, true, 1, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
 ('Facility Admin', 'Einrichtungsadministrator', 'Verwaltung einer spezifischen Einrichtung', '#9C27B0', 'business', true, true, 2, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
-('Kassierer', 'Kassierer/in', 'Ticketverkauf und Kassenoperationen', '#4CAF50', 'payment', true, true, 3, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
-('Support Staff', 'Support-Mitarbeiter', 'Kundenbetreuung und grundlegende Operationen', '#2196F3', 'support_agent', true, true, 4, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
-('Readonly User', 'Nur-Lese-Benutzer', 'Nur-Lese-Zugriff auf ausgewählte Bereiche', '#607D8B', 'visibility', true, true, 5, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local'));
+('Artikel Manager', 'Artikel-Manager', 'Vollständige Artikel-Verwaltung und Barcode-Scanning', '#FF5722', 'inventory', true, true, 3, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
+('Kassierer', 'Kassierer/in', 'Ticketverkauf und Kassenoperationen', '#4CAF50', 'payment', true, true, 4, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
+('Support Staff', 'Support-Mitarbeiter', 'Kundenbetreuung und grundlegende Operationen', '#2196F3', 'support_agent', true, true, 5, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local')),
+('Readonly User', 'Nur-Lese-Benutzer', 'Nur-Lese-Zugriff auf ausgewählte Bereiche', '#607D8B', 'visibility', true, true, 6, NOW(), (SELECT id FROM staff_users WHERE email = 'system@temp.local'));
 
 -- ========================================
--- 5. 🔗 ROLLEN-PERMISSIONS ZUWEISUNGEN (KORREKTE SPALTEN!)
+-- 5. 🔗 ROLLEN-PERMISSIONS ZUWEISUNGEN
 -- ========================================
 
 -- Super Admin bekommt ALLE Permissions
@@ -152,7 +159,7 @@ SELECT
     (SELECT id FROM staff_users WHERE email = 'system@temp.local')
 FROM permissions;
 
--- Kassierer bekommt grundlegende Permissions
+-- Kassierer bekommt grundlegende Permissions + Artikel-Anzeige
 INSERT INTO role_permissions ("roleId", "permissionId", "assignedAt", "assignedBy")
 SELECT 
     (SELECT id FROM roles WHERE name = 'Kassierer'),
@@ -164,10 +171,29 @@ WHERE name IN (
     'can_view_users', 'can_create_users', 'can_edit_users',
     'can_view_tickets', 'can_create_tickets', 'can_process_payments',
     'can_scan_tickets', 'can_validate_tickets',
-    'can_view_facilities'
+    'can_view_facilities',
+    'can_view_products'
 );
 
--- Support Staff bekommt erweiterte User-Management Permissions
+-- Artikel Manager bekommt alle Artikel-Management Permissions
+INSERT INTO role_permissions ("roleId", "permissionId", "assignedAt", "assignedBy")
+SELECT 
+    (SELECT id FROM roles WHERE name = 'Artikel Manager'),
+    id,
+    NOW(),
+    (SELECT id FROM staff_users WHERE email = 'system@temp.local')
+FROM permissions 
+WHERE name IN (
+    'can_view_users', 'can_create_users', 'can_edit_users',
+    'can_view_tickets', 'can_create_tickets', 'can_process_payments',
+    'can_scan_tickets', 'can_validate_tickets',
+    'can_view_facilities',
+    'can_view_products', 'can_create_products', 'can_edit_products', 'can_delete_products',
+    'can_manage_product_categories', 'can_manage_product_stock', 
+    'can_scan_product_barcodes', 'can_access_favorites_category'
+);
+
+-- Support Staff bekommt erweiterte User-Management Permissions + Artikel-Anzeige
 INSERT INTO role_permissions ("roleId", "permissionId", "assignedAt", "assignedBy")
 SELECT 
     (SELECT id FROM roles WHERE name = 'Support Staff'),
@@ -178,35 +204,116 @@ FROM permissions
 WHERE name IN (
     'can_view_users', 'can_create_users', 'can_edit_users', 'can_view_user_details',
     'can_view_tickets', 'can_edit_tickets', 'can_issue_refunds',
-    'can_view_facilities', 'can_view_reports'
+    'can_view_facilities', 'can_view_reports',
+    'can_view_products'
 );
 
 -- ========================================
--- 6. ✅ VERIFIKATION - Zeige Setup-Ergebnis
+-- 6. 🔐 SUPERUSER ERSTELLEN (UNIFIED AUTH)
 -- ========================================
 
-SELECT 'SETUP COMPLETED' as status, 
-       (SELECT COUNT(*) FROM permissions) as total_permissions,
-       (SELECT COUNT(*) FROM roles) as total_roles,
-       (SELECT COUNT(*) FROM role_permissions) as total_role_permissions;
+-- Erstelle UserInfo im Serverpod Auth-System
+INSERT INTO serverpod_user_info (
+    "userIdentifier",
+    email,
+    "userName", 
+    "fullName",
+    created,
+    blocked,
+    "scopeNames"
+) VALUES (
+    'superuser@staff.vertic.local',
+    'superuser@staff.vertic.local',
+    'superuser',
+    'Super Administrator',
+    NOW(),
+    false,
+    '["staff"]'::json
+);
 
--- Zeige alle Rollen mit Permission-Anzahl
+-- Erstelle EmailAuth mit bcrypt Hash für 'super123'
+INSERT INTO serverpod_email_auth (
+    "userId",
+    email,
+    hash
+) VALUES (
+    (SELECT id FROM serverpod_user_info WHERE "userIdentifier" = 'superuser@staff.vertic.local'),
+    'superuser@staff.vertic.local',
+    '$2a$10$KNcGVTK1kwpwJhfwtaat5u1uOOOUJzIa51blIw2JcQ0K1tjrRTw62'
+);
+
+-- Erstelle StaffUser-Eintrag
+INSERT INTO staff_users (
+    "firstName",
+    "lastName", 
+    email,
+    "employeeId",
+    "staffLevel",
+    "employmentStatus",
+    "userInfoId",
+    "createdAt",
+    "createdBy"
+) VALUES (
+    'Super',
+    'Administrator',
+    'superuser@staff.vertic.local',
+    'superuser',
+    3,
+    'active',
+    (SELECT id FROM serverpod_user_info WHERE "userIdentifier" = 'superuser@staff.vertic.local'),
+    NOW(),
+    (SELECT id FROM staff_users WHERE email = 'system@temp.local')
+);
+
+-- Weise Super Admin Rolle zu
+INSERT INTO staff_user_roles ("staffUserId", "roleId", "assignedAt", "assignedBy", "isActive")
 SELECT 
-    r.name as role_name,
-    r."displayName",
-    COUNT(p.id) as permission_count
-FROM roles r
-LEFT JOIN role_permissions rp ON r.id = rp."roleId"
-LEFT JOIN permissions p ON rp."permissionId" = p.id
-GROUP BY r.id, r.name, r."displayName"
-ORDER BY permission_count DESC;
+    (SELECT id FROM staff_users WHERE email = 'superuser@staff.vertic.local'),
+    (SELECT id FROM roles WHERE name = 'Super Admin'),
+    NOW(),
+    (SELECT id FROM staff_users WHERE email = 'system@temp.local'),
+    true;
+
+-- Weise ALLE Permissions direkt zu (als Backup)
+INSERT INTO staff_user_permissions ("staffUserId", "permissionId", "grantedAt", "grantedBy", "isActive")
+SELECT 
+    (SELECT id FROM staff_users WHERE email = 'superuser@staff.vertic.local'),
+    p.id,
+    NOW(),
+    (SELECT id FROM staff_users WHERE email = 'system@temp.local'),
+    true
+FROM permissions p;
+
+-- ========================================
+-- 7. ✅ SETUP VERIFIKATION
+-- ========================================
+
+-- Gesamtstatistik
+SELECT 
+    '🎉 COMPLETE SETUP FINISHED!' as status,
+    (SELECT COUNT(*) FROM permissions) as total_permissions,
+    (SELECT COUNT(*) FROM roles) as total_roles,
+    (SELECT COUNT(*) FROM staff_users WHERE email = 'superuser@staff.vertic.local') as superuser_created,
+    (SELECT COUNT(*) FROM staff_user_permissions WHERE "staffUserId" = (SELECT id FROM staff_users WHERE email = 'superuser@staff.vertic.local')) as superuser_permissions;
+
+-- Superuser Details
+SELECT 
+    '👑 SUPERUSER LOGIN CREDENTIALS' as info,
+    'superuser' as username,
+    'super123' as password,
+    'superuser@staff.vertic.local' as email,
+    su."staffLevel" as staff_level,
+    su."employmentStatus" as status
+FROM staff_users su
+WHERE su.email = 'superuser@staff.vertic.local';
 
 -- =====================================================
--- ✅ SETUP ABGESCHLOSSEN!
--- 📋 Nächster Schritt: Führe "02_CREATE_SUPERUSER_FINAL_CORRECTED.sql" aus
+-- ✅ SETUP KOMPLETT!
 -- 
--- 🔧 WICHTIGE ERKENNTNISSE:
--- - staffLevel muss 0,1,2,3 sein (NICHT 99!)
--- - userInfoId Feld verknüpft mit serverpod_user_info.id
--- - StaffUserType Enum: 0=staff, 1=hallAdmin, 2=facilityAdmin, 3=superUser
+-- 📋 LOGIN:
+--    Username: superuser
+--    Password: super123
+--    Email: superuser@staff.vertic.local
+-- 
+-- 🎯 FERTIG! Starte die Staff App und melde dich an.
 -- ===================================================== 

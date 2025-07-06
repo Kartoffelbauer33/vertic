@@ -31,6 +31,12 @@ class BackgroundScannerService extends ChangeNotifier {
   String _lastResult = '';
   DateTime? _lastScanTime;
 
+  // **🎯 DIALOG-MODE für Scanner-Input an Dialogs weiterleiten**
+  bool _isDialogMode = false;
+  Function(String)? _dialogScanCallback;
+  String _lastScannedCode = '';
+  DateTime? _lastDuplicateCheck;
+
   // **SCAN TYPES CONFIGURATION**
   Map<String, bool> _enabledScanTypes = {
     'vertic_tickets': true,
@@ -67,6 +73,7 @@ class BackgroundScannerService extends ChangeNotifier {
   int get successfulScansToday => _successfulScansToday;
   bool get showToastNotifications => _showToastNotifications;
   bool get playSuccessSound => _playSuccessSound;
+  bool get isDialogMode => _isDialogMode;
 
   /// **🔧 SCANNER INITIALIZATION**
   void _initializeScanner() {
@@ -88,6 +95,22 @@ class BackgroundScannerService extends ChangeNotifier {
   void registerContext(BuildContext context) {
     _context = context;
     debugPrint('📱 Background Scanner Context registriert');
+  }
+
+  /// **🎯 DIALOG-MODE: Scanner-Input an Dialog weiterleiten**
+  void registerDialogScanListener(Function(String) callback) {
+    _isDialogMode = true;
+    _dialogScanCallback = callback;
+    debugPrint('🎯 Dialog-Scanner-Mode aktiviert');
+    notifyListeners();
+  }
+
+  /// **🔴 DIALOG-MODE DEAKTIVIEREN**
+  void unregisterDialogScanListener() {
+    _isDialogMode = false;
+    _dialogScanCallback = null;
+    debugPrint('🔴 Dialog-Scanner-Mode deaktiviert');
+    notifyListeners();
   }
 
   /// **🔍 PORT MANAGEMENT**
@@ -183,7 +206,47 @@ class BackgroundScannerService extends ChangeNotifier {
     if (cleanedData.isEmpty) return;
 
     debugPrint('🔍 Scanner-Daten empfangen: $cleanedData');
+
+    // **🎯 DIALOG-MODE: Scanner-Input direkt an Dialog weiterleiten**
+    if (_isDialogMode && _dialogScanCallback != null) {
+      debugPrint('🎯 Dialog-Mode: Weiterleitung an Dialog-Callback');
+      _dialogScanCallback!(cleanedData);
+      return;
+    }
+
+    // **🔄 DUPLICATE-CHECK nur für Identity/User-QR-Codes**
+    if (_shouldCheckForDuplicates(cleanedData)) {
+      final now = DateTime.now();
+      if (_lastScannedCode == cleanedData &&
+          _lastDuplicateCheck != null &&
+          now.difference(_lastDuplicateCheck!).inMilliseconds < 1000) {
+        debugPrint('Ignoriere doppelten Scan des letzten QR-Codes');
+        return;
+      }
+      _lastScannedCode = cleanedData;
+      _lastDuplicateCheck = now;
+    }
+
     _processScannedCode(cleanedData);
+  }
+
+  /// **🔍 DUPLICATE-CHECK nur für spezielle Code-Typen**
+  bool _shouldCheckForDuplicates(String code) {
+    try {
+      // JSON QR-Code prüfen
+      final json = jsonDecode(code);
+
+      // Nur bei Vertic Tickets, Fitpass, Friction doppelte Scans verhindern
+      return json.containsKey('vertic_ticket_id') ||
+          json.containsKey('fitpass_id') ||
+          json.containsKey('friction_id');
+    } catch (_) {
+      // Kein JSON - bei User-IDs auch doppelte Scans verhindern
+      return code.startsWith('VT-') ||
+          code.startsWith('FP-') ||
+          code.startsWith('FR-') ||
+          code.startsWith('vertic://');
+    }
   }
 
   /// **✋ MANUAL SCAN INPUT**
@@ -194,6 +257,14 @@ class BackgroundScannerService extends ChangeNotifier {
     }
 
     debugPrint('✋ Manuelle Eingabe: $code');
+
+    // **🎯 DIALOG-MODE: Manuelle Eingabe auch an Dialog weiterleiten**
+    if (_isDialogMode && _dialogScanCallback != null) {
+      debugPrint('🎯 Dialog-Mode: Manuelle Eingabe an Dialog-Callback');
+      _dialogScanCallback!(code);
+      return;
+    }
+
     await _processScannedCode(code);
   }
 

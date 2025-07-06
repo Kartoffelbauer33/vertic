@@ -1,12 +1,46 @@
 class: Product
 table: products
 fields:
+  # Grunddaten (bestehend)
   name: String
   description: String?
-  categoryId: int
+  categoryId: int?               # Optional (neue Artikel ohne Kategorie)
   price: double
-  barcode: String?
-  sku: String?
-  stockQuantity: int?
-  isActive: bool, default=true
-  hallId: int? 
+  barcode: String?               # EAN/UPC Barcode
+  sku: String?                   # Stock Keeping Unit
+  hallId: int?                   # Hallen-spezifisch
+  
+  # Erweiterte Preisgestaltung
+  costPrice: double?             # Einkaufspreis (optional)
+  marginPercentage: double?      # Gewinnmarge in Prozent
+  
+  # Erweiterte Lagerbestand-Funktionen
+  stockQuantity: int?            # Aktueller Lagerbestand
+  minStockThreshold: int?        # Mindestbestand für Warnungen
+  
+  # Status & Flags (erweitert)
+  isActive: bool, default=true   # Artikel ist im Verkauf verfügbar
+  isFoodItem: bool, default=false # Lebensmittel (für Open Food Facts)
+  
+  # Open Food Facts Integration
+  openFoodFactsId: String?       # Produkt-ID von Open Food Facts
+  imageUrl: String?              # Produkt-Foto URL
+  
+  # Metadaten
+  createdByStaffId: int?         # Wer hat den Artikel erstellt (nullable für bestehende)
+  createdAt: DateTime?           # Nullable für bestehende Daten
+  updatedAt: DateTime?
+
+indexes:
+  products_barcode_idx:
+    fields: barcode
+  products_category_idx:
+    fields: categoryId
+  products_active_idx:
+    fields: isActive
+  products_stock_idx:
+    fields: stockQuantity
+  products_creator_idx:
+    fields: createdByStaffId
+  products_hall_idx:
+    fields: hallId 

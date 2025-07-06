@@ -1,8 +1,34 @@
 class: ProductCategory
 table: product_categories
 fields:
-  name: String
-  description: String?
-  displayOrder: int, default=0
-  isActive: bool, default=true
-  hallId: int? 
+  # Grunddaten (bestehend)
+  name: String                   # Name der Kategorie (z.B. "Getränke", "Snacks")
+  description: String?           # Optionale Beschreibung
+  hallId: int?                   # Hallen-spezifisch
+  
+  # Erweiterte Darstellung
+  colorHex: String, default='#607D8B' # Farbe als Hex-Code (default grau)
+  iconName: String, default='category' # Icon-Name (default category)
+  displayOrder: int, default=0   # Reihenfolge in der Anzeige (bestehend)
+  
+  # Status & Eigenschaften (erweitert)
+  isActive: bool, default=true   # Kategorie ist verfügbar (bestehend)
+  isFavorites: bool, default=false # Ist die spezielle Favoriten-Kategorie
+  isSystemCategory: bool, default=false # System-Kategorie (nicht löschbar)
+  
+  # Metadaten
+  createdByStaffId: int?         # Wer hat die Kategorie erstellt (nullable für bestehende)
+  createdAt: DateTime?           # Nullable für bestehende Daten
+  updatedAt: DateTime?
+
+indexes:
+  categories_active_idx:
+    fields: isActive
+  categories_favorites_idx:
+    fields: isFavorites
+  categories_display_order_idx:
+    fields: displayOrder
+  categories_system_idx:
+    fields: isSystemCategory
+  categories_hall_idx:
+    fields: hallId 

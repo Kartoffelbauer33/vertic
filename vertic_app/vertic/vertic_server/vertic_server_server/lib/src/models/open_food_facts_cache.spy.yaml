@@ -1,0 +1,26 @@
+class: OpenFoodFactsCache
+table: open_food_facts_cache
+fields:
+  # Barcode als Primary Key
+  barcode: String                # EAN/UPC Barcode
+  
+  # Cached API Data
+  cachedData: String             # JSON-String der Open Food Facts Daten
+  
+  # Cache-Metadaten
+  cachedAt: DateTime             # Wann wurde gecacht
+  isValid: bool, default=true    # Ist der Cache noch gültig
+  
+  # API-Response-Status
+  productFound: bool, default=false # Wurde Produkt in Open Food Facts gefunden
+  lastApiStatus: int?            # HTTP Status der letzten API-Anfrage
+
+indexes:
+  cache_barcode_idx:
+    fields: barcode
+  cache_valid_idx:
+    fields: isValid
+  cache_found_idx:
+    fields: productFound
+  cache_date_idx:
+    fields: cachedAt 

@@ -6,6 +6,7 @@ import 'package:test_server_client/test_server_client.dart';
 import '../main.dart';
 import '../services/background_scanner_service.dart';
 import '../services/device_id_service.dart';
+import '../auth/permission_provider.dart';
 
 /// **🛒 CART SESSION MODEL für Multi-Cart-System**
 class CartSession {
@@ -81,17 +82,17 @@ class _PosSystemPageState extends State<PosSystemPage> {
   List<CartSession> _activeCarts = []; // Alle aktiven Warenkörbe
   int _currentCartIndex = 0; // Index des aktuell angezeigten Warenkorbs
 
-  // Kategorie-Konfiguration mit Farben und Icons
+  // 🎨 Kategorie-Konfiguration mit optimierten Namen (Overflow-Fix)
   final Map<String, CategoryConfig> _categoryConfigs = {
     'Hallentickets': CategoryConfig(
       color: Colors.blue,
       icon: Icons.local_activity,
-      name: 'Hallentickets',
+      name: 'Hallen-\ntickets', // Mehrzeilig für bessere Passform
     ),
     'Vertic Universal': CategoryConfig(
       color: Colors.purple,
       icon: Icons.card_membership,
-      name: 'Vertic Universal',
+      name: 'Vertic\nUniversal', // Mehrzeilig für bessere Passform
     ),
     'Produkte': CategoryConfig(
       color: Colors.green,
@@ -107,6 +108,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
       color: Colors.red,
       icon: Icons.fastfood,
       name: 'Snacks',
+    ),
+    '🆕 ARTIKEL HINZUFÜGEN': CategoryConfig(
+      color: Colors.indigo,
+      icon: Icons.add_shopping_cart,
+      name: 'Artikel\nhinzufügen', // RBAC-geschützte Kategorie
     ),
   };
 
@@ -175,40 +181,45 @@ class _PosSystemPageState extends State<PosSystemPage> {
       debugPrint('🖥️ Verwende Device-ID: $deviceId');
 
       // Bestehende Sessions für dieses Gerät wiederherstellen
-      final deviceState = await client.pos.restoreDeviceCartState(deviceId);
-      debugPrint('🔄 Backend-Antwort: $deviceState');
+      final activeSessions = await client.pos.restoreDeviceCartState(deviceId);
+      debugPrint(
+        '🔄 Backend-Antwort: ${activeSessions.length} Sessions gefunden',
+      );
 
-      final carts = deviceState['carts'] as List<dynamic>?;
-
-      if (carts != null && carts.isNotEmpty) {
-        // Bestehende Warenkörbe wiederherstellen
+      if (activeSessions.isNotEmpty) {
+        // Bestehende Warenkörbe wiederherstellen - aber nur mit Inhalt
         debugPrint(
-          '🔄 ${carts.length} bestehende Warenkörbe gefunden für Gerät: $deviceId',
+          '🔄 ${activeSessions.length} bestehende Sessions gefunden für Gerät: $deviceId',
         );
 
-        for (int i = 0; i < carts.length; i++) {
-          final cartData = carts[i] as Map<String, dynamic>;
-          final posSession = cartData['session'];
-          final items = cartData['items'] as List<dynamic>? ?? [];
+        for (final posSession in activeSessions) {
+          // Cart-Items für diese Session laden
+          final cartItems = await client.pos.getCartItems(posSession.id!);
 
-          // Items korrekt von JSON zu PosCartItem umwandeln
-          final List<PosCartItem> cartItems = [];
-          for (final itemData in items) {
-            if (itemData is Map<String, dynamic>) {
-              final cartItem = PosCartItem.fromJson(itemData);
-              cartItems.add(cartItem);
-            }
+          // **🎯 NUR Sessions mit Artikeln oder Kunden wiederherstellen**
+          final hasItems = cartItems.isNotEmpty;
+          final hasCustomer = posSession.customerId != null;
+
+          if (!hasItems && !hasCustomer) {
+            debugPrint(
+              '⏭️ Überspringe leere Session ${posSession.id} - keine Artikel und kein Kunde',
+            );
+            continue; // Leere Session überspringen
           }
 
-          final cartId = 'cart_${posSession['id']}_restored';
+          debugPrint(
+            '✅ Stelle Session ${posSession.id} wieder her - ${cartItems.length} Artikel, Kunde: ${hasCustomer ? posSession.customerId : 'keiner'}',
+          );
+
+          final cartId = 'cart_${posSession.id}_restored';
           final newCart = CartSession(
             id: cartId,
-            customer: posSession['customerId'] != null
-                ? _findUserById(posSession['customerId'])
+            customer: posSession.customerId != null
+                ? _findUserById(posSession.customerId)
                 : null,
             posSession: posSession,
             items: cartItems,
-            createdAt: _parseDateTime(posSession['createdAt']),
+            createdAt: posSession.createdAt,
           );
 
           setState(() {
@@ -224,15 +235,17 @@ class _PosSystemPageState extends State<PosSystemPage> {
             _cartItems = _activeCarts[0].items;
             _selectedCustomer = _activeCarts[0].customer;
           });
-        }
 
-        debugPrint('✅ ${_activeCarts.length} Warenkörbe wiederhergestellt');
-        return;
+          debugPrint('✅ ${_activeCarts.length} Warenkörbe wiederhergestellt');
+          return;
+        } else {
+          debugPrint('ℹ️ Alle Sessions waren leer - erstelle neuen Warenkorb');
+        }
       }
 
       // Keine bestehenden Warenkörbe - neuen erstellen
       debugPrint(
-        '🆕 Keine bestehenden Warenkörbe - erstelle neuen für Gerät: $deviceId',
+        '🆕 Keine bestehenden Sessions - erstelle neuen für Gerät: $deviceId',
       );
       await _createNewDeviceCart(deviceId);
 
@@ -445,12 +458,92 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
   // ==================== MULTI-CART-SYSTEM ====================
 
-  /// **🛒 NEUE METHODE: Erstellt einen neuen Warenkorb**
+  /// **✅ VALIDIERUNGSLOGIK: Prüft ob neuer Warenkorb erstellt werden darf**
+  bool _canCreateNewCart() {
+    // Kein aktiver Warenkorb vorhanden
+    if (_activeCarts.isEmpty || _currentCartIndex < 0) return true;
+
+    final currentCart = _activeCarts[_currentCartIndex];
+
+    // Warenkorb ist leer
+    if (_cartItems.isEmpty) return true;
+
+    // Warenkorb hat Kunde zugeordnet (kann zurückgestellt werden)
+    if (currentCart.customer != null) return true;
+
+    // Warenkorb ist bezahlt (in dieser Implementation nicht implementiert, aber Platzhalter)
+    // if (currentCart.isPaid) return true;
+
+    return false;
+  }
+
+  /// **⚠️ VALIDIERUNGS-DIALOG: Warnt bei unbezahltem Warenkorb ohne Kunde**
+  void _showCartValidationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange, size: 28),
+            const SizedBox(width: 12),
+            const Text('Warenkorb nicht abgeschlossen'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Der aktuelle Warenkorb enthält ${_cartItems.length} unbezahlte Artikel im Wert von ${_calculateCartTotal().toStringAsFixed(2)}€.',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Um einen neuen Warenkorb zu erstellen, müssen Sie:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text('• Den Warenkorb bezahlen ODER'),
+            const Text('• Einen Kunden zuordnen (für Zurückstellung)'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Verstanden'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Fokus auf Kundensuche setzen - wird durch setState automatisch aktualisiert
+            },
+            child: const Text('Kunde zuordnen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// **🛒 KORRIGIERTE METHODE: Erstellt einen neuen Warenkorb mit gerätespezifischer Session**
   Future<void> _createNewCart({AppUser? customer}) async {
+    // ✅ VALIDIERUNG: Prüfe ob neuer Warenkorb erstellt werden darf
+    if (!_canCreateNewCart()) {
+      _showCartValidationDialog();
+      return;
+    }
+
     try {
-      // Backend POS-Session erstellen
+      // 🖥️ KRITISCH: Gerätespezifische Session erstellen mit deviceId
       final client = Provider.of<Client>(context, listen: false);
-      final session = await client.pos.createSession(customer?.id);
+      final deviceId = await _getDeviceId();
+      final session = await client.pos.createDeviceSession(
+        deviceId,
+        customer?.id,
+      );
+
+      debugPrint(
+        '🖥️ Gerätespezifische Session erstellt: ${session.id} für Device: $deviceId',
+      );
 
       // Neuen CartSession erstellen
       final cartId = 'cart_${DateTime.now().millisecondsSinceEpoch}';
@@ -470,7 +563,12 @@ class _PosSystemPageState extends State<PosSystemPage> {
         _cartItems = [];
       });
 
-      debugPrint('🛒 Neuer Warenkorb erstellt: ${newCart.displayName}');
+      // 🎯 WICHTIG: Artikel-Katalog für neuen Warenkorb aktualisieren
+      await _loadAvailableItems();
+
+      debugPrint(
+        '🛒 Neuer gerätespezifischer Warenkorb erstellt: ${newCart.displayName}',
+      );
     } catch (e) {
       debugPrint('❌ Fehler beim Erstellen des Warenkorbs: $e');
       if (mounted) {
@@ -500,59 +598,19 @@ class _PosSystemPageState extends State<PosSystemPage> {
         _selectedCustomer = targetCart.customer;
         _currentSession = targetCart.posSession;
         _cartItems = items;
+        // 🎯 WICHTIG: Suchfeld zurücksetzen beim Warenkorb-Wechsel
+        _searchText = '';
+        _searchController.clear();
+        _filteredUsers = _allUsers;
       });
 
-      // Artikel-Katalog für aktuellen Kunden aktualisieren
+      // 🎯 KRITISCH: Artikel-Katalog für aktuellen Kunden aktualisieren
       await _loadAvailableItems();
 
       debugPrint('🔄 Zu Warenkorb gewechselt: ${targetCart.displayName}');
     } catch (e) {
       debugPrint('❌ Fehler beim Wechseln des Warenkorbs: $e');
     }
-  }
-
-  /// **🔒 NEUE METHODE: Warenkorb zurückstellen (nur mit Kunde möglich)**
-  Future<void> _holdCart() async {
-    if (_activeCarts.isEmpty) return;
-
-    final currentCart = _activeCarts[_currentCartIndex];
-
-    // Validierung: Nur Warenkörbe mit Kunden dürfen zurückgestellt werden
-    if (currentCart.customer == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            '⚠️ Warenkörbe dürfen nur hinterlegt werden, wenn sie einer Person zugeordnet sind',
-          ),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
-    // Warenkorb als "zurückgestellt" markieren
-    final updatedCart = currentCart.copyWith(isOnHold: true);
-    setState(() {
-      _activeCarts[_currentCartIndex] = updatedCart;
-    });
-
-    // Neuen Warenkorb erstellen
-    await _createNewCart();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '✅ Warenkorb zurückgestellt: ${currentCart.displayName}',
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-
-    debugPrint('🔒 Warenkorb zurückgestellt: ${currentCart.displayName}');
   }
 
   /// **🗑️ NEUE METHODE: Warenkorb entfernen**
@@ -641,8 +699,15 @@ class _PosSystemPageState extends State<PosSystemPage> {
         final currentCart = _activeCarts[_currentCartIndex];
         final oldSession = currentCart.posSession;
 
-        // Neue Session mit Kunde erstellen
-        final newSession = await client.pos.createSession(newCustomer.id);
+        // 🖥️ KRITISCH: Gerätespezifische Session mit Kunde erstellen
+        final deviceId = await _getDeviceId();
+        final newSession = await client.pos.createDeviceSession(
+          deviceId,
+          newCustomer.id,
+        );
+        debugPrint(
+          '🖥️ Gerätespezifische Session für Kundenwechsel erstellt: ${newSession.id}',
+        );
 
         // 🔄 WICHTIG: Alle Items aus alter Session in neue Session übertragen
         if (oldSession != null) {
@@ -738,9 +803,13 @@ class _PosSystemPageState extends State<PosSystemPage> {
         setState(() {
           _activeCarts[_currentCartIndex] = updatedCart;
           _selectedCustomer = null;
+          // 🎯 WICHTIG: Suchfeld zurücksetzen
+          _searchText = '';
+          _searchController.clear();
+          _filteredUsers = _allUsers;
         });
 
-        // 2. Artikel-Katalog aktualisieren (alle verfügbaren anzeigen)
+        // 2. 🎯 KRITISCH: Artikel-Katalog aktualisieren (alle verfügbaren anzeigen)
         await _loadAvailableItems();
 
         // 3. Erfolgs-Feedback
@@ -1393,98 +1462,139 @@ class _PosSystemPageState extends State<PosSystemPage> {
   }
 
   Widget _buildCategoryTabs() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Artikel-Katalog',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
-          const SizedBox(height: 16),
+    return Consumer<PermissionProvider>(
+      builder: (context, permissionProvider, _) {
+        // 🔐 RBAC-Filter: Nur Kategorien anzeigen, für die Berechtigung vorhanden ist
+        final visibleCategories = _categoryConfigs.keys.where((category) {
+          // Spezielle RBAC-Prüfung für Artikel-Erstellung
+          if (category == '🆕 ARTIKEL HINZUFÜGEN') {
+            return permissionProvider.hasPermission('can_create_products');
+          }
+          // Alle anderen Kategorien sind immer sichtbar
+          return true;
+        }).toList();
 
-          // Kategorie-Buttons
-          SizedBox(
-            height: 80,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _categoryConfigs.length,
-              itemBuilder: (context, index) {
-                final category = _categoryConfigs.keys.elementAt(index);
-                final config = _categoryConfigs[category]!;
-                final isSelected = _selectedCategory == category;
-                final itemCount = _categorizedItems[category]?.length ?? 0;
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Artikel-Katalog',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 16),
 
-                return Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  child: Material(
-                    elevation: isSelected ? 6 : 2,
-                    borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () {
-                        setState(() => _selectedCategory = category);
-                      },
-                      child: Container(
-                        width: 120,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
+              // Kategorie-Buttons mit RBAC-Filter
+              SizedBox(
+                height: 85, // Erhöht von 80 auf 85 für mehrzeilige Texte
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: visibleCategories.length,
+                  itemBuilder: (context, index) {
+                    final category = visibleCategories[index];
+                    final config = _categoryConfigs[category]!;
+                    final isSelected = _selectedCategory == category;
+
+                    // 🆕 Spezielle Logik für Artikel-Erstellung Kategorie
+                    int itemCount = 0;
+                    if (category == '🆕 ARTIKEL HINZUFÜGEN') {
+                      itemCount = 0; // Keine Items zum Anzeigen
+                    } else {
+                      itemCount = _categorizedItems[category]?.length ?? 0;
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      child: Material(
+                        elevation: isSelected ? 6 : 2,
+                        borderRadius: BorderRadius.circular(16),
+                        child: InkWell(
                           borderRadius: BorderRadius.circular(16),
-                          color: isSelected ? config.color : Colors.white,
-                          border: Border.all(
-                            color: isSelected
-                                ? config.color
-                                : Colors.grey.shade300,
-                            width: isSelected ? 2 : 1,
+                          onTap: () {
+                            // 🆕 Spezielle Logik für Artikel-Erstellung
+                            if (category == '🆕 ARTIKEL HINZUFÜGEN') {
+                              _showAddProductDialog();
+                            } else {
+                              setState(() => _selectedCategory = category);
+                            }
+                          },
+                          child: Container(
+                            width: 110, // Reduziert von 120 auf 110
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ), // Optimiert
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              color: isSelected ? config.color : Colors.white,
+                              border: Border.all(
+                                color: isSelected
+                                    ? config.color
+                                    : Colors.grey.shade300,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize:
+                                  MainAxisSize.min, // Wichtig für Overflow-Fix
+                              children: [
+                                Icon(
+                                  config.icon,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : config.color,
+                                  size: 24, // Reduziert von 28 auf 24
+                                ),
+                                const SizedBox(
+                                  height: 3,
+                                ), // Reduziert von 4 auf 3
+                                Flexible(
+                                  // Flexibler Text-Container
+                                  child: Text(
+                                    config.name,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.grey[700],
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10, // Reduziert von 12 auf 10
+                                      height: 1.1, // Kompakter Line-Height
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2, // Max 2 Zeilen
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (itemCount > 0) ...[
+                                  const SizedBox(height: 1), // Reduziert
+                                  Text(
+                                    '$itemCount',
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white70
+                                          : Colors.grey[500],
+                                      fontSize: 9, // Reduziert von 10 auf 9
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              config.icon,
-                              color: isSelected ? Colors.white : config.color,
-                              size: 28,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              config.name,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.grey[700],
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            if (itemCount > 0) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                '$itemCount',
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white70
-                                      : Colors.grey[500],
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1518,10 +1628,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: GridView.builder(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.2,
+            crossAxisCount: 4, // Erhöht von 3 auf 4 für kleinere Karten
+            crossAxisSpacing: 8, // Reduziert von 12 auf 8
+            mainAxisSpacing: 8, // Reduziert von 12 auf 8
+            childAspectRatio:
+                1.0, // Reduziert von 1.2 auf 1.0 für quadratische Form
           ),
           itemCount: items.length,
           itemBuilder: (context, index) {
@@ -1550,9 +1661,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
           _addIntelligentTicketToCart(ticketType);
         },
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8), // Reduziert von 12 auf 8
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1566,25 +1677,29 @@ class _PosSystemPageState extends State<PosSystemPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(config.icon, color: config.color, size: 32),
-              const SizedBox(height: 8),
+              Icon(
+                config.icon,
+                color: config.color,
+                size: 24,
+              ), // Reduziert von 32 auf 24
+              const SizedBox(height: 4), // Reduziert von 8 auf 4
               Text(
                 ticketType.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 11, // Reduziert von 14 auf 11
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2), // Reduziert von 4 auf 2
               Text(
                 '${ticketType.defaultPrice.toStringAsFixed(2)} €',
                 style: TextStyle(
                   color: config.color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 13, // Reduziert von 16 auf 13
                 ),
               ),
             ],
@@ -1606,9 +1721,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
           _addItemToCart('product', product.id!, product.name, product.price);
         },
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8), // Reduziert von 12 auf 8
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1622,25 +1737,29 @@ class _PosSystemPageState extends State<PosSystemPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(config.icon, color: config.color, size: 32),
-              const SizedBox(height: 8),
+              Icon(
+                config.icon,
+                color: config.color,
+                size: 24,
+              ), // Reduziert von 32 auf 24
+              const SizedBox(height: 4), // Reduziert von 8 auf 4
               Text(
                 product.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 11, // Reduziert von 14 auf 11
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2), // Reduziert von 4 auf 2
               Text(
                 '${product.price.toStringAsFixed(2)} €',
                 style: TextStyle(
                   color: config.color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 13, // Reduziert von 16 auf 13
                 ),
               ),
             ],
@@ -1933,11 +2052,24 @@ class _PosSystemPageState extends State<PosSystemPage> {
     );
   }
 
-  /// **🛒 NEUE METHODE: Multi-Cart-Tabs für AppBar (flach und gut lesbar)**
+  /// **🎨 VERBESSERTE METHODE: Multi-Cart-Tabs mit besserer Sichtbarkeit**
   Widget _buildTopCartTabs() {
     return Container(
       height: 50,
-      color: Colors.red[600], // Roter Hintergrund wie gewünscht
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue[800]!, Colors.blue[600]!],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           // 🛒 CART-TABS MIT HORIZONTALEM SCROLLING
@@ -1968,32 +2100,41 @@ class _PosSystemPageState extends State<PosSystemPage> {
                         child: Container(
                           margin: const EdgeInsets.symmetric(
                             horizontal: 3,
-                            vertical: 4, // Reduziert von 8 auf 4
+                            vertical: 4,
                           ),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2, // Reduziert von 6 auf 2
+                            horizontal: 10,
+                            vertical: 4,
                           ),
                           constraints: const BoxConstraints(
-                            maxWidth: 150, // Begrenze Breite
-                            minHeight: 34, // Touch-Target
-                            maxHeight: 38, // Verhindere Overflow
+                            maxWidth: 160,
+                            minHeight: 36,
+                            maxHeight: 40,
                           ),
                           decoration: BoxDecoration(
                             color: isActive
                                 ? Colors.white
                                 : isOnHold
-                                ? Colors.orange.withOpacity(0.8)
-                                : Colors.white.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(4),
+                                ? Colors.amber[600]
+                                : Colors.white.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: isActive
-                                  ? Colors.blue
+                                  ? Colors.blue[300]!
                                   : isOnHold
-                                  ? Colors.orange
-                                  : Colors.transparent,
-                              width: 1.5, // Reduziert von 2 auf 1.5
+                                  ? Colors.amber[700]!
+                                  : Colors.white.withOpacity(0.5),
+                              width: 2,
                             ),
+                            boxShadow: isActive
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(0.3),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -2005,14 +2146,14 @@ class _PosSystemPageState extends State<PosSystemPage> {
                                     : cart.customer != null
                                     ? Icons.person
                                     : Icons.shopping_cart,
-                                size: 14, // Reduziert von 16 auf 14
+                                size: 16,
                                 color: isActive
-                                    ? Colors.blue
+                                    ? Colors.blue[700]
                                     : isOnHold
                                     ? Colors.white
-                                    : Colors.red[600],
+                                    : Colors.grey[700],
                               ),
-                              const SizedBox(width: 4), // Reduziert von 6 auf 4
+                              const SizedBox(width: 6),
                               // Cart-Name & Info
                               Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -2024,46 +2165,44 @@ class _PosSystemPageState extends State<PosSystemPage> {
                                         ? '${cart.displayName.substring(0, 12)}...'
                                         : cart.displayName,
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.bold,
                                       color: isActive
-                                          ? Colors.blue
+                                          ? Colors.blue[800]
                                           : isOnHold
                                           ? Colors.white
-                                          : Colors.red[600],
-                                      height: 1.1,
+                                          : Colors.grey[800],
+                                      height: 1.2,
                                     ),
                                   ),
                                   if (cart.items.isNotEmpty)
                                     Text(
                                       '${cart.items.length} • ${cart.total.toStringAsFixed(2)}€',
                                       style: TextStyle(
-                                        fontSize: 9,
+                                        fontSize: 10,
                                         color: isActive
-                                            ? Colors.grey[600]
+                                            ? Colors.blue[600]
                                             : isOnHold
                                             ? Colors.white70
-                                            : Colors.red[400],
-                                        height: 1.0,
+                                            : Colors.grey[600],
+                                        height: 1.1,
                                       ),
                                     ),
                                 ],
                               ),
-                              // Löschen-Button nur für inaktive Warenkörbe
-                              if (!isActive && _activeCarts.length > 1) ...[
-                                const SizedBox(
-                                  width: 3,
-                                ), // Reduziert von 6 auf 3
+                              // 🔧 X-Button für ALLE Warenkörbe (auch aktive), aber nicht bei nur einem Warenkorb
+                              if (_activeCarts.length > 1) ...[
+                                const SizedBox(width: 4),
                                 GestureDetector(
                                   onTap: () => _showRemoveCartDialog(index),
                                   child: Icon(
                                     Icons.close,
-                                    size: 12, // Reduziert von 16 auf 12
+                                    size: 14,
                                     color: isActive
-                                        ? Colors.red
+                                        ? Colors.red[600]!
                                         : isOnHold
                                         ? Colors.white
-                                        : Colors.red[600],
+                                        : Colors.grey[600],
                                   ),
                                 ),
                               ],
@@ -2076,33 +2215,18 @@ class _PosSystemPageState extends State<PosSystemPage> {
           ),
           // 🛒 AKTIONS-BUTTONS
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Neuer Warenkorb
+                // Neuer Warenkorb (mit Validierung)
                 SizedBox(
-                  width: 36,
-                  height: 36,
+                  width: 40,
+                  height: 40,
                   child: IconButton(
-                    icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                    icon: const Icon(Icons.add, color: Colors.white, size: 20),
                     onPressed: () => _createNewCart(),
                     tooltip: 'Neuer Warenkorb',
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-                // Warenkorb zurückstellen
-                SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.pause,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    onPressed: _activeCarts.isNotEmpty ? _holdCart : null,
-                    tooltip: 'Warenkorb zurückstellen',
                     padding: EdgeInsets.zero,
                   ),
                 ),
@@ -2114,12 +2238,26 @@ class _PosSystemPageState extends State<PosSystemPage> {
     );
   }
 
-  /// **🗑️ NEUE METHODE: Dialog zum Entfernen eines Warenkorbs**
+  /// **🗑️ VERBESSERTE METHODE: Intelligente Warenkorb-Entfernung**
   void _showRemoveCartDialog(int index) {
     if (index < 0 || index >= _activeCarts.length) return;
 
     final cart = _activeCarts[index];
 
+    // 🧹 INTELLIGENTE LOGIK: Leere Warenkörbe ohne Bestätigung entfernen
+    final hasItems = cart.items.isNotEmpty;
+    final hasCustomer = cart.customer != null;
+
+    // Wenn Warenkorb leer und kein Kunde zugeordnet → direkt entfernen
+    if (!hasItems && !hasCustomer) {
+      debugPrint(
+        '🧹 Leerer Warenkorb wird direkt entfernt: ${cart.displayName}',
+      );
+      _removeCart(index);
+      return;
+    }
+
+    // Andernfalls: Bestätigung anfordern bei Inhalt oder Kundenzuordnung
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2131,12 +2269,22 @@ class _PosSystemPageState extends State<PosSystemPage> {
             Text(
               'Möchten Sie den Warenkorb "${cart.displayName}" wirklich entfernen?',
             ),
-            if (cart.items.isNotEmpty) ...[
+            if (hasItems) ...[
               const SizedBox(height: 8),
               Text(
                 '⚠️ Warenkorb enthält ${cart.items.length} Artikel (${cart.total.toStringAsFixed(2)} €)',
                 style: TextStyle(
                   color: Colors.orange[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            if (hasCustomer) ...[
+              const SizedBox(height: 8),
+              Text(
+                '👤 Warenkorb ist ${cart.customer!.firstName} ${cart.customer!.lastName} zugeordnet',
+                style: TextStyle(
+                  color: Colors.blue[700],
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -2221,6 +2369,61 @@ class _PosSystemPageState extends State<PosSystemPage> {
     );
   }
 
+  // ==================== ARTIKEL-MANAGEMENT ====================
+
+  /// **🆕 NEUE METHODE: Artikel-Hinzufügen Dialog**
+  void _showAddProductDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AddProductDialog(
+        onProductCreated: (product) {
+          // Neues Produkt wurde erstellt → zur entsprechenden Kategorie hinzufügen
+          setState(() {
+            // Füge Produkt zur richtigen Kategorie hinzu
+            final categoryName = _getProductCategoryName(product);
+            if (_categorizedItems[categoryName] == null) {
+              _categorizedItems[categoryName] = [];
+            }
+            _categorizedItems[categoryName]!.add(product);
+
+            // Wechsle zur Kategorie des neuen Produkts
+            _selectedCategory = categoryName;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✅ Artikel "${product.name}" erfolgreich hinzugefügt',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// **🏷️ HELPER: Bestimmt Kategorie-Namen für Produkt**
+  String _getProductCategoryName(Product product) {
+    // Standard-Kategorien basierend auf Product-Properties
+    if (product.name.toLowerCase().contains('getränk') ||
+        product.name.toLowerCase().contains('drink') ||
+        product.name.toLowerCase().contains('cola') ||
+        product.name.toLowerCase().contains('wasser')) {
+      return 'Getränke';
+    }
+
+    if (product.name.toLowerCase().contains('snack') ||
+        product.name.toLowerCase().contains('chip') ||
+        product.name.toLowerCase().contains('riegel')) {
+      return 'Snacks';
+    }
+
+    // Fallback: Allgemeine Produkte-Kategorie
+    return 'Produkte';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2232,39 +2435,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
         backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _scannerMode,
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-                dropdownColor: Colors.blue[700],
-                items: ['Express', 'POS', 'Hybrid'].map((mode) {
-                  return DropdownMenuItem(
-                    value: mode,
-                    child: Text(
-                      mode,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (mode) {
-                  if (mode != null) setState(() => _scannerMode = mode);
-                },
-              ),
-            ),
-          ),
-        ],
+        // ❌ Express/POS/Hybrid Einstellung entfernt - gehört in Admin-Einstellungen
         // 🛒 CART-TABS IN APPBAR BOTTOM
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
@@ -2329,4 +2500,494 @@ class CategoryConfig {
   final String name;
 
   CategoryConfig({required this.color, required this.icon, required this.name});
+}
+
+/// **🆕 ARTIKEL-HINZUFÜGEN DIALOG**
+class AddProductDialog extends StatefulWidget {
+  final Function(Product) onProductCreated;
+
+  const AddProductDialog({super.key, required this.onProductCreated});
+
+  @override
+  State<AddProductDialog> createState() => _AddProductDialogState();
+}
+
+class _AddProductDialogState extends State<AddProductDialog> {
+  final TextEditingController _barcodeController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  bool _isLoading = false;
+  bool _isCategoriesLoading = true;
+  Map<String, dynamic>? _scannedData;
+  BackgroundScannerService? _scannerService;
+
+  // **🏷️ Kategorie-Verwaltung**
+  List<ProductCategory> _availableCategories = [];
+  ProductCategory? _selectedCategory;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // **🎯 Scanner-Service für Dialog-Mode registrieren**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scannerService = Provider.of<BackgroundScannerService>(
+        context,
+        listen: false,
+      );
+
+      _scannerService!.registerDialogScanListener(_onScanReceived);
+      debugPrint('🎯 AddProductDialog: Scanner-Listener registriert');
+
+      // **🏷️ Kategorien laden**
+      _loadProductCategories();
+    });
+  }
+
+  @override
+  void dispose() {
+    // **🔴 Scanner-Listener wieder abmelden**
+    if (_scannerService != null) {
+      _scannerService!.unregisterDialogScanListener();
+      debugPrint('🔴 AddProductDialog: Scanner-Listener abgemeldet');
+    }
+
+    _barcodeController.dispose();
+    _nameController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  /// **🎯 SCANNER-CALLBACK: Gescannter Code empfangen**
+  void _onScanReceived(String scannedCode) {
+    debugPrint('🎯 Dialog: Scanner-Code empfangen: $scannedCode');
+
+    if (mounted) {
+      setState(() {
+        _barcodeController.text = scannedCode;
+      });
+
+      // Automatisch Barcode scannen und Produktdaten abrufen
+      _scanBarcode(scannedCode);
+    }
+  }
+
+  /// **🏷️ Produktkategorien laden**
+  Future<void> _loadProductCategories() async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final categories = await client.productManagement.getProductCategories();
+
+      if (mounted) {
+        setState(() {
+          _availableCategories = categories;
+          _isCategoriesLoading = false;
+
+          // Standard-Kategorie "Produkte" vorauswählen falls vorhanden
+          if (categories.isNotEmpty) {
+            _selectedCategory = categories.firstWhere(
+              (cat) => cat.name.toLowerCase() == 'produkte',
+              orElse: () => categories.first,
+            );
+          }
+        });
+        debugPrint(
+          '🏷️ ${categories.length} Kategorien geladen, Standard: ${_selectedCategory?.name}',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Laden der Kategorien: $e');
+      if (mounted) {
+        setState(() {
+          _isCategoriesLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 500,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(Icons.add_shopping_cart, color: Colors.indigo, size: 28),
+                const SizedBox(width: 12),
+                Text(
+                  'Neuen Artikel hinzufügen',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const Divider(height: 32),
+
+            // Barcode-Eingabe mit Scanner-Button
+            Text(
+              'Barcode',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _barcodeController,
+                    decoration: const InputDecoration(
+                      hintText: 'Barcode eingeben oder scannen',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.qr_code),
+                    ),
+                    onChanged: (value) {
+                      if (value.length >= 8) {
+                        _scanBarcode(value);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: _startHardwareScanning,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Scannen'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+
+            // Gescannte Produktinformationen anzeigen
+            if (_scannedData != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  border: Border.all(color: Colors.green[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '✅ Produktdaten gefunden',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_scannedData!['openFoodFactsData'] != null)
+                      Text('📦 ${_scannedData!['openFoodFactsData']['name']}'),
+                    if (_scannedData!['product'] != null)
+                      Text('📦 ${_scannedData!['product'].name}'),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+
+            // Produktinformationen
+            Text(
+              'Produktinformationen',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Produktname *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.label),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            TextField(
+              controller: _priceController,
+              decoration: const InputDecoration(
+                labelText: 'Preis (€) *',
+                hintText: 'z.B. 1,50 oder 1.50',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.euro),
+                helperText: 'Komma oder Punkt als Dezimaltrennzeichen möglich',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // **🏷️ Kategorie-Auswahl**
+            _isCategoriesLoading
+                ? const Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Kategorien werden geladen...'),
+                    ],
+                  )
+                : DropdownButtonFormField<ProductCategory>(
+                    value: _selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Kategorie *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.category),
+                      helperText: 'Wählen Sie eine Produktkategorie',
+                    ),
+                    items: _availableCategories.map((category) {
+                      return DropdownMenuItem<ProductCategory>(
+                        value: category,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Color(
+                                  int.parse(
+                                    category.colorHex.replaceFirst('#', '0xFF'),
+                                  ),
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(category.name),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (category) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null) {
+                        return 'Bitte wählen Sie eine Kategorie';
+                      }
+                      return null;
+                    },
+                  ),
+
+            const SizedBox(height: 24),
+
+            // Action Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Abbrechen'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _createProduct,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Artikel erstellen'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// **🔍 Hardware-Scanner aktivieren**
+  void _startHardwareScanning() {
+    if (_scannerService == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Scanner-Service nicht verfügbar'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (!_scannerService!.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Hardware-Scanner nicht verbunden'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _scannerService!.isDialogMode
+              ? '✅ Scanner bereit - Barcode scannen...'
+              : '📡 Scanner aktiviert - Barcode scannen...',
+        ),
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  /// **🔍 Barcode scannen und Produktdaten abrufen**
+  Future<void> _scanBarcode(String barcode) async {
+    if (barcode.trim().isEmpty) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final scanResult = await client.productManagement.scanBarcode(barcode);
+
+      if (scanResult.found) {
+        setState(() {
+          _scannedData = {
+            'found': true,
+            'source': scanResult.source,
+            'openFoodFactsData': scanResult.openFoodFactsName != null
+                ? {
+                    'name': scanResult.openFoodFactsName,
+                    'description': scanResult.openFoodFactsDescription,
+                  }
+                : null,
+            'product': scanResult.productId != null
+                ? {
+                    'name': scanResult.productName,
+                    'price': scanResult.productPrice,
+                  }
+                : null,
+          };
+
+          // Automatisch Felder ausfüllen
+          if (scanResult.openFoodFactsName != null) {
+            _nameController.text = scanResult.openFoodFactsName ?? '';
+          } else if (scanResult.productName != null) {
+            _nameController.text = scanResult.productName!;
+            _priceController.text = scanResult.productPrice?.toString() ?? '';
+          }
+        });
+      } else {
+        setState(() => _scannedData = null);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                scanResult.message ??
+                    'ℹ️ Produkt nicht gefunden - kann manuell erstellt werden',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Scanner-Fehler: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// **🔧 Hilfsfunktion: Deutsche Dezimaltrennzeichen unterstützen**
+  double? _parseGermanPrice(String priceText) {
+    if (priceText.trim().isEmpty) return null;
+
+    // Normalisiere deutsches Komma zu englischem Punkt
+    final normalizedPrice = priceText.trim().replaceAll(',', '.');
+
+    try {
+      final price = double.parse(normalizedPrice);
+      return price > 0 ? price : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// **✅ Neues Produkt erstellen**
+  Future<void> _createProduct() async {
+    if (_nameController.text.trim().isEmpty ||
+        _priceController.text.trim().isEmpty ||
+        _selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Name, Preis und Kategorie sind erforderlich'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      final price = _parseGermanPrice(_priceController.text);
+      if (price == null) {
+        throw Exception(
+          'Ungültiger Preis - verwenden Sie Format: 1,50 oder 1.50',
+        );
+      }
+
+      final newProduct = await client.productManagement.createProduct(
+        _nameController.text.trim(),
+        price,
+        barcode: _barcodeController.text.trim().isNotEmpty
+            ? _barcodeController.text.trim()
+            : null,
+        description: _scannedData?['openFoodFactsData']?['description'],
+        categoryId: _selectedCategory!.id,
+        isFoodItem: _scannedData?['openFoodFactsData'] != null,
+      );
+
+      widget.onProductCreated(newProduct);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Fehler beim Erstellen: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 }

@@ -469,8 +469,8 @@ class PosEndpoint extends Endpoint {
     }
   }
 
-  /// 🖥️ Neue Methode: Multi-Cart Daten für Gerät wiederherstellen
-  Future<Map<String, dynamic>> restoreDeviceCartState(
+  /// 🖥️ Neue Methode: Multi-Cart Daten für Gerät wiederherstellen - vereinfacht
+  Future<List<PosSession>> restoreDeviceCartState(
       Session session, String deviceId) async {
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
@@ -479,60 +479,14 @@ class PosEndpoint extends Endpoint {
     }
 
     try {
-      // Alle aktiven Sessions für dieses Gerät
+      // Alle aktiven Sessions für dieses Gerät zurückgeben
       final activeSessions =
           await getActiveSessionsForDevice(session, deviceId);
-
-      // Cart-Items für jede Session laden
-      final cartData = <Map<String, dynamic>>[];
-
-      for (final posSession in activeSessions) {
-        final cartItems = await getCartItems(session, posSession.id!);
-
-        cartData.add({
-          'session': {
-            'id': posSession.id,
-            'staffUserId': posSession.staffUserId,
-            'customerId': posSession.customerId,
-            'hallId': posSession.hallId,
-            'deviceId': posSession.deviceId,
-            'status': posSession.status,
-            'totalAmount': posSession.totalAmount,
-            'discountAmount': posSession.discountAmount,
-            'paymentMethod': posSession.paymentMethod,
-            'createdAt': posSession.createdAt.toIso8601String(),
-            'completedAt': posSession.completedAt?.toIso8601String(),
-          },
-          'items': cartItems
-              .map((item) => {
-                    'id': item.id,
-                    'sessionId': item.sessionId,
-                    'itemType': item.itemType,
-                    'itemId': item.itemId,
-                    'itemName': item.itemName,
-                    'quantity': item.quantity,
-                    'unitPrice': item.unitPrice,
-                    'totalPrice': item.totalPrice,
-                    'addedAt': item.addedAt.toIso8601String(),
-                  })
-              .toList(),
-          'itemCount': cartItems.length,
-          'totalAmount': cartItems.fold<double>(
-            0.0,
-            (sum, item) => sum + item.totalPrice,
-          ),
-        });
-      }
 
       session.log(
           'Geräte-Status wiederhergestellt: ${activeSessions.length} Sessions für Gerät $deviceId');
 
-      return {
-        'deviceId': deviceId,
-        'activeSessions': activeSessions.length,
-        'carts': cartData,
-        'restoredAt': DateTime.now().toIso8601String(),
-      };
+      return activeSessions;
     } catch (e) {
       session.log('Fehler beim Wiederherstellen des Geräte-Status: $e',
           level: LogLevel.error);

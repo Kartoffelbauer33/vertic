@@ -1,0 +1,21 @@
+class: BarcodeScanResponse
+fields:
+  found: bool
+  source: String?
+  barcode: String
+  message: String?
+  error: String?
+  
+  # Gefundenes Produkt (falls in lokaler DB) - als separate Properties
+  productId: int?
+  productName: String?
+  productPrice: double?
+  
+  # Open Food Facts Daten (falls von API/Cache)
+  openFoodFactsName: String?
+  openFoodFactsDescription: String?
+  openFoodFactsCategories: String?
+  openFoodFactsImageUrl: String?
+  openFoodFactsBrand: String?
+  openFoodFactsIngredients: String?
+  openFoodFactsNutritionGrade: String? 
