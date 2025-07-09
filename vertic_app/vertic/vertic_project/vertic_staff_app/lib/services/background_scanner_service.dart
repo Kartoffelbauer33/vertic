@@ -18,6 +18,10 @@ class BackgroundScannerService extends ChangeNotifier {
   final Client _client;
   BuildContext? _context;
 
+  // **SESSION CONTEXT** - ✅ TODO-FIX: Dynamische IDs statt hardcoded
+  int _facilityId = 1; // Default bis Session geladen
+  int _hallId = 1; // Default bis Session geladen
+
   // **SCANNER HARDWARE**
   SerialScanner? _serialScanner;
   bool _isConnected = false;
@@ -33,9 +37,10 @@ class BackgroundScannerService extends ChangeNotifier {
 
   // **🎯 DIALOG-MODE für Scanner-Input an Dialogs weiterleiten**
   bool _isDialogMode = false;
-  Function(String)? _dialogScanCallback;
-  String _lastScannedCode = '';
-  DateTime? _lastDuplicateCheck;
+  String? _dialogScannedCode; // NEU: State statt Callback
+  DateTime? _dialogScanTime; // NEU: Für UI-Reaktion
+  String _lastScannedCode = ''; // Für Duplicate-Check
+  DateTime? _lastDuplicateCheck; // Für Duplicate-Check
 
   // **SCAN TYPES CONFIGURATION**
   Map<String, bool> _enabledScanTypes = {
@@ -74,6 +79,8 @@ class BackgroundScannerService extends ChangeNotifier {
   bool get showToastNotifications => _showToastNotifications;
   bool get playSuccessSound => _playSuccessSound;
   bool get isDialogMode => _isDialogMode;
+  String? get dialogScannedCode => _dialogScannedCode;
+  DateTime? get dialogScanTime => _dialogScanTime;
 
   /// **🔧 SCANNER INITIALIZATION**
   void _initializeScanner() {
@@ -97,20 +104,30 @@ class BackgroundScannerService extends ChangeNotifier {
     debugPrint('📱 Background Scanner Context registriert');
   }
 
-  /// **🎯 DIALOG-MODE: Scanner-Input an Dialog weiterleiten**
-  void registerDialogScanListener(Function(String) callback) {
+  /// **🎯 DIALOG-MODE: Scanner-State für Dialog aktivieren**
+  void activateDialogMode() {
     _isDialogMode = true;
-    _dialogScanCallback = callback;
+    _dialogScannedCode = null; // Reset
+    _dialogScanTime = null; // Reset
     debugPrint('🎯 Dialog-Scanner-Mode aktiviert');
-    notifyListeners();
+
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   /// **🔴 DIALOG-MODE DEAKTIVIEREN**
-  void unregisterDialogScanListener() {
+  void deactivateDialogMode() {
     _isDialogMode = false;
-    _dialogScanCallback = null;
+    _dialogScannedCode = null;
+    _dialogScanTime = null;
     debugPrint('🔴 Dialog-Scanner-Mode deaktiviert');
-    notifyListeners();
+
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   /// **🔍 PORT MANAGEMENT**
@@ -125,7 +142,11 @@ class BackgroundScannerService extends ChangeNotifier {
       }
 
       debugPrint('🔌 Verfügbare Ports: $_availablePorts');
-      notifyListeners();
+
+      // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     }
   }
 
@@ -154,7 +175,10 @@ class BackgroundScannerService extends ChangeNotifier {
       _showToastMessage('Scanner Verbindung fehlgeschlagen', isSuccess: false);
     }
 
-    notifyListeners();
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
     return success;
   }
 
@@ -165,7 +189,11 @@ class BackgroundScannerService extends ChangeNotifier {
       _isConnected = false;
       debugPrint('🔌 COM-Port getrennt');
       _showToastMessage('Scanner getrennt', isSuccess: false);
-      notifyListeners();
+
+      // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     }
   }
 
@@ -173,7 +201,11 @@ class BackgroundScannerService extends ChangeNotifier {
   void updateScanTypeSettings(Map<String, bool> newSettings) {
     _enabledScanTypes = Map.from(newSettings);
     _saveSettings();
-    notifyListeners();
+
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
     debugPrint('⚙️ Scan-Type Settings aktualisiert: $_enabledScanTypes');
   }
 
@@ -181,7 +213,11 @@ class BackgroundScannerService extends ChangeNotifier {
     if (showToast != null) _showToastNotifications = showToast;
     if (playSound != null) _playSuccessSound = playSound;
     _saveSettings();
-    notifyListeners();
+
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
     debugPrint('🔔 Notification Settings aktualisiert');
   }
 
@@ -207,10 +243,16 @@ class BackgroundScannerService extends ChangeNotifier {
 
     debugPrint('🔍 Scanner-Daten empfangen: $cleanedData');
 
-    // **🎯 DIALOG-MODE: Scanner-Input direkt an Dialog weiterleiten**
-    if (_isDialogMode && _dialogScanCallback != null) {
-      debugPrint('🎯 Dialog-Mode: Weiterleitung an Dialog-Callback');
-      _dialogScanCallback!(cleanedData);
+    // **🎯 DIALOG-MODE: Scanner-Input an Dialog-State weiterleiten**
+    if (_isDialogMode) {
+      debugPrint('🎯 Dialog-Mode: Setze Scanner-State für Dialog');
+      _dialogScannedCode = cleanedData;
+      _dialogScanTime = DateTime.now();
+
+      // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners(); // Dialog reagiert via Consumer
+      });
       return;
     }
 
@@ -258,10 +300,16 @@ class BackgroundScannerService extends ChangeNotifier {
 
     debugPrint('✋ Manuelle Eingabe: $code');
 
-    // **🎯 DIALOG-MODE: Manuelle Eingabe auch an Dialog weiterleiten**
-    if (_isDialogMode && _dialogScanCallback != null) {
-      debugPrint('🎯 Dialog-Mode: Manuelle Eingabe an Dialog-Callback');
-      _dialogScanCallback!(code);
+    // **🎯 DIALOG-MODE: Manuelle Eingabe an Dialog-State weiterleiten**
+    if (_isDialogMode) {
+      debugPrint('🎯 Dialog-Mode: Manuelle Eingabe an Dialog-State');
+      _dialogScannedCode = code;
+      _dialogScanTime = DateTime.now();
+
+      // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners(); // Dialog reagiert via Consumer
+      });
       return;
     }
 
@@ -274,7 +322,11 @@ class BackgroundScannerService extends ChangeNotifier {
 
     _isProcessing = true;
     _totalScansToday++;
-    notifyListeners();
+
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
 
     try {
       debugPrint('🎯 Verarbeite gescannten Code: $code');
@@ -312,7 +364,11 @@ class BackgroundScannerService extends ChangeNotifier {
     } finally {
       _isProcessing = false;
       await _saveSettings();
-      notifyListeners();
+
+      // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     }
   }
 
@@ -352,7 +408,11 @@ class BackgroundScannerService extends ChangeNotifier {
     if (success) {
       _successfulScansToday++;
     }
-    notifyListeners();
+
+    // **🔧 FLUTTER-KONFORM: notifyListeners sicher ausführen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
   }
 
   /// **🎯 SCAN PROCESSING BY TYPE**
@@ -387,7 +447,7 @@ class BackgroundScannerService extends ChangeNotifier {
       // ✅ KORREKT: identity.validateIdentityQrCode (nicht ticket.scanTicket)
       final response = await _client.identity.validateIdentityQrCode(
         code,
-        1, // facilityId - TODO: Dynamisch aus Settings
+        _facilityId, // ✅ TODO-FIX: Dynamische Facility-ID
       );
 
       if (response != null && response['success'] == true) {

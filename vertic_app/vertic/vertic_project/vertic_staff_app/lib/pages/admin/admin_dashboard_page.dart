@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
-import '../../auth/permission_wrapper.dart';
 import 'unified_ticket_management_page.dart';
 import 'gym_management_page.dart';
 // import 'user_management_page.dart'; // Temporär deaktiviert
@@ -198,6 +197,7 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
           onBack: () => setState(() => _currentPage = null),
           onUnsavedChanges: _setUnsavedChanges,
         );
+
       case 'external_provider_management':
         return ExternalProviderManagementPage(
           isSuperUser: widget.isSuperUser,

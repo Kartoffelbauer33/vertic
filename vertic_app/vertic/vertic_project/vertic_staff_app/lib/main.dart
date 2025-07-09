@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
-import 'package:serverpod_auth_shared_flutter/serverpod_auth_shared_flutter.dart';
+
 import 'package:test_server_client/test_server_client.dart';
 import 'auth/permission_provider.dart';
 import 'auth/staff_auth_provider.dart';
@@ -9,6 +9,7 @@ import 'pages/login_page.dart';
 import 'pages/admin/admin_dashboard_page.dart';
 import 'pages/customer_management_page.dart';
 import 'pages/pos_system_page.dart';
+import 'pages/product_management_page.dart';
 import 'pages/statistics_page.dart';
 import 'auth/permission_wrapper.dart';
 import 'config/environment.dart';
@@ -112,10 +113,9 @@ class _MyAppState extends State<MyApp> {
             useMaterial3: true,
           ),
           // 🎯 Routing basiert auf Staff-Auth-Status
-          home:
-              staffAuth.isAuthenticated
-                  ? const StaffHomePage()
-                  : const LoginPage(),
+          home: staffAuth.isAuthenticated
+              ? const StaffHomePage()
+              : const LoginPage(),
           debugShowCheckedModeBanner: false,
         );
       },
@@ -280,6 +280,10 @@ class _StaffHomePageState extends State<StaffHomePage> {
 
     return <Widget>[
       const PosSystemPage(),
+      PermissionWrapper(
+        requiredPermission: 'can_create_products',
+        child: const ProductManagementPage(),
+      ),
       const StatisticsPage(),
       CustomerManagementPage(isSuperUser: isSuperUser),
       PermissionWrapper(
@@ -323,12 +327,29 @@ class _StaffHomePageState extends State<StaffHomePage> {
         icon: Icon(Icons.point_of_sale),
         label: 'Verkauf',
       ),
+    ];
+
+    // 🔐 RBAC: Artikelverwaltung nur mit Permission anzeigen
+    final hasProductPermission = permissionProvider.hasPermission(
+      'can_create_products',
+    );
+
+    if (hasProductPermission) {
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.inventory_2),
+          label: 'Artikel',
+        ),
+      );
+    }
+
+    items.addAll([
       const BottomNavigationBarItem(
         icon: Icon(Icons.insert_chart),
         label: 'Statistik',
       ),
       const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Kunden'),
-    ];
+    ]);
 
     // 🔐 RBAC: Admin-Dashboard nur mit Permission anzeigen
     final hasAdminPermission = permissionProvider.hasPermission(
@@ -390,17 +411,15 @@ class _StaffHomePageState extends State<StaffHomePage> {
                                   children: [
                                     Text(
                                       staffAuth.currentStaffDisplayName,
-                                      style:
-                                          Theme.of(
-                                            context,
-                                          ).textTheme.titleLarge,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
                                     ),
                                     Text(
                                       staffAuth.currentStaffEmail,
-                                      style:
-                                          Theme.of(
-                                            context,
-                                          ).textTheme.bodyMedium,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
                                     ),
                                     const SizedBox(height: 4),
                                     Container(
@@ -446,36 +465,34 @@ class _StaffHomePageState extends State<StaffHomePage> {
 
                 // 🔓 Logout-Button
                 ElevatedButton.icon(
-                  onPressed:
-                      staffAuth.isLoading
-                          ? null
-                          : () async {
-                            try {
-                              await staffAuth.signOut();
-                              if (mounted) {
-                                // Navigation erfolgt automatisch über Consumer
-                                debugPrint('✅ Staff-Logout erfolgreich');
-                              }
-                            } catch (e) {
-                              debugPrint('❌ Staff-Logout Fehler: $e');
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Logout-Fehler: $e'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
+                  onPressed: staffAuth.isLoading
+                      ? null
+                      : () async {
+                          try {
+                            await staffAuth.signOut();
+                            if (mounted) {
+                              // Navigation erfolgt automatisch über Consumer
+                              debugPrint('✅ Staff-Logout erfolgreich');
                             }
-                          },
-                  icon:
-                      staffAuth.isLoading
-                          ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Icon(Icons.logout),
+                          } catch (e) {
+                            debugPrint('❌ Staff-Logout Fehler: $e');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Logout-Fehler: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  icon: staffAuth.isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.logout),
                   label: Text(
                     staffAuth.isLoading ? 'Wird abgemeldet...' : 'Abmelden',
                   ),

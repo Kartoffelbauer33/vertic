@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:test_server_client/test_server_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:serverpod_flutter/serverpod_flutter.dart';
 
 /// 🔐 **StaffAuthProvider - Zentrale Staff-Authentication-Verwaltung**
 ///
@@ -84,13 +83,16 @@ class StaffAuthProvider extends ChangeNotifier {
     try {
       debugPrint('🔐 Staff-Login-Versuch: $emailOrUsername');
 
-      final result = await _client.unifiedAuth
-          .staffSignInFlexible(emailOrUsername, password);
+      final result = await _client.unifiedAuth.staffSignInFlexible(
+        emailOrUsername,
+        password,
+      );
 
       if (result.success == true && result.staffUser != null) {
         // StaffUser direkt aus Response verwenden
         _currentStaffUser = result.staffUser!;
-        _authToken = result.staffToken ??
+        _authToken =
+            result.staffToken ??
             result.userInfoId?.toString(); // Neuen Staff-Token verwenden
         _isAuthenticated = true;
 
@@ -105,7 +107,8 @@ class StaffAuthProvider extends ChangeNotifier {
           await _client.authenticationKeyManager?.put(_authToken!);
 
           debugPrint(
-              '🔐 Staff-Token über StaffAuthenticationKeyManager gesetzt: ${_authToken!.length > 16 ? _authToken!.substring(0, 16) + '...' : _authToken!}');
+            '🔐 Staff-Token über StaffAuthenticationKeyManager gesetzt: ${_authToken!.length > 16 ? _authToken!.substring(0, 16) + '...' : _authToken!}',
+          );
           debugPrint('✅ Staff-Auth für HTTP-Header-Übertragung konfiguriert');
         }
 
@@ -113,7 +116,8 @@ class StaffAuthProvider extends ChangeNotifier {
         await _saveToStorage();
 
         debugPrint(
-            '✅ Staff-Login erfolgreich: ${_currentStaffUser!.employeeId}');
+          '✅ Staff-Login erfolgreich: ${_currentStaffUser!.employeeId}',
+        );
         debugPrint('👤 Staff-Level: ${_currentStaffUser!.staffLevel}');
 
         notifyListeners();
@@ -217,13 +221,15 @@ class StaffAuthProvider extends ChangeNotifier {
 
       if (staffUserId != null && authToken != null && staffUserJson != null) {
         debugPrint(
-            '🔄 Staff-Session aus Storage wiederhergestellt: User-ID $staffUserId');
+          '🔄 Staff-Session aus Storage wiederhergestellt: User-ID $staffUserId',
+        );
 
         // 🔐 **SESSION-WIEDERHERSTELLUNG: Auth-Token am Client setzen**
         if (_client.authenticationKeyManager != null) {
           await _client.authenticationKeyManager!.put(authToken);
           debugPrint(
-              '✅ Auth-Token wiederhergestellt: ${authToken.length > 8 ? authToken.substring(0, 8) + '...' : authToken}');
+            '✅ Auth-Token wiederhergestellt: ${authToken.length > 8 ? authToken.substring(0, 8) + '...' : authToken}',
+          );
         }
 
         // Temporär Token setzen (wird nur gültig, wenn Server-Check erfolgreich)
@@ -235,13 +241,14 @@ class StaffAuthProvider extends ChangeNotifier {
 
           // Wir verwenden den PermissionProvider als Validierung
           // Wenn der Token ungültig ist, schlägt dieser API-Call fehl
-          final permissions =
-              await _client.permissionManagement.getCurrentUserPermissions();
+          final permissions = await _client.permissionManagement
+              .getCurrentUserPermissions();
 
           if (permissions.isNotEmpty) {
             // Token ist gültig, User-Daten setzen
             debugPrint(
-                '✅ Token gültig! ${permissions.length} Permissions geladen');
+              '✅ Token gültig! ${permissions.length} Permissions geladen',
+            );
             _isAuthenticated = true;
 
             // Versuche Staff-User-Daten zu laden
@@ -251,17 +258,19 @@ class StaffAuthProvider extends ChangeNotifier {
 
               // 🔧 FIX: Verwende firstWhereOrNull statt firstWhere
               final currentUser = staffUsers.cast<StaffUser?>().firstWhere(
-                    (user) => user?.id == staffUserId,
-                    orElse: () => null,
-                  );
+                (user) => user?.id == staffUserId,
+                orElse: () => null,
+              );
 
               if (currentUser != null) {
                 _currentStaffUser = currentUser;
                 debugPrint(
-                    '✅ Staff-User-Daten geladen: ${currentUser.firstName} ${currentUser.lastName}');
+                  '✅ Staff-User-Daten geladen: ${currentUser.firstName} ${currentUser.lastName}',
+                );
               } else {
                 debugPrint(
-                    '⚠️ Staff-User mit ID $staffUserId nicht in Liste gefunden');
+                  '⚠️ Staff-User mit ID $staffUserId nicht in Liste gefunden',
+                );
                 // Trotzdem authentifiziert lassen, da Token gültig ist
               }
             } catch (e) {
@@ -378,7 +387,8 @@ class StaffAuthenticationKeyManager extends AuthenticationKeyManager {
   Future<void> put(String key) async {
     _staffToken = key;
     debugPrint(
-        '🔐 Staff-Token gesetzt: ${key.length > 16 ? key.substring(0, 16) + '...' : key}');
+      '🔐 Staff-Token gesetzt: ${key.length > 16 ? key.substring(0, 16) + '...' : key}',
+    );
   }
 
   @override

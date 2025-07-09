@@ -1,9 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:serverpod_flutter/serverpod_flutter.dart';
 import 'package:test_server_client/test_server_client.dart';
-import '../main.dart';
 import '../services/background_scanner_service.dart';
 import '../services/device_id_service.dart';
 import '../auth/permission_provider.dart';
@@ -65,6 +62,7 @@ class PosSystemPage extends StatefulWidget {
 class _PosSystemPageState extends State<PosSystemPage> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _manualCodeController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   // State Management
   List<AppUser> _allUsers = []; // Vollständige Kundenliste
@@ -76,49 +74,40 @@ class _PosSystemPageState extends State<PosSystemPage> {
   String _scannerMode = 'POS'; // Express, POS, Hybrid
   Map<String, List<dynamic>> _categorizedItems = {};
   PosSession? _currentSession;
-  String _selectedCategory = 'Hallentickets'; // Aktuelle Kategorie
+
+  // 🆕 BACKEND-INTEGRATION: Echte Kategorien und Produkte
+  List<ProductCategory> _allCategories = [];
+  List<Product> _allProducts = [];
+  String? _selectedCategory; // Wird dynamisch gesetzt
 
   // 🛒 MULTI-CART-SYSTEM
   List<CartSession> _activeCarts = []; // Alle aktiven Warenkörbe
   int _currentCartIndex = 0; // Index des aktuell angezeigten Warenkorbs
 
-  // 🎨 Kategorie-Konfiguration mit optimierten Namen (Overflow-Fix)
-  final Map<String, CategoryConfig> _categoryConfigs = {
-    'Hallentickets': CategoryConfig(
-      color: Colors.blue,
-      icon: Icons.local_activity,
-      name: 'Hallen-\ntickets', // Mehrzeilig für bessere Passform
-    ),
-    'Vertic Universal': CategoryConfig(
-      color: Colors.purple,
-      icon: Icons.card_membership,
-      name: 'Vertic\nUniversal', // Mehrzeilig für bessere Passform
-    ),
-    'Produkte': CategoryConfig(
-      color: Colors.green,
-      icon: Icons.shopping_bag,
-      name: 'Produkte',
-    ),
-    'Getränke': CategoryConfig(
-      color: Colors.orange,
-      icon: Icons.local_drink,
-      name: 'Getränke',
-    ),
-    'Snacks': CategoryConfig(
-      color: Colors.red,
-      icon: Icons.fastfood,
-      name: 'Snacks',
-    ),
-    '🆕 ARTIKEL HINZUFÜGEN': CategoryConfig(
-      color: Colors.indigo,
-      icon: Icons.add_shopping_cart,
-      name: 'Artikel\nhinzufügen', // RBAC-geschützte Kategorie
-    ),
+  // 🎨 DYNAMISCHE ICON-MAPPING für Backend-Kategorien
+  final Map<String, IconData> _iconMapping = {
+    'category': Icons.category,
+    'fastfood': Icons.fastfood,
+    'local_drink': Icons.local_drink,
+    'lunch_dining': Icons.lunch_dining,
+    'sports': Icons.sports,
+    'checkroom': Icons.checkroom,
+    'build': Icons.build,
+    'favorite': Icons.favorite,
+    'shopping_bag': Icons.shopping_bag,
+    'local_activity': Icons.local_activity,
+    'card_membership': Icons.card_membership,
   };
 
   @override
   void initState() {
     super.initState();
+
+    // 🎯 Focus-Listener für UI-Updates (grüne Icons etc.)
+    _searchFocusNode.addListener(() {
+      if (mounted) setState(() {}); // UI-Update bei Fokus-Änderung
+    });
+
     _initializeData();
   }
 
@@ -126,6 +115,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
   void dispose() {
     _searchController.dispose();
     _manualCodeController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -142,6 +132,16 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
       // 🛒 MULTI-CART: Ersten Warenkorb erstellen oder bestehenden laden
       await _initializeCartFromExistingSession();
+
+      // 🎯 AUTO-FOKUS: Scanner-Input geht automatisch ins Suchfeld
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _searchFocusNode.canRequestFocus) {
+          _searchFocusNode.requestFocus();
+          debugPrint(
+            '🎯 Auto-Fokus auf Suchfeld gesetzt für Scanner-Integration',
+          );
+        }
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -202,8 +202,20 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
           if (!hasItems && !hasCustomer) {
             debugPrint(
-              '⏭️ Überspringe leere Session ${posSession.id} - keine Artikel und kein Kunde',
+              '🗑️ Bereinige leere Session ${posSession.id} - keine Artikel und kein Kunde',
             );
+
+            // **🧹 CLEANUP-FIX: Leere Sessions sofort löschen**
+            try {
+              await client.pos.clearCart(posSession.id!);
+              debugPrint(
+                '✅ Leere Session ${posSession.id} erfolgreich gelöscht',
+              );
+            } catch (e) {
+              debugPrint(
+                '⚠️ Fehler beim Löschen der leeren Session ${posSession.id}: $e',
+              );
+            }
             continue; // Leere Session überspringen
           }
 
@@ -509,13 +521,26 @@ class _PosSystemPageState extends State<PosSystemPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              // 🎯 FOCUS-FIX: Nach Dialog-Schließung Suchfeld fokussieren
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && _searchFocusNode.canRequestFocus) {
+                  _searchFocusNode.requestFocus();
+                }
+              });
+            },
             child: const Text('Verstanden'),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // Fokus auf Kundensuche setzen - wird durch setState automatisch aktualisiert
+              // 🎯 FOCUS-FIX: Nach Dialog-Schließung Suchfeld fokussieren für Kundenzuordnung
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && _searchFocusNode.canRequestFocus) {
+                  _searchFocusNode.requestFocus();
+                }
+              });
             },
             child: const Text('Kunde zuordnen'),
           ),
@@ -1065,7 +1090,84 @@ class _PosSystemPageState extends State<PosSystemPage> {
   // ==================== SEARCH FUNCTIONALITY ====================
 
   /// **🔍 ENHANCED SEARCH FIELD INPUT HANDLER**
-  /// Handles both customer search and scanner input
+  /// **🎯 VEREINFACHTE SCANNER-INTEGRATION: Auto-Fokus macht globale Listener überflüssig**
+  void _handleSimplifiedSearchInput(String input) {
+    final trimmedInput = input.trim();
+
+    // ✅ EINFACHE SCANNER-ERKENNUNG: Scanner-Input ist meist länger und alphanumerisch
+    if (_isLikelyScanner(trimmedInput)) {
+      _processSimplifiedScannerInput(trimmedInput);
+    } else {
+      // Normale Kundensuche
+      _performCustomerSearch(input);
+    }
+  }
+
+  /// **🔍 VEREINFACHTE SCANNER-ERKENNUNG (ohne komplexe Pattern-Matching)**
+  bool _isLikelyScanner(String input) {
+    if (input.length < 3) return false;
+
+    // Scanner-Input ist meist länger als normale Namen/Suchen
+    if (input.length > 12) return true;
+
+    // Scanner-Codes enthalten oft Sonderzeichen
+    if (input.contains('-') ||
+        input.contains('_') ||
+        input.startsWith('{') ||
+        input.startsWith('VT-') ||
+        input.startsWith('FP-') ||
+        input.startsWith('FR-')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// **📡 VEREINFACHTE SCANNER-VERARBEITUNG**
+  void _processSimplifiedScannerInput(String scannerCode) {
+    debugPrint('🎯 Scanner-Input erkannt (Auto-Fokus): $scannerCode');
+
+    // Suchfeld leeren nach Scanner-Input
+    _searchController.clear();
+    setState(() => _searchText = '');
+
+    // An Background Scanner Service weiterleiten
+    final backgroundScanner = Provider.of<BackgroundScannerService>(
+      context,
+      listen: false,
+    );
+    backgroundScanner.manualScanInput(scannerCode);
+
+    // Feedback anzeigen
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.qr_code_scanner, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Scanner-Code verarbeitet'),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // Fokus wieder auf Suchfeld für nächsten Scanner-Input
+    Future.delayed(Duration(milliseconds: 500), () {
+      _restoreScannerFocus();
+    });
+  }
+
+  /// **🎯 HILFSMETHODE: Scanner-Fokus wiederherstellen**
+  void _restoreScannerFocus() {
+    if (mounted && _searchFocusNode.canRequestFocus) {
+      _searchFocusNode.requestFocus();
+      debugPrint('🎯 Scanner-Fokus wiederhergestellt');
+    }
+  }
+
+  /// **📝 ALTE KOMPLEXE METHODE (kann entfernt werden)**
   void _handleSearchFieldInput(String input) {
     final trimmedInput = input.trim();
 
@@ -1161,9 +1263,8 @@ class _PosSystemPageState extends State<PosSystemPage> {
     try {
       final client = Provider.of<Client>(context, listen: false);
 
+      // 🎯 1. TICKET-TYPES LADEN (bestehende Logik)
       final allTicketTypes = await client.ticketType.getAllTicketTypes();
-
-      // 🎯 INTELLIGENTE TICKET-FILTERUNG basierend auf ausgewähltem Kunden
       List<TicketType> filteredTickets;
 
       if (_selectedCustomer != null) {
@@ -1172,14 +1273,23 @@ class _PosSystemPageState extends State<PosSystemPage> {
           '🎯 Tickets für Kunde ${_selectedCustomer!.firstName} gefiltert: ${filteredTickets.length}/${allTicketTypes.length}',
         );
       } else {
-        // Wenn kein Kunde ausgewählt: Zeige alle verfügbaren Tickets
         filteredTickets = allTicketTypes;
         debugPrint(
           '📋 Alle verfügbaren Tickets angezeigt: ${filteredTickets.length}',
         );
       }
 
-      // 🏢 NEUE KATEGORISIERUNG: Hallentickets vs. Hallenübergreifende Tickets
+      // 🆕 2. BACKEND-KATEGORIEN LADEN
+      final categories = await client.productManagement.getProductCategories();
+      final products = await client.productManagement.getProducts(
+        onlyActive: true,
+      );
+
+      debugPrint('🏪 Backend-Daten geladen:');
+      debugPrint('  • Kategorien: ${categories.length}');
+      debugPrint('  • Produkte: ${products.length}');
+
+      // 🆕 3. TICKET-KATEGORIEN erstellen (Tickets als spezielle Kategorien behandeln)
       final hallentickets = filteredTickets
           .where((ticket) => ticket.gymId != null)
           .toList();
@@ -1188,43 +1298,79 @@ class _PosSystemPageState extends State<PosSystemPage> {
           .where((ticket) => ticket.gymId == null && ticket.isVerticUniversal)
           .toList();
 
-      // TODO: Load products when Product endpoint is available
-      final products = <Product>[];
+      // 🆕 4. ALLE DATEN KATEGORISIEREN
+      final newCategorizedItems = <String, List<dynamic>>{};
 
-      // ⚡ PERFORMANCE-OPTIMIERUNG: Nur setState wenn sich Daten geändert haben
-      final newCategorizedItems = {
-        'Hallentickets': hallentickets,
-        'Vertic Universal': verticUniversal,
-        'Produkte': products,
-        'Getränke': [], // Placeholder
-        'Snacks': [], // Placeholder
-      };
+      // Ticket-Kategorien (falls vorhanden)
+      if (hallentickets.isNotEmpty) {
+        newCategorizedItems['🎫 Hallentickets'] = hallentickets;
+      }
+      if (verticUniversal.isNotEmpty) {
+        newCategorizedItems['🎟️ Vertic Universal'] = verticUniversal;
+      }
 
-      // Prüfe ob sich die Kategorien geändert haben
-      bool hasChanged = false;
-      for (final category in newCategorizedItems.keys) {
-        if (_categorizedItems[category]?.length !=
-            newCategorizedItems[category]?.length) {
-          hasChanged = true;
-          break;
+      // Backend-Kategorien mit Produkten
+      for (final category in categories) {
+        final categoryProducts = products
+            .where((product) => product.categoryId == category.id)
+            .toList();
+
+        if (categoryProducts.isNotEmpty || category.isActive) {
+          // Icon-Emoji für bessere Darstellung
+          final emoji = _getCategoryEmoji(category.iconName);
+          final categoryName = '$emoji ${category.name}';
+          newCategorizedItems[categoryName] = categoryProducts;
         }
       }
 
-      if (hasChanged || _categorizedItems.isEmpty) {
-        setState(() {
-          _categorizedItems = newCategorizedItems;
-        });
-
-        debugPrint('🏢 Ticket-Kategorisierung:');
-        debugPrint('  • Hallentickets: ${hallentickets.length}');
-        debugPrint('  • Vertic Universal: ${verticUniversal.length}');
+      // 🆕 5. ERSTE KATEGORIE AUTOMATISCH AUSWÄHLEN
+      if (_selectedCategory == null && newCategorizedItems.isNotEmpty) {
+        _selectedCategory = newCategorizedItems.keys.first;
+        debugPrint('🎯 Auto-Select erste Kategorie: $_selectedCategory');
       }
+
+      // 🆕 6. STATE AKTUALISIEREN
+      setState(() {
+        _allCategories = categories;
+        _allProducts = products;
+        _categorizedItems = newCategorizedItems;
+      });
+
+      debugPrint('🏪 Kategorisierung aktualisiert:');
+      newCategorizedItems.forEach((categoryName, items) {
+        debugPrint('  • $categoryName: ${items.length} Artikel');
+      });
     } catch (e) {
+      debugPrint('❌ Fehler beim Laden der Backend-Daten: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Laden der Artikel: $e')),
         );
       }
+    }
+  }
+
+  /// **🎨 HILFSMETHODE: Emoji für Kategorie-Icons**
+  String _getCategoryEmoji(String? iconName) {
+    switch (iconName) {
+      case 'fastfood':
+        return '🍕';
+      case 'local_drink':
+        return '🥤';
+      case 'lunch_dining':
+        return '🥙';
+      case 'sports':
+        return '⚽';
+      case 'checkroom':
+        return '👕';
+      case 'build':
+        return '🔧';
+      case 'favorite':
+        return '⭐';
+      case 'shopping_bag':
+        return '🛍️';
+      default:
+        return '📦';
     }
   }
 
@@ -1329,30 +1475,46 @@ class _PosSystemPageState extends State<PosSystemPage> {
           ),
           const SizedBox(height: 12),
 
-          // Suchfeld
+          // Suchfeld mit Auto-Fokus für Scanner-Integration
           TextField(
             controller: _searchController,
+            focusNode: _searchFocusNode,
             decoration: InputDecoration(
-              hintText: 'Name, E-Mail, ID oder Telefon eingeben...',
-              prefixIcon: const Icon(Icons.search),
+              hintText:
+                  'Name, E-Mail, ID oder Telefon eingeben (Auto-Scanner bereit)...',
+              prefixIcon: Icon(
+                Icons.search,
+                color: _searchFocusNode.hasFocus ? Colors.green : null,
+              ),
               suffixIcon: _searchText.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         _searchController.clear();
                         _performCustomerSearch('');
+                        // Fokus wieder setzen nach Clear
+                        _searchFocusNode.requestFocus();
                       },
                     )
+                  : _searchFocusNode.hasFocus
+                  ? Icon(Icons.qr_code_scanner, color: Colors.green)
                   : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: _searchFocusNode.hasFocus ? Colors.green : Colors.grey,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Colors.green, width: 2),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 12,
               ),
             ),
-            onChanged: _handleSearchFieldInput,
+            onChanged: _handleSimplifiedSearchInput,
           ),
 
           // Suchergebnisse
@@ -1402,6 +1564,34 @@ class _PosSystemPageState extends State<PosSystemPage> {
                 fontSize: 12,
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+
+          // 🎯 Scanner-Status-Anzeige
+          if (_searchFocusNode.hasFocus) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.qr_code_scanner, size: 16, color: Colors.green),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Scanner bereit',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1464,15 +1654,8 @@ class _PosSystemPageState extends State<PosSystemPage> {
   Widget _buildCategoryTabs() {
     return Consumer<PermissionProvider>(
       builder: (context, permissionProvider, _) {
-        // 🔐 RBAC-Filter: Nur Kategorien anzeigen, für die Berechtigung vorhanden ist
-        final visibleCategories = _categoryConfigs.keys.where((category) {
-          // Spezielle RBAC-Prüfung für Artikel-Erstellung
-          if (category == '🆕 ARTIKEL HINZUFÜGEN') {
-            return permissionProvider.hasPermission('can_create_products');
-          }
-          // Alle anderen Kategorien sind immer sichtbar
-          return true;
-        }).toList();
+        // Alle Kategorien sind immer sichtbar (Artikel-Verwaltung ist jetzt separater Tab)
+        final visibleCategories = _categorizedItems.keys.toList();
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -1496,16 +1679,10 @@ class _PosSystemPageState extends State<PosSystemPage> {
                   itemCount: visibleCategories.length,
                   itemBuilder: (context, index) {
                     final category = visibleCategories[index];
-                    final config = _categoryConfigs[category]!;
+                    final categoryData = _getCategoryDataByName(category);
                     final isSelected = _selectedCategory == category;
 
-                    // 🆕 Spezielle Logik für Artikel-Erstellung Kategorie
-                    int itemCount = 0;
-                    if (category == '🆕 ARTIKEL HINZUFÜGEN') {
-                      itemCount = 0; // Keine Items zum Anzeigen
-                    } else {
-                      itemCount = _categorizedItems[category]?.length ?? 0;
-                    }
+                    final itemCount = _categorizedItems[category]?.length ?? 0;
 
                     return Container(
                       margin: const EdgeInsets.only(right: 12),
@@ -1515,12 +1692,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
                           onTap: () {
-                            // 🆕 Spezielle Logik für Artikel-Erstellung
-                            if (category == '🆕 ARTIKEL HINZUFÜGEN') {
-                              _showAddProductDialog();
-                            } else {
-                              setState(() => _selectedCategory = category);
-                            }
+                            setState(() => _selectedCategory = category);
                           },
                           child: Container(
                             width: 110, // Reduziert von 120 auf 110
@@ -2371,59 +2543,6 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
   // ==================== ARTIKEL-MANAGEMENT ====================
 
-  /// **🆕 NEUE METHODE: Artikel-Hinzufügen Dialog**
-  void _showAddProductDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AddProductDialog(
-        onProductCreated: (product) {
-          // Neues Produkt wurde erstellt → zur entsprechenden Kategorie hinzufügen
-          setState(() {
-            // Füge Produkt zur richtigen Kategorie hinzu
-            final categoryName = _getProductCategoryName(product);
-            if (_categorizedItems[categoryName] == null) {
-              _categorizedItems[categoryName] = [];
-            }
-            _categorizedItems[categoryName]!.add(product);
-
-            // Wechsle zur Kategorie des neuen Produkts
-            _selectedCategory = categoryName;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '✅ Artikel "${product.name}" erfolgreich hinzugefügt',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// **🏷️ HELPER: Bestimmt Kategorie-Namen für Produkt**
-  String _getProductCategoryName(Product product) {
-    // Standard-Kategorien basierend auf Product-Properties
-    if (product.name.toLowerCase().contains('getränk') ||
-        product.name.toLowerCase().contains('drink') ||
-        product.name.toLowerCase().contains('cola') ||
-        product.name.toLowerCase().contains('wasser')) {
-      return 'Getränke';
-    }
-
-    if (product.name.toLowerCase().contains('snack') ||
-        product.name.toLowerCase().contains('chip') ||
-        product.name.toLowerCase().contains('riegel')) {
-      return 'Snacks';
-    }
-
-    // Fallback: Allgemeine Produkte-Kategorie
-    return 'Produkte';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -2445,49 +2564,59 @@ class _PosSystemPageState extends State<PosSystemPage> {
       backgroundColor: Colors.grey[100],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Row(
-              children: [
-                // Linke Spalte: Kundensuche
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: _buildCustomerSearchSection(),
-                  ),
-                ),
-
-                // Mittlere Spalte: Produkt-Katalog
-                Expanded(
-                  flex: 4,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [_buildCategoryTabs(), _buildProductGrid()],
+          : GestureDetector(
+              // 🎯 QUICK-FOCUS: Tippen ins Leere setzt Fokus zurück auf Suchfeld
+              onTap: () {
+                if (!_searchFocusNode.hasFocus &&
+                    _searchFocusNode.canRequestFocus) {
+                  _searchFocusNode.requestFocus();
+                  debugPrint('🎯 Quick-Focus: Suchfeld wieder fokussiert');
+                }
+              },
+              child: Row(
+                children: [
+                  // Linke Spalte: Kundensuche
+                  Expanded(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: _buildCustomerSearchSection(),
                     ),
                   ),
-                ),
 
-                // Rechte Spalte: Warenkorb
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: _buildShoppingCart(),
+                  // Mittlere Spalte: Produkt-Katalog
+                  Expanded(
+                    flex: 4,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [_buildCategoryTabs(), _buildProductGrid()],
+                      ),
+                    ),
                   ),
-                ),
-              ],
+
+                  // Rechte Spalte: Warenkorb
+                  Expanded(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: _buildShoppingCart(),
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
@@ -2521,6 +2650,10 @@ class _AddProductDialogState extends State<AddProductDialog> {
   Map<String, dynamic>? _scannedData;
   BackgroundScannerService? _scannerService;
 
+  // **🎯 SCANNER-STATE-TRACKING für Consumer**
+  String? _lastProcessedScanCode;
+  DateTime? _lastProcessedScanTime;
+
   // **🏷️ Kategorie-Verwaltung**
   List<ProductCategory> _availableCategories = [];
   ProductCategory? _selectedCategory;
@@ -2542,7 +2675,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
         listen: false,
       );
 
-      _scannerService!.registerDialogScanListener(_onScanReceived);
+      _scannerService!.activateDialogMode();
       debugPrint('🎯 AddProductDialog: Scanner-Listener registriert');
 
       // **🏷️ Kategorien laden**
@@ -2557,7 +2690,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
   void dispose() {
     // **🔴 Scanner-Listener wieder abmelden**
     if (_scannerService != null) {
-      _scannerService!.unregisterDialogScanListener();
+      _scannerService!.deactivateDialogMode();
       debugPrint('🔴 AddProductDialog: Scanner-Listener abgemeldet');
     }
 
@@ -2567,19 +2700,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
     super.dispose();
   }
 
-  /// **🎯 SCANNER-CALLBACK: Gescannter Code empfangen**
-  void _onScanReceived(String scannedCode) {
-    debugPrint('🎯 Dialog: Scanner-Code empfangen: $scannedCode');
-
-    if (mounted) {
-      setState(() {
-        _barcodeController.text = scannedCode;
-      });
-
-      // Automatisch Barcode scannen und Produktdaten abrufen
-      _scanBarcode(scannedCode);
-    }
-  }
+  // **🎯 SCANNER-CALLBACK ENTFERNT - Consumer-Pattern verwendet**
 
   /// **🏷️ Produktkategorien laden**
   Future<void> _loadProductCategories() async {
@@ -2619,13 +2740,10 @@ class _AddProductDialogState extends State<AddProductDialog> {
     try {
       final client = Provider.of<Client>(context, listen: false);
 
-      // TODO: Hier sollte die aktuelle Facility-ID aus der Session kommen
-      // Für jetzt nehmen wir die erste verfügbare Facility
-      final facilities = await client.facility.getAllFacilities();
+      // ✅ SESSION-BASIERTE FACILITY-ERMITTLUNG
+      final currentFacility = await client.facility.getCurrentFacility();
 
-      if (facilities.isNotEmpty) {
-        final currentFacility = facilities.first;
-
+      if (currentFacility != null) {
         if (currentFacility.countryId != null) {
           // Alle Länder laden und das Facility-Land finden
           final countries = await client.taxManagement.getAllCountries();
@@ -2743,401 +2861,438 @@ class _AddProductDialogState extends State<AddProductDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 500,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                Icon(Icons.add_shopping_cart, color: Colors.indigo, size: 28),
-                const SizedBox(width: 12),
-                Text(
-                  'Neuen Artikel hinzufügen',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.indigo,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const Divider(height: 32),
+    return Consumer<BackgroundScannerService>(
+      builder: (context, scanner, child) {
+        // **🎯 Scanner-State-Änderungen verarbeiten (OHNE setState)**
+        if (scanner.dialogScannedCode != null &&
+            scanner.dialogScanTime != null &&
+            (scanner.dialogScannedCode != _lastProcessedScanCode ||
+                scanner.dialogScanTime != _lastProcessedScanTime)) {
+          // State-Tracking ohne setState
+          _lastProcessedScanCode = scanner.dialogScannedCode;
+          _lastProcessedScanTime = scanner.dialogScanTime;
 
-            // Barcode-Eingabe mit Scanner-Button
-            Text(
-              'Barcode',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _barcodeController,
-                    decoration: const InputDecoration(
-                      hintText: 'Barcode eingeben oder scannen',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.qr_code),
-                    ),
-                    onChanged: (value) {
-                      if (value.length >= 8) {
-                        _scanBarcode(value);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _startHardwareScanning,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scannen'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
+          // Textfeld direkt updaten (ohne setState)
+          _barcodeController.text = scanner.dialogScannedCode!;
 
-            // Gescannte Produktinformationen anzeigen
-            if (_scannedData != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  border: Border.all(color: Colors.green[300]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Async-Operationen sicher ausführen
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scanBarcode(scanner.dialogScannedCode!);
+          });
+        }
+
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            width: 500,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
                   children: [
+                    Icon(
+                      Icons.add_shopping_cart,
+                      color: Colors.indigo,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
                     Text(
-                      '✅ Produktdaten gefunden',
-                      style: TextStyle(
-                        color: Colors.green[700],
+                      'Neuen Artikel hinzufügen',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: Colors.indigo,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    if (_scannedData!['openFoodFactsData'] != null)
-                      Text('📦 ${_scannedData!['openFoodFactsData']['name']}'),
-                    if (_scannedData!['product'] != null)
-                      Text('📦 ${_scannedData!['product'].name}'),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
                   ],
                 ),
-              ),
-            ],
+                const Divider(height: 32),
 
-            const SizedBox(height: 24),
-
-            // Produktinformationen
-            Text(
-              'Produktinformationen',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Produktname *',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.label),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _priceController,
-              decoration: const InputDecoration(
-                labelText: 'Preis (€) *',
-                hintText: 'z.B. 1,50 oder 1.50',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.euro),
-                helperText: 'Komma oder Punkt als Dezimaltrennzeichen möglich',
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // **🏷️ Kategorie-Auswahl**
-            _isCategoriesLoading
-                ? const Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: 12),
-                      Text('Kategorien werden geladen...'),
-                    ],
-                  )
-                : DropdownButtonFormField<ProductCategory>(
-                    value: _selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Kategorie *',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.category),
-                      helperText: 'Wählen Sie eine Produktkategorie',
-                    ),
-                    items: _availableCategories.map((category) {
-                      return DropdownMenuItem<ProductCategory>(
-                        value: category,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: Color(
-                                  int.parse(
-                                    category.colorHex.replaceFirst('#', '0xFF'),
-                                  ),
-                                ),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(category.name),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (category) {
-                      setState(() {
-                        _selectedCategory = category;
-                      });
-                    },
-                    validator: (value) {
-                      if (value == null) {
-                        return 'Bitte wählen Sie eine Kategorie';
-                      }
-                      return null;
-                    },
+                // Barcode-Eingabe mit Scanner-Button
+                Text(
+                  'Barcode',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-
-            const SizedBox(height: 16),
-
-            // **🏛️ DACH-Compliance: Land-Auswahl**
-            Text(
-              'Steuerliche Zuordnung',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-
-            // **🏛️ Facility-Land-Anzeige**
-            if (_facilityCountry != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  border: Border.all(color: Colors.blue[300]!),
-                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
+                const SizedBox(height: 8),
+                Row(
                   children: [
-                    Icon(Icons.business, color: Colors.blue[700]),
-                    const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Standort-Land: ${_facilityCountry!.displayName}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue[700],
-                            ),
-                          ),
-                          Text(
-                            'Steuersystem: ${_facilityCountry!.taxSystemType.toUpperCase()}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue[600],
-                            ),
-                          ),
-                        ],
+                      child: TextField(
+                        controller: _barcodeController,
+                        decoration: const InputDecoration(
+                          hintText: 'Barcode eingeben oder scannen',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.qr_code),
+                        ),
+                        onChanged: (value) {
+                          if (value.length >= 8) {
+                            _scanBarcode(value);
+                          }
+                        },
                       ),
                     ),
-                    Row(
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _startHardwareScanning,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Scannen'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Gescannte Produktinformationen anzeigen
+                if (_scannedData != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      border: Border.all(color: Colors.green[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_facilityCountry!.requiresTSE)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red[100],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'TSE',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.red[800],
-                              ),
-                            ),
+                        Text(
+                          '✅ Produktdaten gefunden',
+                          style: TextStyle(
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.bold,
                           ),
-                        if (_facilityCountry!.requiresRKSV) ...[
-                          if (_facilityCountry!.requiresTSE)
-                            const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[100],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'RKSV',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange[800],
-                              ),
-                            ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_scannedData!['openFoodFactsData'] != null)
+                          Text(
+                            '📦 ${_scannedData!['openFoodFactsData']['name']}',
                           ),
-                        ],
+                        if (_scannedData!['product'] != null)
+                          Text('📦 ${_scannedData!['product'].name}'),
                       ],
                     ),
-                  ],
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                // Produktinformationen
+                Text(
+                  'Produktinformationen',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 12),
 
-            const SizedBox(height: 16),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Produktname *',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.label),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-            _availableTaxClasses.isEmpty
-                ? const Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: 12),
-                      Text('Steuerklassen werden geladen...'),
-                    ],
-                  )
-                : DropdownButtonFormField<TaxClass>(
-                    value: _selectedTaxClass,
-                    decoration: const InputDecoration(
-                      labelText: 'Steuerklasse *',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.receipt_long),
-                      helperText: 'Steuersatz und Compliance-Einstellungen',
-                    ),
-                    items: _availableTaxClasses.map((taxClass) {
-                      return DropdownMenuItem<TaxClass>(
-                        value: taxClass,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: Color(
-                                  int.parse(
-                                    taxClass.colorHex.replaceFirst('#', '0xFF'),
+                TextField(
+                  controller: _priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Preis (€) *',
+                    hintText: 'z.B. 1,50 oder 1.50',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.euro),
+                    helperText:
+                        'Komma oder Punkt als Dezimaltrennzeichen möglich',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // **🏷️ Kategorie-Auswahl**
+                _isCategoriesLoading
+                    ? const Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Kategorien werden geladen...'),
+                        ],
+                      )
+                    : DropdownButtonFormField<ProductCategory>(
+                        value: _selectedCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Kategorie *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.category),
+                          helperText: 'Wählen Sie eine Produktkategorie',
+                        ),
+                        items: _availableCategories.map((category) {
+                          return DropdownMenuItem<ProductCategory>(
+                            value: category,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Color(
+                                      int.parse(
+                                        category.colorHex.replaceFirst(
+                                          '#',
+                                          '0xFF',
+                                        ),
+                                      ),
+                                    ),
+                                    shape: BoxShape.circle,
                                   ),
                                 ),
-                                shape: BoxShape.circle,
-                              ),
+                                const SizedBox(width: 8),
+                                Text(category.name),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '${taxClass.name} (${taxClass.taxRate.toStringAsFixed(1)}%)',
+                          );
+                        }).toList(),
+                        onChanged: (category) {
+                          setState(() {
+                            _selectedCategory = category;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                            return 'Bitte wählen Sie eine Kategorie';
+                          }
+                          return null;
+                        },
+                      ),
+
+                const SizedBox(height: 16),
+
+                // **🏛️ DACH-Compliance: Land-Auswahl**
+                Text(
+                  'Steuerliche Zuordnung',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // **🏛️ Facility-Land-Anzeige**
+                if (_facilityCountry != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      border: Border.all(color: Colors.blue[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.business, color: Colors.blue[700]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Standort-Land: ${_facilityCountry!.displayName}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue[700],
+                                ),
                               ),
-                            ),
-                            if (taxClass.isDefault)
+                              Text(
+                                'Steuersystem: ${_facilityCountry!.taxSystemType.toUpperCase()}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            if (_facilityCountry!.requiresTSE)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
+                                  horizontal: 6,
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.green[100],
+                                  color: Colors.red[100],
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'Standard',
+                                  'TSE',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.green[800],
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red[800],
                                   ),
                                 ),
                               ),
+                            if (_facilityCountry!.requiresRKSV) ...[
+                              if (_facilityCountry!.requiresTSE)
+                                const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[100],
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'RKSV',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange[800],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                      );
-                    }).toList(),
-                    onChanged: (taxClass) {
-                      setState(() {
-                        _selectedTaxClass = taxClass;
-                      });
-                    },
-                    validator: (value) {
-                      if (value == null) {
-                        return 'Bitte wählen Sie eine Steuerklasse';
-                      }
-                      return null;
-                    },
+                      ],
+                    ),
                   ),
 
-            const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-            // Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Abbrechen'),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _createProduct,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Artikel erstellen'),
+                _availableTaxClasses.isEmpty
+                    ? const Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Steuerklassen werden geladen...'),
+                        ],
+                      )
+                    : DropdownButtonFormField<TaxClass>(
+                        value: _selectedTaxClass,
+                        decoration: const InputDecoration(
+                          labelText: 'Steuerklasse *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.receipt_long),
+                          helperText: 'Steuersatz und Compliance-Einstellungen',
+                        ),
+                        items: _availableTaxClasses.map((taxClass) {
+                          return DropdownMenuItem<TaxClass>(
+                            value: taxClass,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Color(
+                                      int.parse(
+                                        taxClass.colorHex.replaceFirst(
+                                          '#',
+                                          '0xFF',
+                                        ),
+                                      ),
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${taxClass.name} (${taxClass.taxRate.toStringAsFixed(1)}%)',
+                                  ),
+                                ),
+                                if (taxClass.isDefault)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[100],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Standard',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.green[800],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (taxClass) {
+                          setState(() {
+                            _selectedTaxClass = taxClass;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                            return 'Bitte wählen Sie eine Steuerklasse';
+                          }
+                          return null;
+                        },
+                      ),
+
+                const SizedBox(height: 24),
+
+                // Action Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Abbrechen'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: _isLoading ? null : _createProduct,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Artikel erstellen'),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -3180,41 +3335,54 @@ class _AddProductDialogState extends State<AddProductDialog> {
   Future<void> _scanBarcode(String barcode) async {
     if (barcode.trim().isEmpty) return;
 
-    setState(() => _isLoading = true);
+    // **🔧 FLUTTER-KONFORM: setState mit addPostFrameCallback umhüllen**
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _isLoading = true);
+    });
 
     try {
       final client = Provider.of<Client>(context, listen: false);
       final scanResult = await client.productManagement.scanBarcode(barcode);
 
       if (scanResult.found) {
-        setState(() {
-          _scannedData = {
-            'found': true,
-            'source': scanResult.source,
-            'openFoodFactsData': scanResult.openFoodFactsName != null
-                ? {
-                    'name': scanResult.openFoodFactsName,
-                    'description': scanResult.openFoodFactsDescription,
-                  }
-                : null,
-            'product': scanResult.productId != null
-                ? {
-                    'name': scanResult.productName,
-                    'price': scanResult.productPrice,
-                  }
-                : null,
-          };
+        // **🔧 FLUTTER-KONFORM: setState sicher ausführen**
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _scannedData = {
+                'found': true,
+                'source': scanResult.source,
+                'openFoodFactsData': scanResult.openFoodFactsName != null
+                    ? {
+                        'name': scanResult.openFoodFactsName,
+                        'description': scanResult.openFoodFactsDescription,
+                      }
+                    : null,
+                'product': scanResult.productId != null
+                    ? {
+                        'name': scanResult.productName,
+                        'price': scanResult.productPrice,
+                      }
+                    : null,
+              };
 
-          // Automatisch Felder ausfüllen
-          if (scanResult.openFoodFactsName != null) {
-            _nameController.text = scanResult.openFoodFactsName ?? '';
-          } else if (scanResult.productName != null) {
-            _nameController.text = scanResult.productName!;
-            _priceController.text = scanResult.productPrice?.toString() ?? '';
+              // Automatisch Felder ausfüllen
+              if (scanResult.openFoodFactsName != null) {
+                _nameController.text = scanResult.openFoodFactsName ?? '';
+              } else if (scanResult.productName != null) {
+                _nameController.text = scanResult.productName!;
+                _priceController.text =
+                    scanResult.productPrice?.toString() ?? '';
+              }
+            });
           }
         });
       } else {
-        setState(() => _scannedData = null);
+        // **🔧 FLUTTER-KONFORM: setState sicher ausführen**
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _scannedData = null);
+        });
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -3233,7 +3401,10 @@ class _AddProductDialogState extends State<AddProductDialog> {
         ).showSnackBar(SnackBar(content: Text('❌ Scanner-Fehler: $e')));
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      // **🔧 FLUTTER-KONFORM: setState sicher ausführen**
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _isLoading = false);
+      });
     }
   }
 
