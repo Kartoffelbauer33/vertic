@@ -18,6 +18,7 @@ import 'reports_analytics_page.dart';
 import 'system_configuration_page.dart';
 import 'external_provider_management_page.dart';
 import 'scanner_settings_page.dart';
+import 'tax_class_management_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   final bool isSuperUser;
@@ -719,11 +720,8 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Future<void> _manageTaxClasses(BuildContext context) async {
-    // TODO: Implementierung für Tax Class Management
-    _showInfoDialog(
-      context,
-      'Tax Classes',
-      'Tax Class Management wird in Phase 2 implementiert.',
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const TaxClassManagementPage()),
     );
   }
 

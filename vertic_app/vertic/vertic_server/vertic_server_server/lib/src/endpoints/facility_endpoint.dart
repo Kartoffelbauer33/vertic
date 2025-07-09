@@ -3,12 +3,31 @@ import 'package:vertic_server_server/src/generated/protocol.dart';
 // 🔐 RBAC SECURITY INTEGRATION
 import '../helpers/permission_helper.dart';
 import '../helpers/staff_auth_helper.dart';
+import '../helpers/facility_session_helper.dart';
 
 /// Facility-Management Endpoint
 class FacilityEndpoint extends Endpoint {
   /// Prüft ob StaffUser für Facility-Management berechtigt ist
   Future<int?> _getAuthenticatedStaffUserId(Session session) async {
     return await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+  }
+
+  /// **🏛️ Aktuelle Facility des authentifizierten Staff-Users abrufen**
+  Future<Facility?> getCurrentFacility(Session session) async {
+    final authUserId = await _getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Aktuelle Facility verweigert',
+          level: LogLevel.warning);
+      return null;
+    }
+
+    try {
+      return await FacilitySessionHelper.getCurrentFacility(session);
+    } catch (e) {
+      session.log('❌ Fehler beim Abrufen der aktuellen Facility: $e',
+          level: LogLevel.error);
+      return null;
+    }
   }
 
   // Alle Einrichtungen abrufen

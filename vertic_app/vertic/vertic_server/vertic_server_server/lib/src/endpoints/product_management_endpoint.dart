@@ -595,6 +595,135 @@ class ProductManagementEndpoint extends Endpoint {
     }
   }
 
+  /// Produktkategorie aktualisieren
+  Future<ProductCategory> updateProductCategory(
+    Session session,
+    int categoryId, {
+    String? name,
+    String? description,
+    String? colorHex,
+    String? iconName,
+    int? displayOrder,
+    bool? isActive,
+    bool? isFavorites,
+  }) async {
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      throw Exception('Authentication erforderlich');
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+      session,
+      staffUserId,
+      'can_manage_product_categories',
+    );
+    if (!hasPermission) {
+      throw Exception('Keine Berechtigung zum Verwalten von Kategorien');
+    }
+
+    try {
+      final existingCategory =
+          await ProductCategory.db.findById(session, categoryId);
+      if (existingCategory == null) {
+        throw Exception('Kategorie nicht gefunden');
+      }
+
+      // System-Kategorien können nicht bearbeitet werden
+      if (existingCategory.isSystemCategory) {
+        throw Exception('System-Kategorien können nicht bearbeitet werden');
+      }
+
+      // Prüfe Favoriten-Kategorie Einzigartigkeit
+      if (isFavorites == true && !existingCategory.isFavorites) {
+        final existingFavorites = await ProductCategory.db.find(
+          session,
+          where: (t) => t.isFavorites.equals(true),
+          limit: 1,
+        );
+        if (existingFavorites.isNotEmpty) {
+          throw Exception('Es kann nur eine Favoriten-Kategorie geben');
+        }
+      }
+
+      final updatedCategory = existingCategory.copyWith(
+        name: name ?? existingCategory.name,
+        description: description ?? existingCategory.description,
+        colorHex: colorHex ?? existingCategory.colorHex,
+        iconName: iconName ?? existingCategory.iconName,
+        displayOrder: displayOrder ?? existingCategory.displayOrder,
+        isActive: isActive ?? existingCategory.isActive,
+        isFavorites: isFavorites ?? existingCategory.isFavorites,
+        updatedAt: DateTime.now(),
+      );
+
+      final savedCategory =
+          await ProductCategory.db.updateRow(session, updatedCategory);
+      session.log(
+          'Kategorie aktualisiert: ${savedCategory.name} (ID: $categoryId)');
+      return savedCategory;
+    } catch (e) {
+      session.log('Fehler beim Aktualisieren der Kategorie: $e',
+          level: LogLevel.error);
+      rethrow;
+    }
+  }
+
+  /// Produktkategorie löschen
+  Future<bool> deleteProductCategory(Session session, int categoryId) async {
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      throw Exception('Authentication erforderlich');
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+      session,
+      staffUserId,
+      'can_manage_product_categories',
+    );
+    if (!hasPermission) {
+      throw Exception('Keine Berechtigung zum Verwalten von Kategorien');
+    }
+
+    try {
+      final category = await ProductCategory.db.findById(session, categoryId);
+      if (category == null) {
+        throw Exception('Kategorie nicht gefunden');
+      }
+
+      // System-Kategorien können nicht gelöscht werden
+      if (category.isSystemCategory) {
+        throw Exception('System-Kategorien können nicht gelöscht werden');
+      }
+
+      // Favoriten-Kategorie kann nicht gelöscht werden
+      if (category.isFavorites) {
+        throw Exception('Die Favoriten-Kategorie kann nicht gelöscht werden');
+      }
+
+      // Prüfe ob noch Produkte in dieser Kategorie sind
+      final productsInCategory = await Product.db.find(
+        session,
+        where: (t) => t.categoryId.equals(categoryId),
+        limit: 1,
+      );
+
+      if (productsInCategory.isNotEmpty) {
+        throw Exception(
+            'Kategorie kann nicht gelöscht werden - sie enthält noch Produkte');
+      }
+
+      await ProductCategory.db.deleteRow(session, category);
+      session.log('Kategorie gelöscht: ${category.name} (ID: $categoryId)');
+      return true;
+    } catch (e) {
+      session.log('Fehler beim Löschen der Kategorie: $e',
+          level: LogLevel.error);
+      rethrow;
+    }
+  }
+
   // ==================== FAVORITES MANAGEMENT ====================
 
   /// Produkt zur Favoriten-Kategorie hinzufügen

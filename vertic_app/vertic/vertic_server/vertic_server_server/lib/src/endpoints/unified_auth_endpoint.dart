@@ -643,6 +643,34 @@ class UnifiedAuthEndpoint extends Endpoint {
         return existingUser;
       }
 
+      // 🚫 CRITICAL FIX: Prüfe auch ob bereits AppUser mit dieser E-Mail existiert
+      // (verhindert doppelte User durch Race Conditions)
+      final existingEmailUser = await AppUser.db.findFirstRow(
+        session,
+        where: (t) => t.email.equals(email),
+      );
+
+      if (existingEmailUser != null) {
+        session.log(
+            '❌ DUPLICATE EMAIL PREVENTED: AppUser mit E-Mail ${email} existiert bereits (ID: ${existingEmailUser.id})');
+
+        // Verknüpfe den bestehenden User mit der aktuellen userInfoId wenn noch nicht gesetzt
+        if (existingEmailUser.userInfoId == null) {
+          final updatedUser = existingEmailUser.copyWith(
+            userInfoId: authInfo.userId,
+            updatedAt: DateTime.now(),
+          );
+          final savedUser = await AppUser.db.updateRow(session, updatedUser);
+          session.log(
+              '🔧 MIGRATION: Bestehender AppUser (ID: ${existingEmailUser.id}) mit UserInfo.id=${authInfo.userId} verknüpft');
+          return savedUser;
+        } else {
+          session.log(
+              '⚠️ E-Mail-Konflikt: AppUser ${existingEmailUser.id} bereits mit UserInfo.id=${existingEmailUser.userInfoId} verknüpft');
+          return existingEmailUser;
+        }
+      }
+
       // 3. **Erstelle neuen AppUser**
       final appUser = AppUser(
         userInfoId: authInfo.userId, // 🔗 Verknüpfung zu Serverpod Auth

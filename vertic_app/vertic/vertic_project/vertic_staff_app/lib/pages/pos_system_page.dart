@@ -103,10 +103,12 @@ class _PosSystemPageState extends State<PosSystemPage> {
   void initState() {
     super.initState();
 
-    // 🎯 Focus-Listener für UI-Updates (grüne Icons etc.)
-    _searchFocusNode.addListener(() {
-      if (mounted) setState(() {}); // UI-Update bei Fokus-Änderung
-    });
+    // 🔧 **FLUTTER-FIX: FocusNode-Listener entfernt**
+    // Der direkte setState() im Focus-Listener verursachte endlose Build-Zyklen
+    // Alternative: Focus-State wird über hasFocus-Property abgefragt (ohne setState)
+    // _searchFocusNode.addListener(() {
+    //   if (mounted) setState(() {}); // ❌ PROBLEMATISCH - Endlose Build-Zyklen
+    // });
 
     _initializeData();
   }

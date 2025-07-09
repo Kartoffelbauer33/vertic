@@ -244,3 +244,19 @@ A: Nach Superuser-Login → Admin-Dashboard → Staff-Management
 **Bei Problemen:** Reparatur-Script ausführen und es läuft wieder.
 
 **Viel Erfolg mit deinem Vertic System!** 🚀 
+
+## ⚠️ Kritische Fehlerbehebungen
+
+### CLEANUP_DUPLICATE_USERS.sql 🚫
+**SOFORT AUSFÜHREN** - Behebt kritischen Bug mit doppelten E-Mail-Adressen
+- **Problem:** `onUserCreated` Callback + `completeClientRegistration` erstellten doppelte AppUser
+- **Lösung:** Löscht User ohne `userInfoId` (Legacy von onUserCreated)
+- **Gefahr:** Unique-Constraint wurde durch Race Condition umgangen
+- **Status:** 🔴 KRITISCH - verhindert weitere Registrierungen
+
+```sql
+-- Führe aus in pgAdmin/DBeaver:
+\i CLEANUP_DUPLICATE_USERS.sql
+```
+
+## DACH Compliance Permissions 

@@ -27,7 +27,10 @@ Future<AuthenticationInfo?> clientAuthenticationHandler(
 void run(List<String> args) async {
   // AuthConfig für Client-App (NICHT für Staff-App!)
   auth.AuthConfig.set(auth.AuthConfig(
-    // Für Client-App-User automatisch AppUser erstellen
+    // 🚫 KRITISCHER BUG FIX: onUserCreated deaktiviert
+    // Dieser Callback erstellt doppelte AppUser!
+    // User-Erstellung erfolgt jetzt NUR über completeClientRegistration
+    /*
     onUserCreated: (session, userInfo) async {
       session.log(
           '🆕 Neuer Client-User via Auth-Modul: ${userInfo.email}, Auth-ID: ${userInfo.id}, userIdentifier: ${userInfo.userIdentifier}');
@@ -66,6 +69,8 @@ void run(List<String> args) async {
             level: LogLevel.error);
       }
     },
+    */
+
     // E-Mail Validierung für Client-App
     sendValidationEmail: (session, email, validationCode) async {
       session.log('📧 VALIDIERUNGSCODE für Client-App $email: $validationCode');
