@@ -1374,6 +1374,47 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
+  /// **🎨 HILFSMETHODE: Kategorie-Daten für UI abrufen**
+  Map<String, dynamic> _getCategoryDataByName(String categoryName) {
+    // Für Ticket-Kategorien
+    if (categoryName.contains('Hallentickets')) {
+      return {
+        'color': Colors.blue,
+        'icon': Icons.local_activity,
+        'name': 'Hallen-\ntickets',
+      };
+    }
+    if (categoryName.contains('Vertic Universal')) {
+      return {
+        'color': Colors.purple,
+        'icon': Icons.card_membership,
+        'name': 'Vertic\nUniversal',
+      };
+    }
+
+    // Für Backend-Kategorien
+    final cleanName = categoryName.replaceAll(
+      RegExp(r'^[^\s]+ '),
+      '',
+    ); // Emoji entfernen
+    final category = _allCategories.firstWhere(
+      (cat) => cat.name == cleanName,
+      orElse: () => ProductCategory(
+        name: cleanName,
+        colorHex: '#607D8B',
+        iconName: 'category',
+        isActive: true,
+        displayOrder: 0,
+      ),
+    );
+
+    return {
+      'color': Color(int.parse(category.colorHex.replaceFirst('#', '0xFF'))),
+      'icon': _iconMapping[category.iconName] ?? Icons.category,
+      'name': category.name,
+    };
+  }
+
   /// **🎯 NEUE METHODE: Filtere Tickets basierend auf Kunden-Eigenschaften**
   Future<List<TicketType>> _getCustomerRelevantTickets(
     List<TicketType> allTickets,
@@ -1702,12 +1743,12 @@ class _PosSystemPageState extends State<PosSystemPage> {
                             ), // Optimiert
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
-                              color: isSelected ? config.color : Colors.white,
+                              color: isSelected
+                                  ? categoryData['color']
+                                  : Colors.white,
                               border: Border.all(
-                                color: isSelected
-                                    ? config.color
-                                    : Colors.grey.shade300,
-                                width: isSelected ? 2 : 1,
+                                color: categoryData['color'],
+                                width: 2,
                               ),
                             ),
                             child: Column(
@@ -1716,10 +1757,10 @@ class _PosSystemPageState extends State<PosSystemPage> {
                                   MainAxisSize.min, // Wichtig für Overflow-Fix
                               children: [
                                 Icon(
-                                  config.icon,
+                                  categoryData['icon'],
                                   color: isSelected
                                       ? Colors.white
-                                      : config.color,
+                                      : categoryData['color'],
                                   size: 24, // Reduziert von 28 auf 24
                                 ),
                                 const SizedBox(
@@ -1728,7 +1769,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
                                 Flexible(
                                   // Flexibler Text-Container
                                   child: Text(
-                                    config.name,
+                                    categoryData['name'],
                                     style: TextStyle(
                                       color: isSelected
                                           ? Colors.white
@@ -1780,7 +1821,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                _categoryConfigs[_selectedCategory]?.icon ?? Icons.category,
+                _selectedCategory != null
+                    ? _getCategoryDataByName(_selectedCategory!)['icon']
+                    : Icons.category,
                 size: 64,
                 color: Colors.grey[400],
               ),
@@ -1822,7 +1865,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
   }
 
   Widget _buildTicketCard(TicketType ticketType) {
-    final config = _categoryConfigs[_selectedCategory]!;
+    final categoryData = _getCategoryDataByName(_selectedCategory!);
 
     return Material(
       elevation: 3,
@@ -1840,18 +1883,18 @@ class _PosSystemPageState extends State<PosSystemPage> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                config.color.withOpacity(0.1),
-                config.color.withOpacity(0.05),
+                categoryData['color'].withOpacity(0.1),
+                categoryData['color'].withOpacity(0.05),
               ],
             ),
-            border: Border.all(color: config.color.withOpacity(0.3)),
+            border: Border.all(color: categoryData['color'].withOpacity(0.3)),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                config.icon,
-                color: config.color,
+                categoryData['icon'],
+                color: categoryData['color'],
                 size: 24,
               ), // Reduziert von 32 auf 24
               const SizedBox(height: 4), // Reduziert von 8 auf 4
@@ -1869,7 +1912,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
               Text(
                 '${ticketType.defaultPrice.toStringAsFixed(2)} €',
                 style: TextStyle(
-                  color: config.color,
+                  color: categoryData['color'],
                   fontWeight: FontWeight.bold,
                   fontSize: 13, // Reduziert von 16 auf 13
                 ),
@@ -1882,7 +1925,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
   }
 
   Widget _buildProductCard(Product product) {
-    final config = _categoryConfigs[_selectedCategory]!;
+    final categoryData = _getCategoryDataByName(_selectedCategory!);
 
     return Material(
       elevation: 3,
@@ -1900,18 +1943,18 @@ class _PosSystemPageState extends State<PosSystemPage> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                config.color.withOpacity(0.1),
-                config.color.withOpacity(0.05),
+                categoryData['color'].withOpacity(0.1),
+                categoryData['color'].withOpacity(0.05),
               ],
             ),
-            border: Border.all(color: config.color.withOpacity(0.3)),
+            border: Border.all(color: categoryData['color'].withOpacity(0.3)),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                config.icon,
-                color: config.color,
+                categoryData['icon'],
+                color: categoryData['color'],
                 size: 24,
               ), // Reduziert von 32 auf 24
               const SizedBox(height: 4), // Reduziert von 8 auf 4
@@ -1929,7 +1972,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
               Text(
                 '${product.price.toStringAsFixed(2)} €',
                 style: TextStyle(
-                  color: config.color,
+                  color: categoryData['color'],
                   fontWeight: FontWeight.bold,
                   fontSize: 13, // Reduziert von 16 auf 13
                 ),
