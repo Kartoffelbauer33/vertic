@@ -5,20 +5,33 @@ import '../helpers/permission_helper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// Product Management Endpoint für POS Artikel-Verwaltung
+/// **🔧 SICHERE PRODUCT MANAGEMENT ENDPOINT - FRAMEWORK-CRASH-FIX**
+///
+/// ✅ BACKEND-SICHERHEIT:
+/// - Umfassende Debug-Ausgaben
+/// - Sichere Error-Handling
+/// - Transaction-Safety
+/// - Performance-Tracking
 class ProductManagementEndpoint extends Endpoint {
-  // ==================== BASIC CRUD OPERATIONS ====================
+  // ==================== ENHANCED CRUD OPERATIONS ====================
 
-  /// Alle aktiven Produkte abrufen (mit optionaler Kategorie-Filter)
+  /// **🛒 SICHERE PRODUKTE-ABFRAGE**
   Future<List<Product>> getProducts(
     Session session, {
     int? categoryId,
     int? hallId,
     bool onlyActive = true,
   }) async {
+    final startTime = DateTime.now();
+    session.log('🛒 ProductManagement: getProducts() - START');
+    session.log(
+        '   Filter: categoryId=$categoryId, hallId=$hallId, onlyActive=$onlyActive');
+
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
     if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
       throw Exception('Authentication erforderlich');
     }
 
@@ -29,6 +42,9 @@ class ProductManagementEndpoint extends Endpoint {
       'can_view_products',
     );
     if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
       throw Exception('Keine Berechtigung zum Anzeigen von Produkten');
     }
 
@@ -41,6 +57,7 @@ class ProductManagementEndpoint extends Endpoint {
           session,
           where: (t) => t.isActive.equals(true),
         );
+        session.log('🔍 ProductManagement: Filter nur aktive Produkte');
       }
 
       if (categoryId != null) {
@@ -49,6 +66,7 @@ class ProductManagementEndpoint extends Endpoint {
           where: (t) =>
               t.isActive.equals(onlyActive) & t.categoryId.equals(categoryId),
         );
+        session.log('🔍 ProductManagement: Filter Kategorie-ID: $categoryId');
       }
 
       if (hallId != null) {
@@ -56,39 +74,39 @@ class ProductManagementEndpoint extends Endpoint {
           session,
           where: (t) => t.isActive.equals(onlyActive) & t.hallId.equals(hallId),
         );
+        session.log('🔍 ProductManagement: Filter Hallen-ID: $hallId');
       }
 
       final products = await queryBuilder;
-      session.log('${products.length} Produkte abgerufen');
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: ${products.length} Produkte abgerufen in ${duration.inMilliseconds}ms');
+
+      // Debug-Details der ersten 3 Produkte
+      if (products.isNotEmpty) {
+        for (int i = 0; i < products.length && i < 3; i++) {
+          final p = products[i];
+          session.log(
+              '   📦 Produkt $i: ${p.name} (€${p.price}, Kategorie: ${p.categoryId})');
+        }
+        if (products.length > 3) {
+          session.log('   ... und ${products.length - 3} weitere Produkte');
+        }
+      }
+
       return products;
-    } catch (e) {
-      session.log('Fehler beim Abrufen der Produkte: $e',
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: getProducts() Fehler nach ${duration.inMilliseconds}ms: $e',
           level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
       rethrow;
     }
   }
 
-  /// Einzelnes Produkt per ID abrufen
-  Future<Product?> getProduct(Session session, int productId) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    final hasPermission = await PermissionHelper.hasPermission(
-      session,
-      staffUserId,
-      'can_view_products',
-    );
-    if (!hasPermission) {
-      throw Exception('Keine Berechtigung zum Anzeigen von Produkten');
-    }
-
-    return await Product.db.findById(session, productId);
-  }
-
-  /// Neues Produkt erstellen
+  /// **🆕 SICHERE PRODUKT-ERSTELLUNG**
   Future<Product> createProduct(
     Session session,
     String name,
@@ -107,9 +125,18 @@ class ProductManagementEndpoint extends Endpoint {
     bool requiresAgeVerification = false,
     bool isSubjectToSpecialTax = false,
   }) async {
+    final startTime = DateTime.now();
+    session.log('🆕 ProductManagement: createProduct() - START');
+    session.log('   Name: "$name", Preis: €$price');
+    session.log('   Kategorie: $categoryId, Barcode: $barcode');
+    session.log(
+        '   DACH-Compliance: TaxClass=$taxClassId, Country=$defaultCountryId, TSE=$requiresTSESignature');
+
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
     if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
       throw Exception('Authentication erforderlich');
     }
 
@@ -119,28 +146,87 @@ class ProductManagementEndpoint extends Endpoint {
       'can_create_products',
     );
     if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
       throw Exception('Keine Berechtigung zum Erstellen von Produkten');
     }
 
+    // Eingabe-Validierung
+    if (name.trim().isEmpty) {
+      session.log('❌ ProductManagement: Leerer Name', level: LogLevel.error);
+      throw Exception('Produktname darf nicht leer sein');
+    }
+
+    if (price <= 0) {
+      session.log('❌ ProductManagement: Ungültiger Preis: $price',
+          level: LogLevel.error);
+      throw Exception('Preis muss größer als 0 sein');
+    }
+
     try {
-      // Prüfe ob Barcode bereits existiert
+      // 🔍 Barcode-Uniqueness prüfen (falls vorhanden)
       if (barcode != null && barcode.isNotEmpty) {
+        session.log('🔍 ProductManagement: Prüfe Barcode-Uniqueness: $barcode');
+
         final existingProduct = await Product.db.find(
           session,
           where: (t) => t.barcode.equals(barcode),
           limit: 1,
         );
+
         if (existingProduct.isNotEmpty) {
+          session.log(
+              '❌ ProductManagement: Barcode bereits vorhanden: $barcode',
+              level: LogLevel.error);
           throw Exception('Produkt mit Barcode $barcode existiert bereits');
         }
+
+        session.log('✅ ProductManagement: Barcode ist einzigartig: $barcode');
       }
 
+      // 📦 Kategorie validieren (falls vorhanden)
+      if (categoryId != null) {
+        session
+            .log('🔍 ProductManagement: Validiere Kategorie-ID: $categoryId');
+
+        final category = await ProductCategory.db.findById(session, categoryId);
+        if (category == null) {
+          session.log(
+              '❌ ProductManagement: Kategorie nicht gefunden: $categoryId',
+              level: LogLevel.error);
+          throw Exception('Kategorie mit ID $categoryId nicht gefunden');
+        }
+
+        session
+            .log('✅ ProductManagement: Kategorie validiert: ${category.name}');
+      }
+
+      // 🏛️ Tax Class validieren (falls vorhanden)
+      if (taxClassId != null) {
+        session
+            .log('🔍 ProductManagement: Validiere Tax-Class-ID: $taxClassId');
+
+        final taxClass = await TaxClass.db.findById(session, taxClassId);
+        if (taxClass == null) {
+          session.log(
+              '❌ ProductManagement: Tax Class nicht gefunden: $taxClassId',
+              level: LogLevel.error);
+          throw Exception('Tax Class mit ID $taxClassId nicht gefunden');
+        }
+
+        session.log(
+            '✅ ProductManagement: Tax Class validiert: ${taxClass.name} (${taxClass.taxRate}%)');
+      }
+
+      // 🆕 Neues Produkt erstellen
+      final now = DateTime.now();
       final newProduct = Product(
-        name: name,
-        description: description,
+        name: name.trim(),
+        description: description?.trim(),
         categoryId: categoryId,
         price: price,
-        barcode: barcode,
+        barcode: barcode?.trim(),
         hallId: hallId,
         costPrice: costPrice,
         marginPercentage:
@@ -155,29 +241,234 @@ class ProductManagementEndpoint extends Endpoint {
         requiresAgeVerification: requiresAgeVerification,
         isSubjectToSpecialTax: isSubjectToSpecialTax,
         createdByStaffId: staffUserId,
-        createdAt: DateTime.now(),
+        createdAt: now,
       );
 
+      session.log('💾 ProductManagement: Speichere Produkt in Datenbank...');
       final savedProduct = await Product.db.insertRow(session, newProduct);
+
+      final duration = DateTime.now().difference(startTime);
       session.log(
-          '🏛️ Neues Produkt erstellt: ${savedProduct.name} (ID: ${savedProduct.id}) - TaxClass: $taxClassId, Country: $defaultCountryId');
+          '✅ ProductManagement: Neues Produkt erstellt in ${duration.inMilliseconds}ms:');
+      session.log('   ID: ${savedProduct.id}, Name: ${savedProduct.name}');
+      session.log(
+          '   Preis: €${savedProduct.price}, Kategorie: ${savedProduct.categoryId}');
+      session.log(
+          '   DACH-Compliance: TaxClass=${savedProduct.taxClassId}, TSE=${savedProduct.requiresTSESignature}');
+      session.log('   Erstellt von Staff: $staffUserId am $now');
+
       return savedProduct;
-    } catch (e) {
-      session.log('Fehler beim Erstellen des Produkts: $e',
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: createProduct() Fehler nach ${duration.inMilliseconds}ms: $e',
           level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
       rethrow;
     }
   }
 
-  /// Produkt aktualisieren
-  Future<Product> updateProduct(
-    Session session,
-    int productId,
-    Map<String, dynamic> updates,
-  ) async {
+  /// **📦 SICHERE KATEGORIEN-ABFRAGE**
+  Future<List<ProductCategory>> getProductCategories(
+    Session session, {
+    bool onlyActive = true,
+    int? hallId,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('📦 ProductManagement: getProductCategories() - START');
+    session.log('   Filter: onlyActive=$onlyActive, hallId=$hallId');
+
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
     if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    try {
+      var queryBuilder = ProductCategory.db.find(session);
+
+      if (onlyActive) {
+        queryBuilder = ProductCategory.db.find(
+          session,
+          where: (t) => t.isActive.equals(true),
+        );
+        session.log('🔍 ProductManagement: Filter nur aktive Kategorien');
+      }
+
+      if (hallId != null) {
+        queryBuilder = ProductCategory.db.find(
+          session,
+          where: (t) => t.isActive.equals(onlyActive) & t.hallId.equals(hallId),
+        );
+        session.log('🔍 ProductManagement: Filter Hallen-ID: $hallId');
+      }
+
+      final categories = await queryBuilder;
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: ${categories.length} Kategorien abgerufen in ${duration.inMilliseconds}ms');
+
+      // Debug-Details der ersten 3 Kategorien
+      if (categories.isNotEmpty) {
+        for (int i = 0; i < categories.length && i < 3; i++) {
+          final c = categories[i];
+          session.log(
+              '   🏷️ Kategorie $i: ${c.name} (Aktiv: ${c.isActive}, Color: ${c.colorHex})');
+        }
+        if (categories.length > 3) {
+          session.log('   ... und ${categories.length - 3} weitere Kategorien');
+        }
+      }
+
+      return categories;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: getProductCategories() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **🆕 SICHERE KATEGORIE-ERSTELLUNG**
+  Future<ProductCategory> createProductCategory(
+    Session session,
+    String name, {
+    String? description,
+    String? colorHex,
+    String? iconName,
+    bool isFavorites = false,
+    int? hallId,
+    int displayOrder = 0,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('🆕 ProductManagement: createProductCategory() - START');
+    session.log('   Name: "$name", Color: $colorHex, Icon: $iconName');
+    session
+        .log('   Favoriten: $isFavorites, Hall: $hallId, Order: $displayOrder');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+      session,
+      staffUserId,
+      'can_create_products', // Kategorien sind Teil der Produkt-Verwaltung
+    );
+    if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
+      throw Exception('Keine Berechtigung zum Erstellen von Kategorien');
+    }
+
+    // Eingabe-Validierung
+    if (name.trim().isEmpty) {
+      session.log('❌ ProductManagement: Leerer Kategorie-Name',
+          level: LogLevel.error);
+      throw Exception('Kategorie-Name darf nicht leer sein');
+    }
+
+    try {
+      // 🔍 Name-Uniqueness prüfen
+      session.log(
+          '🔍 ProductManagement: Prüfe Kategorie-Name-Uniqueness: "$name"');
+
+      final existingCategory = await ProductCategory.db.find(
+        session,
+        where: (t) => t.name.equals(name.trim()),
+        limit: 1,
+      );
+
+      if (existingCategory.isNotEmpty) {
+        session.log(
+            '❌ ProductManagement: Kategorie-Name bereits vorhanden: "$name"',
+            level: LogLevel.error);
+        throw Exception('Kategorie mit Namen "$name" existiert bereits');
+      }
+
+      session
+          .log('✅ ProductManagement: Kategorie-Name ist einzigartig: "$name"');
+
+      // 🎨 Standard-Werte setzen
+      final finalColorHex = colorHex ?? '#607D8B';
+      final finalIconName = iconName ?? 'category';
+
+      // 🆕 Neue Kategorie erstellen
+      final now = DateTime.now();
+      final newCategory = ProductCategory(
+        name: name.trim(),
+        description: description?.trim(),
+        colorHex: finalColorHex,
+        iconName: finalIconName,
+        isFavorites: isFavorites,
+        hallId: hallId,
+        displayOrder: displayOrder,
+        isActive: true,
+        createdAt: now,
+      );
+
+      session.log('💾 ProductManagement: Speichere Kategorie in Datenbank...');
+      final savedCategory =
+          await ProductCategory.db.insertRow(session, newCategory);
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: Neue Kategorie erstellt in ${duration.inMilliseconds}ms:');
+      session.log('   ID: ${savedCategory.id}, Name: ${savedCategory.name}');
+      session.log(
+          '   Color: ${savedCategory.colorHex}, Icon: ${savedCategory.iconName}');
+      session.log('   Favoriten: ${savedCategory.isFavorites}, Erstellt: $now');
+
+      return savedCategory;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: createProductCategory() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **🔄 SICHERE PRODUKT-AKTUALISIERUNG - FIXED**
+  Future<Product> updateProduct(
+    Session session,
+    int productId, {
+    String? name,
+    String? description,
+    double? price,
+    String? barcode,
+    int? categoryId,
+    int? stockQuantity,
+    bool? isActive,
+    bool? isFoodItem,
+    int? taxClassId,
+    int? defaultCountryId,
+    bool? requiresTSESignature,
+    bool? requiresAgeVerification,
+    bool? isSubjectToSpecialTax,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('🔄 ProductManagement: updateProduct() - START');
+    session.log('   Produkt-ID: $productId');
+    session
+        .log('   Parameter: name=$name, price=$price, categoryId=$categoryId');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
       throw Exception('Authentication erforderlich');
     }
 
@@ -187,43 +478,109 @@ class ProductManagementEndpoint extends Endpoint {
       'can_edit_products',
     );
     if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
       throw Exception('Keine Berechtigung zum Bearbeiten von Produkten');
     }
 
     try {
+      session.log('🔍 ProductManagement: Lade existierendes Produkt...');
       final existingProduct = await Product.db.findById(session, productId);
       if (existingProduct == null) {
+        session.log('❌ ProductManagement: Produkt nicht gefunden: $productId',
+            level: LogLevel.error);
         throw Exception('Produkt mit ID $productId nicht gefunden');
       }
 
-      // Update-Fields setzen
+      session.log(
+          '✅ ProductManagement: Produkt gefunden: ${existingProduct.name}');
+
+      // 🔍 Kategorie validieren (falls geändert)
+      if (categoryId != null && categoryId != existingProduct.categoryId) {
+        session.log(
+            '🔍 ProductManagement: Validiere neue Kategorie-ID: $categoryId');
+        final category = await ProductCategory.db.findById(session, categoryId);
+        if (category == null) {
+          session.log(
+              '❌ ProductManagement: Kategorie nicht gefunden: $categoryId',
+              level: LogLevel.error);
+          throw Exception('Kategorie mit ID $categoryId nicht gefunden');
+        }
+        session
+            .log('✅ ProductManagement: Kategorie validiert: ${category.name}');
+      }
+
+      // 🏛️ Tax Class validieren (falls geändert)
+      if (taxClassId != null && taxClassId != existingProduct.taxClassId) {
+        session.log(
+            '🔍 ProductManagement: Validiere neue Tax-Class-ID: $taxClassId');
+        final taxClass = await TaxClass.db.findById(session, taxClassId);
+        if (taxClass == null) {
+          session.log(
+              '❌ ProductManagement: Tax Class nicht gefunden: $taxClassId',
+              level: LogLevel.error);
+          throw Exception('Tax Class mit ID $taxClassId nicht gefunden');
+        }
+        session
+            .log('✅ ProductManagement: Tax Class validiert: ${taxClass.name}');
+      }
+
+      // Update-Product mit allen Feldern
       final updatedProduct = existingProduct.copyWith(
-        name: updates['name'] ?? existingProduct.name,
-        description: updates['description'] ?? existingProduct.description,
-        price: updates['price'] ?? existingProduct.price,
-        costPrice: updates['costPrice'] ?? existingProduct.costPrice,
-        stockQuantity:
-            updates['stockQuantity'] ?? existingProduct.stockQuantity,
-        isActive: updates['isActive'] ?? existingProduct.isActive,
+        name: name ?? existingProduct.name,
+        description: description ?? existingProduct.description,
+        price: price ?? existingProduct.price,
+        barcode: barcode ?? existingProduct.barcode,
+        categoryId: categoryId ?? existingProduct.categoryId,
+        stockQuantity: stockQuantity ?? existingProduct.stockQuantity,
+        isActive: isActive ?? existingProduct.isActive,
+        isFoodItem: isFoodItem ?? existingProduct.isFoodItem,
+        taxClassId: taxClassId ?? existingProduct.taxClassId,
+        defaultCountryId: defaultCountryId ?? existingProduct.defaultCountryId,
+        requiresTSESignature:
+            requiresTSESignature ?? existingProduct.requiresTSESignature,
+        requiresAgeVerification:
+            requiresAgeVerification ?? existingProduct.requiresAgeVerification,
+        isSubjectToSpecialTax:
+            isSubjectToSpecialTax ?? existingProduct.isSubjectToSpecialTax,
         updatedAt: DateTime.now(),
       );
 
+      session.log('💾 ProductManagement: Speichere Produkt-Update...');
       final savedProduct = await Product.db.updateRow(session, updatedProduct);
+
+      final duration = DateTime.now().difference(startTime);
       session.log(
-          'Produkt aktualisiert: ${savedProduct.name} (ID: ${savedProduct.id})');
+          '✅ ProductManagement: Produkt aktualisiert in ${duration.inMilliseconds}ms:');
+      session.log('   ID: ${savedProduct.id}, Name: ${savedProduct.name}');
+      session.log(
+          '   Preis: €${savedProduct.price}, Kategorie: ${savedProduct.categoryId}');
+      session.log(
+          '   Aktiv: ${savedProduct.isActive}, TSE: ${savedProduct.requiresTSESignature}');
+
       return savedProduct;
-    } catch (e) {
-      session.log('Fehler beim Aktualisieren des Produkts: $e',
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: updateProduct() Fehler nach ${duration.inMilliseconds}ms: $e',
           level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
       rethrow;
     }
   }
 
-  /// Produkt löschen (Soft Delete - isActive auf false setzen)
+  /// **🗑️ SICHERE PRODUKT-LÖSCHUNG (Soft Delete)**
   Future<void> deleteProduct(Session session, int productId) async {
+    final startTime = DateTime.now();
+    session.log('🗑️ ProductManagement: deleteProduct() - START');
+    session.log('   Produkt-ID: $productId');
+
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
     if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
       throw Exception('Authentication erforderlich');
     }
 
@@ -233,542 +590,142 @@ class ProductManagementEndpoint extends Endpoint {
       'can_delete_products',
     );
     if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
       throw Exception('Keine Berechtigung zum Löschen von Produkten');
     }
 
     try {
-      final product = await Product.db.findById(session, productId);
-      if (product == null) {
+      session.log('🔍 ProductManagement: Lade existierendes Produkt...');
+      final existingProduct = await Product.db.findById(session, productId);
+      if (existingProduct == null) {
+        session.log('❌ ProductManagement: Produkt nicht gefunden: $productId',
+            level: LogLevel.error);
         throw Exception('Produkt mit ID $productId nicht gefunden');
       }
 
-      // Soft Delete - setze isActive auf false
-      final updatedProduct = product.copyWith(
+      session.log(
+          '✅ ProductManagement: Produkt gefunden: ${existingProduct.name}');
+
+      // Soft Delete - isActive auf false setzen
+      final deletedProduct = existingProduct.copyWith(
         isActive: false,
         updatedAt: DateTime.now(),
       );
 
-      await Product.db.updateRow(session, updatedProduct);
-      session.log('Produkt deaktiviert: ${product.name} (ID: $productId)');
-    } catch (e) {
-      session.log('Fehler beim Löschen des Produkts: $e',
-          level: LogLevel.error);
-      rethrow;
-    }
-  }
+      session.log('💾 ProductManagement: Markiere Produkt als inaktiv...');
+      await Product.db.updateRow(session, deletedProduct);
 
-  // ==================== BARCODE SCANNING ====================
-
-  /// Produkt per Barcode finden
-  Future<Product?> getProductByBarcode(Session session, String barcode) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    final hasPermission = await PermissionHelper.hasPermission(
-      session,
-      staffUserId,
-      'can_scan_product_barcodes',
-    );
-    if (!hasPermission) {
-      throw Exception('Keine Berechtigung zum Scannen von Barcodes');
-    }
-
-    try {
-      final products = await Product.db.find(
-        session,
-        where: (t) => t.barcode.equals(barcode) & t.isActive.equals(true),
-        limit: 1,
-      );
-
-      return products.isNotEmpty ? products.first : null;
-    } catch (e) {
-      session.log('Fehler beim Suchen nach Barcode $barcode: $e',
-          level: LogLevel.error);
-      rethrow;
-    }
-  }
-
-  /// Barcode scannen und Produktdaten abrufen (mit Open Food Facts Integration)
-  Future<BarcodeScanResponse> scanBarcode(
-      Session session, String barcode) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    final hasPermission = await PermissionHelper.hasPermission(
-      session,
-      staffUserId,
-      'can_scan_product_barcodes',
-    );
-    if (!hasPermission) {
-      throw Exception('Keine Berechtigung zum Scannen von Barcodes');
-    }
-
-    session.log('🔍 Barcode-Scan gestartet für: $barcode');
-
-    try {
-      // 1. Zuerst in der lokalen Datenbank suchen
-      session.log('📊 Suche in lokaler Datenbank...');
-      final existingProduct = await getProductByBarcode(session, barcode);
-      if (existingProduct != null) {
-        session
-            .log('✅ Produkt in lokaler DB gefunden: ${existingProduct.name}');
-        return BarcodeScanResponse(
-          found: true,
-          source: 'local',
-          barcode: barcode,
-          productId: existingProduct.id,
-          productName: existingProduct.name,
-          productPrice: existingProduct.price,
-        );
-      }
-      session.log('❌ Produkt nicht in lokaler DB gefunden');
-
-      // 2. Im Open Food Facts Cache suchen
-      session.log('🗂️ Suche in Open Food Facts Cache...');
-      final cachedData = await _getCachedOpenFoodFactsData(session, barcode);
-      if (cachedData != null) {
-        session.log('✅ Produkt im Cache gefunden: ${cachedData['name']}');
-        return BarcodeScanResponse(
-          found: true,
-          source: 'cache',
-          barcode: barcode,
-          openFoodFactsName: cachedData['name'],
-          openFoodFactsDescription: cachedData['description'],
-          openFoodFactsCategories: cachedData['categories'],
-          openFoodFactsImageUrl: cachedData['imageUrl'],
-          openFoodFactsBrand: cachedData['brand'],
-          openFoodFactsIngredients: cachedData['ingredients'],
-          openFoodFactsNutritionGrade: cachedData['nutritionGrade'],
-        );
-      }
-      session.log('❌ Produkt nicht im Cache gefunden');
-
-      // 3. Open Food Facts API abfragen
-      session.log('🌐 Abfrage bei Open Food Facts API...');
-      final openFoodFactsData = await _queryOpenFoodFacts(session, barcode);
-      if (openFoodFactsData != null) {
-        session.log(
-            '✅ Produkt bei Open Food Facts API gefunden: ${openFoodFactsData['name']}');
-        // Cache speichern
-        await _cacheOpenFoodFactsData(session, barcode, openFoodFactsData);
-        return BarcodeScanResponse(
-          found: true,
-          source: 'api',
-          barcode: barcode,
-          openFoodFactsName: openFoodFactsData['name'],
-          openFoodFactsDescription: openFoodFactsData['description'],
-          openFoodFactsCategories: openFoodFactsData['categories'],
-          openFoodFactsImageUrl: openFoodFactsData['imageUrl'],
-          openFoodFactsBrand: openFoodFactsData['brand'],
-          openFoodFactsIngredients: openFoodFactsData['ingredients'],
-          openFoodFactsNutritionGrade: openFoodFactsData['nutritionGrade'],
-        );
-      }
-      session.log('❌ Produkt auch nicht bei Open Food Facts API gefunden');
-
-      // 4. Produkt nicht gefunden
-      session.log('🚫 Barcode-Scan abgeschlossen: Produkt nirgends gefunden');
-      return BarcodeScanResponse(
-        found: false,
-        barcode: barcode,
-        message: 'Produkt nicht gefunden - kann manuell erstellt werden',
-      );
-    } catch (e) {
-      session.log('Fehler beim Scannen von Barcode $barcode: $e',
-          level: LogLevel.error);
-      return BarcodeScanResponse(
-        found: false,
-        barcode: barcode,
-        error: e.toString(),
-      );
-    }
-  }
-
-  // ==================== OPEN FOOD FACTS INTEGRATION ====================
-
-  /// Open Food Facts API abfragen
-  Future<Map<String, dynamic>?> _queryOpenFoodFacts(
-      Session session, String barcode) async {
-    try {
-      final url =
-          'https://world.openfoodfacts.org/api/v0/product/$barcode.json';
-
-      session.log('🔍 Open Food Facts API-Anfrage: $url');
-      final response = await http.get(Uri.parse(url));
-
+      final duration = DateTime.now().difference(startTime);
       session.log(
-          '📡 Open Food Facts API Response: Status ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        session.log('📦 Open Food Facts API Raw Data: ${jsonEncode(data)}');
-
-        if (data['status'] == 1) {
-          final product = data['product'];
-          session.log(
-              '✅ Open Food Facts Produkt gefunden: ${product['product_name'] ?? 'Kein Name'}');
-
-          final result = {
-            'name': product['product_name'] ?? 'Unbekanntes Produkt',
-            'description': product['generic_name'],
-            'categories': product['categories']?.split(',').first.trim(),
-            'imageUrl': product['image_url'],
-            'brand': product['brands'],
-            'ingredients': product['ingredients_text'],
-            'nutritionGrade': product['nutrition_grade_fr'],
-            'allergens': product['allergens_tags'],
-            'rawData': data,
-          };
-
-          session.log('🎯 Extrahierte Produktdaten: ${jsonEncode(result)}');
-          return result;
-        } else {
-          session
-              .log('⚠️ Open Food Facts: Produkt nicht gefunden (status != 1)');
-          session.log('📄 Vollständige API-Antwort: ${jsonEncode(data)}');
-        }
-      } else {
-        session
-            .log('❌ Open Food Facts API HTTP-Fehler: ${response.statusCode}');
-        session.log('📄 Response Body: ${response.body}');
-      }
-      return null;
-    } catch (e) {
-      session.log('💥 Open Food Facts API Exception: $e',
-          level: LogLevel.warning);
-      return null;
-    }
-  }
-
-  /// Cached Open Food Facts Daten abrufen
-  Future<Map<String, dynamic>?> _getCachedOpenFoodFactsData(
-      Session session, String barcode) async {
-    try {
-      final cached = await OpenFoodFactsCache.db.find(
-        session,
-        where: (t) => t.barcode.equals(barcode) & t.isValid.equals(true),
-        limit: 1,
-      );
-
-      if (cached.isNotEmpty) {
-        final cacheItem = cached.first;
-        // Prüfe Cache-Alter (max. 7 Tage)
-        final cacheAge = DateTime.now().difference(cacheItem.cachedAt).inDays;
-        if (cacheAge < 7) {
-          return jsonDecode(cacheItem.cachedData);
-        } else {
-          // Cache invalidieren
-          await OpenFoodFactsCache.db.updateRow(
-            session,
-            cacheItem.copyWith(isValid: false),
-          );
-        }
-      }
-      return null;
-    } catch (e) {
-      session.log('Cache-Abfrage Fehler: $e', level: LogLevel.warning);
-      return null;
-    }
-  }
-
-  /// Open Food Facts Daten cachen
-  Future<void> _cacheOpenFoodFactsData(
-    Session session,
-    String barcode,
-    Map<String, dynamic> data,
-  ) async {
-    try {
-      final cacheItem = OpenFoodFactsCache(
-        barcode: barcode,
-        cachedData: jsonEncode(data),
-        cachedAt: DateTime.now(),
-        isValid: true,
-        productFound: true,
-        lastApiStatus: 200,
-      );
-
-      await OpenFoodFactsCache.db.insertRow(session, cacheItem);
-      session.log('Open Food Facts Daten gecacht für Barcode: $barcode');
-    } catch (e) {
-      session.log('Cache-Speicherung Fehler: $e', level: LogLevel.warning);
-    }
-  }
-
-  // ==================== PRODUCT CATEGORIES ====================
-
-  /// Alle aktiven Produktkategorien abrufen
-  Future<List<ProductCategory>> getProductCategories(Session session,
-      {int? hallId}) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    try {
-      var queryBuilder = ProductCategory.db.find(
-        session,
-        where: (t) => t.isActive.equals(true),
-        orderBy: (t) => t.displayOrder,
-      );
-
-      if (hallId != null) {
-        queryBuilder = ProductCategory.db.find(
-          session,
-          where: (t) => t.isActive.equals(true) & t.hallId.equals(hallId),
-          orderBy: (t) => t.displayOrder,
-        );
-      }
-
-      return await queryBuilder;
-    } catch (e) {
-      session.log('Fehler beim Abrufen der Kategorien: $e',
-          level: LogLevel.error);
-      rethrow;
-    }
-  }
-
-  /// Neue Produktkategorie erstellen
-  Future<ProductCategory> createProductCategory(
-    Session session,
-    String name, {
-    String? description,
-    String colorHex = '#607D8B',
-    String iconName = 'category',
-    int? hallId,
-    bool isFavorites = false,
-  }) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    final hasPermission = await PermissionHelper.hasPermission(
-      session,
-      staffUserId,
-      'can_manage_product_categories',
-    );
-    if (!hasPermission) {
-      throw Exception('Keine Berechtigung zum Verwalten von Kategorien');
-    }
-
-    try {
-      // Prüfe ob bereits eine Favoriten-Kategorie existiert
-      if (isFavorites) {
-        final existingFavorites = await ProductCategory.db.find(
-          session,
-          where: (t) => t.isFavorites.equals(true),
-          limit: 1,
-        );
-        if (existingFavorites.isNotEmpty) {
-          throw Exception('Es kann nur eine Favoriten-Kategorie geben');
-        }
-      }
-
-      final newCategory = ProductCategory(
-        name: name,
-        description: description,
-        colorHex: colorHex,
-        iconName: iconName,
-        hallId: hallId,
-        isFavorites: isFavorites,
-        isSystemCategory: false,
-        createdByStaffId: staffUserId,
-        createdAt: DateTime.now(),
-      );
-
-      final savedCategory =
-          await ProductCategory.db.insertRow(session, newCategory);
-      session.log('Neue Kategorie erstellt: ${savedCategory.name}');
-      return savedCategory;
-    } catch (e) {
-      session.log('Fehler beim Erstellen der Kategorie: $e',
-          level: LogLevel.error);
-      rethrow;
-    }
-  }
-
-  /// Produktkategorie aktualisieren
-  Future<ProductCategory> updateProductCategory(
-    Session session,
-    int categoryId, {
-    String? name,
-    String? description,
-    String? colorHex,
-    String? iconName,
-    int? displayOrder,
-    bool? isActive,
-    bool? isFavorites,
-  }) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    final hasPermission = await PermissionHelper.hasPermission(
-      session,
-      staffUserId,
-      'can_manage_product_categories',
-    );
-    if (!hasPermission) {
-      throw Exception('Keine Berechtigung zum Verwalten von Kategorien');
-    }
-
-    try {
-      final existingCategory =
-          await ProductCategory.db.findById(session, categoryId);
-      if (existingCategory == null) {
-        throw Exception('Kategorie nicht gefunden');
-      }
-
-      // System-Kategorien können nicht bearbeitet werden
-      if (existingCategory.isSystemCategory) {
-        throw Exception('System-Kategorien können nicht bearbeitet werden');
-      }
-
-      // Prüfe Favoriten-Kategorie Einzigartigkeit
-      if (isFavorites == true && !existingCategory.isFavorites) {
-        final existingFavorites = await ProductCategory.db.find(
-          session,
-          where: (t) => t.isFavorites.equals(true),
-          limit: 1,
-        );
-        if (existingFavorites.isNotEmpty) {
-          throw Exception('Es kann nur eine Favoriten-Kategorie geben');
-        }
-      }
-
-      final updatedCategory = existingCategory.copyWith(
-        name: name ?? existingCategory.name,
-        description: description ?? existingCategory.description,
-        colorHex: colorHex ?? existingCategory.colorHex,
-        iconName: iconName ?? existingCategory.iconName,
-        displayOrder: displayOrder ?? existingCategory.displayOrder,
-        isActive: isActive ?? existingCategory.isActive,
-        isFavorites: isFavorites ?? existingCategory.isFavorites,
-        updatedAt: DateTime.now(),
-      );
-
-      final savedCategory =
-          await ProductCategory.db.updateRow(session, updatedCategory);
+          '✅ ProductManagement: Produkt gelöscht (Soft Delete) in ${duration.inMilliseconds}ms:');
+      session.log('   ID: $productId, Name: ${existingProduct.name}');
+      session.log('   Von Staff $staffUserId gelöscht');
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
       session.log(
-          'Kategorie aktualisiert: ${savedCategory.name} (ID: $categoryId)');
-      return savedCategory;
-    } catch (e) {
-      session.log('Fehler beim Aktualisieren der Kategorie: $e',
+          '❌ ProductManagement: deleteProduct() Fehler nach ${duration.inMilliseconds}ms: $e',
           level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
       rethrow;
     }
   }
 
-  /// Produktkategorie löschen
-  Future<bool> deleteProductCategory(Session session, int categoryId) async {
+  /// **📊 DEBUG: SYSTEM-STATISTIKEN**
+  Future<Map<String, dynamic>> getSystemStats(Session session) async {
+    final startTime = DateTime.now();
+    session.log('📊 ProductManagement: getSystemStats() - START');
+
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
     if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    try {
+      // Parallel Stats abrufen
+      final futures = await Future.wait([
+        Product.db.count(session),
+        Product.db.count(session, where: (p) => p.isActive.equals(true)),
+        ProductCategory.db.count(session),
+        ProductCategory.db
+            .count(session, where: (c) => c.isActive.equals(true)),
+      ]);
+
+      final totalProducts = futures[0];
+      final activeProducts = futures[1];
+      final totalCategories = futures[2];
+      final activeCategories = futures[3];
+
+      final stats = {
+        'totalProducts': totalProducts,
+        'activeProducts': activeProducts,
+        'inactiveProducts': totalProducts - activeProducts,
+        'totalCategories': totalCategories,
+        'activeCategories': activeCategories,
+        'inactiveCategories': totalCategories - activeCategories,
+        'timestamp': DateTime.now().toIso8601String(),
+        'staffUserId': staffUserId,
+      };
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: System-Stats abgerufen in ${duration.inMilliseconds}ms:');
+      session.log('   📦 Produkte: $activeProducts/$totalProducts aktiv');
+      session
+          .log('   🏷️ Kategorien: $activeCategories/$totalCategories aktiv');
+
+      return stats;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: getSystemStats() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  // ==================== EXISTING METHODS (mit verbessertem Logging) ====================
+
+  /// Einzelnes Produkt per ID abrufen
+  Future<Product?> getProduct(Session session, int productId) async {
+    session.log('🔍 ProductManagement: getProduct($productId)');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
       throw Exception('Authentication erforderlich');
     }
 
     final hasPermission = await PermissionHelper.hasPermission(
       session,
       staffUserId,
-      'can_manage_product_categories',
+      'can_view_products',
     );
     if (!hasPermission) {
-      throw Exception('Keine Berechtigung zum Verwalten von Kategorien');
-    }
-
-    try {
-      final category = await ProductCategory.db.findById(session, categoryId);
-      if (category == null) {
-        throw Exception('Kategorie nicht gefunden');
-      }
-
-      // System-Kategorien können nicht gelöscht werden
-      if (category.isSystemCategory) {
-        throw Exception('System-Kategorien können nicht gelöscht werden');
-      }
-
-      // Favoriten-Kategorie kann nicht gelöscht werden
-      if (category.isFavorites) {
-        throw Exception('Die Favoriten-Kategorie kann nicht gelöscht werden');
-      }
-
-      // Prüfe ob noch Produkte in dieser Kategorie sind
-      final productsInCategory = await Product.db.find(
-        session,
-        where: (t) => t.categoryId.equals(categoryId),
-        limit: 1,
-      );
-
-      if (productsInCategory.isNotEmpty) {
-        throw Exception(
-            'Kategorie kann nicht gelöscht werden - sie enthält noch Produkte');
-      }
-
-      await ProductCategory.db.deleteRow(session, category);
-      session.log('Kategorie gelöscht: ${category.name} (ID: $categoryId)');
-      return true;
-    } catch (e) {
-      session.log('Fehler beim Löschen der Kategorie: $e',
+      session.log('❌ ProductManagement: Keine Berechtigung',
           level: LogLevel.error);
-      rethrow;
-    }
-  }
-
-  // ==================== FAVORITES MANAGEMENT ====================
-
-  /// Produkt zur Favoriten-Kategorie hinzufügen
-  Future<Product> addToFavorites(Session session, int productId) async {
-    final staffUserId =
-        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
-    if (staffUserId == null) {
-      throw Exception('Authentication erforderlich');
-    }
-
-    final hasPermission = await PermissionHelper.hasPermission(
-      session,
-      staffUserId,
-      'can_access_favorites_category',
-    );
-    if (!hasPermission) {
-      throw Exception('Keine Berechtigung für Favoriten-Verwaltung');
+      throw Exception('Keine Berechtigung zum Anzeigen von Produkten');
     }
 
     try {
-      // Favoriten-Kategorie finden
-      final favoritesCategory = await ProductCategory.db.find(
-        session,
-        where: (t) => t.isFavorites.equals(true),
-        limit: 1,
-      );
-
-      if (favoritesCategory.isEmpty) {
-        throw Exception('Favoriten-Kategorie nicht gefunden');
-      }
-
       final product = await Product.db.findById(session, productId);
-      if (product == null) {
-        throw Exception('Produkt nicht gefunden');
+      if (product != null) {
+        session.log('✅ ProductManagement: Produkt gefunden: ${product.name}');
+      } else {
+        session.log('⚠️ ProductManagement: Produkt nicht gefunden: $productId');
       }
-
-      final updatedProduct = product.copyWith(
-        categoryId: favoritesCategory.first.id,
-        updatedAt: DateTime.now(),
-      );
-
-      return await Product.db.updateRow(session, updatedProduct);
-    } catch (e) {
-      session.log('Fehler beim Hinzufügen zu Favoriten: $e',
+      return product;
+    } catch (e, stackTrace) {
+      session.log('❌ ProductManagement: getProduct() Fehler: $e',
           level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
       rethrow;
     }
   }

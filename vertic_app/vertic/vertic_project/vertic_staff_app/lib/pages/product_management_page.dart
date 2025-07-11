@@ -137,7 +137,9 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
     try {
       final client = Provider.of<Client>(context, listen: false);
-      final categories = await client.productManagement.getProductCategories();
+      final categories = await client.productManagement.getProductCategories(
+        onlyActive: true,
+      );
 
       if (mounted) {
         setState(() {
@@ -900,10 +902,19 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       builder: (context) => AddProductDialog(
         onProductCreated: (product) {
           _loadProducts(); // Reload nach Erstellung
+
+          // 🔄 NEUES FEATURE: Signalisiere anderen Seiten (z.B. POS) dass sie refreshen sollen
+          _notifyOtherSystemsOfProductChange();
         },
         availableCategories: _allCategories,
       ),
     );
+  }
+
+  /// **🔄 NEUE METHODE: Benachrichtigt andere Systeme über Artikel-Änderungen**
+  void _notifyOtherSystemsOfProductChange() {
+    // Für spätere Implementierung: Event-Bus oder ähnliches
+    debugPrint('🔄 Artikel-Änderung: Andere Systeme sollten refreshen');
   }
 
   void _editProduct(Product product) {
@@ -1531,23 +1542,26 @@ class _AddProductDialogState extends State<AddProductDialog> {
                   items: widget.availableCategories.map((category) {
                     return DropdownMenuItem<ProductCategory>(
                       value: category,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: Color(
-                                int.parse(
-                                  category.colorHex.replaceFirst('#', '0xFF'),
+                      child: IntrinsicWidth(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Color(
+                                  int.parse(
+                                    category.colorHex.replaceFirst('#', '0xFF'),
+                                  ),
                                 ),
+                                shape: BoxShape.circle,
                               ),
-                              shape: BoxShape.circle,
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(category.name),
-                        ],
+                            const SizedBox(width: 8),
+                            Text(category.name),
+                          ],
+                        ),
                       ),
                     );
                   }).toList(),
@@ -1589,36 +1603,39 @@ class _AddProductDialogState extends State<AddProductDialog> {
                         items: _availableTaxClasses.map((taxClass) {
                           return DropdownMenuItem<TaxClass>(
                             value: taxClass,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: Color(
-                                      int.parse(
-                                        taxClass.colorHex.replaceFirst(
-                                          '#',
-                                          '0xFF',
+                            child: IntrinsicWidth(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: Color(
+                                        int.parse(
+                                          taxClass.colorHex.replaceFirst(
+                                            '#',
+                                            '0xFF',
+                                          ),
                                         ),
                                       ),
+                                      shape: BoxShape.circle,
                                     ),
-                                    shape: BoxShape.circle,
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
+                                  const SizedBox(width: 8),
+                                  Text(
                                     '${taxClass.name} (${taxClass.taxRate.toStringAsFixed(1)}%)',
                                   ),
-                                ),
-                                if (taxClass.isDefault)
-                                  const Icon(
-                                    Icons.star,
-                                    size: 16,
-                                    color: Colors.amber,
-                                  ),
-                              ],
+                                  if (taxClass.isDefault) ...[
+                                    const SizedBox(width: 8),
+                                    const Icon(
+                                      Icons.star,
+                                      size: 16,
+                                      color: Colors.amber,
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
                           );
                         }).toList(),
@@ -1686,7 +1703,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
   }
 }
 
-/// **📝 ARTIKEL BEARBEITEN DIALOG** (existing, shortened for brevity)
+/// **📝 ARTIKEL BEARBEITEN DIALOG** - Vollständige Implementation
 class EditProductDialog extends StatefulWidget {
   final Product product;
   final Function(Product) onProductUpdated;
@@ -1702,15 +1719,508 @@ class EditProductDialog extends StatefulWidget {
 }
 
 class _EditProductDialogState extends State<EditProductDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _priceController;
+  late final TextEditingController _barcodeController;
+  late final TextEditingController _stockController;
+
+  bool _isLoading = false;
+  bool _isActive = true;
+  bool _isFoodItem = false;
+
+  // 📦 KATEGORIE- UND STEUERKLASSEN-AUSWAHL
+  ProductCategory? _selectedCategory;
+  TaxClass? _selectedTaxClass;
+  Country? _facilityCountry;
+  List<ProductCategory> _availableCategories = [];
+  List<TaxClass> _availableTaxClasses = [];
+  bool _isCategoriesLoading = true;
+  bool _isTaxClassesLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.product.name);
+    _descriptionController = TextEditingController(
+      text: widget.product.description ?? '',
+    );
+    _priceController = TextEditingController(
+      text: widget.product.price.toString().replaceAll('.', ','),
+    );
+    _barcodeController = TextEditingController(
+      text: widget.product.barcode ?? '',
+    );
+    _stockController = TextEditingController(
+      text: widget.product.stockQuantity?.toString() ?? '',
+    );
+    _isActive = widget.product.isActive;
+    _isFoodItem = widget.product.isFoodItem;
+
+    // 📦 Lade verfügbare Kategorien und Steuerklassen
+    _loadAvailableOptionsForEdit();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _barcodeController.dispose();
+    _stockController.dispose();
+    super.dispose();
+  }
+
+  /// **📦 NEUE METHODE: Lädt Kategorien und Steuerklassen für Bearbeitung**
+  Future<void> _loadAvailableOptionsForEdit() async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      // 1. Kategorien laden
+      final categories = await client.productManagement.getProductCategories(
+        onlyActive: true,
+      );
+
+      // 2. Facility-Land und Steuerklassen laden
+      final currentFacility = await client.facility.getCurrentFacility();
+      final countries = await client.taxManagement.getAllCountries();
+
+      final facilityCountry = currentFacility?.countryId != null
+          ? countries.firstWhere((c) => c.id == currentFacility!.countryId)
+          : countries.firstWhere(
+              (c) => c.code == 'DE',
+              orElse: () => countries.first,
+            );
+
+      final taxClasses = await client.taxManagement.getTaxClassesForCountry(
+        facilityCountry.id!,
+      );
+
+      setState(() {
+        _availableCategories = categories;
+        _facilityCountry = facilityCountry;
+        _availableTaxClasses = taxClasses;
+
+        // Aktuelle Auswahl setzen
+        _selectedCategory = categories.isNotEmpty
+            ? categories.firstWhere(
+                (cat) => cat.id == widget.product.categoryId,
+                orElse: () => categories.first,
+              )
+            : null;
+
+        _selectedTaxClass = taxClasses.isNotEmpty
+            ? taxClasses.firstWhere(
+                (tax) => tax.id == widget.product.taxClassId,
+                orElse: () => taxClasses.first,
+              )
+            : null;
+
+        _isCategoriesLoading = false;
+        _isTaxClassesLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isCategoriesLoading = false;
+        _isTaxClassesLoading = false;
+      });
+      debugPrint('❌ Fehler beim Laden der Edit-Optionen: $e');
+    }
+  }
+
+  /// **🔧 Deutsche Dezimaltrennzeichen unterstützen**
+  double? _parseGermanPrice(String priceText) {
+    if (priceText.trim().isEmpty) return null;
+    final normalizedPrice = priceText.trim().replaceAll(',', '.');
+    try {
+      final price = double.parse(normalizedPrice);
+      return price > 0 ? price : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// **✅ Artikel aktualisieren - ECHTE BACKEND-INTEGRATION**
+  Future<void> _updateProduct() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedCategory == null || _selectedTaxClass == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Kategorie und Steuerklasse sind erforderlich'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      final price = _parseGermanPrice(_priceController.text);
+      if (price == null) {
+        throw Exception(
+          'Ungültiger Preis - verwenden Sie Format: 1,50 oder 1.50',
+        );
+      }
+
+      final stockQuantity = _stockController.text.trim().isNotEmpty
+          ? int.tryParse(_stockController.text.trim())
+          : null;
+
+      // 🔧 ECHTE BACKEND-INTEGRATION mit expliziten Parametern
+      final updatedProduct = await client.productManagement.updateProduct(
+        widget.product.id!,
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim().isNotEmpty
+            ? _descriptionController.text.trim()
+            : null,
+        price: price,
+        barcode: _barcodeController.text.trim().isNotEmpty
+            ? _barcodeController.text.trim()
+            : null,
+        categoryId: _selectedCategory!.id!,
+        stockQuantity: stockQuantity,
+        isActive: _isActive,
+        isFoodItem: _isFoodItem,
+        taxClassId: _selectedTaxClass!.id!,
+        defaultCountryId: _facilityCountry!.id!,
+        requiresTSESignature: _selectedTaxClass!.requiresTSESignature,
+        requiresAgeVerification: false,
+        isSubjectToSpecialTax: false,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        widget.onProductUpdated(updatedProduct);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Artikel "${updatedProduct.name}" erfolgreich aktualisiert',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Fehler beim Aktualisieren: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Artikel bearbeiten: ${widget.product.name}'),
-      content: const Text('Bearbeitung wird demnächst verfügbar sein'),
+      title: Row(
+        children: [
+          const Icon(Icons.edit, color: Colors.blue),
+          const SizedBox(width: 8),
+          Text('📝 "${widget.product.name}" bearbeiten'),
+        ],
+      ),
+      content: SizedBox(
+        width: 500,
+        height: 650, // Erhöht für zusätzliche Felder
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Info-Box
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.edit, color: Colors.blue, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Vollständige Backend-Integration - Alle Änderungen werden direkt gespeichert',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Name
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Artikel-Name *',
+                    prefixIcon: Icon(Icons.shopping_cart),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Name ist erforderlich';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Beschreibung
+                TextFormField(
+                  controller: _descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Beschreibung (optional)',
+                    prefixIcon: Icon(Icons.description),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+
+                // Preis und Barcode
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: _priceController,
+                        decoration: const InputDecoration(
+                          labelText: 'Preis (€) *',
+                          prefixIcon: Icon(Icons.euro),
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Preis erforderlich';
+                          }
+                          if (_parseGermanPrice(value) == null) {
+                            return 'Ungültiger Preis';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 3,
+                      child: TextFormField(
+                        controller: _barcodeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Barcode (optional)',
+                          prefixIcon: Icon(Icons.qr_code),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Kategorie-Auswahl
+                _isCategoriesLoading
+                    ? const Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Kategorien werden geladen...'),
+                        ],
+                      )
+                    : _availableCategories.isEmpty
+                    ? const Text(
+                        '⚠️ Keine Kategorien verfügbar',
+                        style: TextStyle(color: Colors.orange),
+                      )
+                    : DropdownButtonFormField<ProductCategory>(
+                        value: _selectedCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Kategorie *',
+                          prefixIcon: Icon(Icons.category),
+                        ),
+                        items: _availableCategories.map((category) {
+                          return DropdownMenuItem<ProductCategory>(
+                            value: category,
+                            child: IntrinsicWidth(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: Color(
+                                        int.parse(
+                                          category.colorHex.replaceFirst(
+                                            '#',
+                                            '0xFF',
+                                          ),
+                                        ),
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(category.name),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (category) {
+                          setState(() => _selectedCategory = category);
+                        },
+                        validator: (value) {
+                          if (value == null) return 'Kategorie erforderlich';
+                          return null;
+                        },
+                      ),
+                const SizedBox(height: 16),
+
+                // Steuerklasse-Auswahl
+                _isTaxClassesLoading
+                    ? const Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Steuerklassen werden geladen...'),
+                        ],
+                      )
+                    : _availableTaxClasses.isEmpty
+                    ? const Text(
+                        '⚠️ Keine Steuerklassen verfügbar',
+                        style: TextStyle(color: Colors.orange),
+                      )
+                    : DropdownButtonFormField<TaxClass>(
+                        value: _selectedTaxClass,
+                        decoration: InputDecoration(
+                          labelText:
+                              'Steuerklasse * (${_facilityCountry?.displayName ?? ""})',
+                          prefixIcon: const Icon(Icons.account_balance),
+                        ),
+                        items: _availableTaxClasses.map((taxClass) {
+                          return DropdownMenuItem<TaxClass>(
+                            value: taxClass,
+                            child: IntrinsicWidth(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: Color(
+                                        int.parse(
+                                          taxClass.colorHex.replaceFirst(
+                                            '#',
+                                            '0xFF',
+                                          ),
+                                        ),
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${taxClass.name} (${taxClass.taxRate.toStringAsFixed(1)}%)',
+                                  ),
+                                  if (taxClass.isDefault) ...[
+                                    const SizedBox(width: 8),
+                                    const Icon(
+                                      Icons.star,
+                                      size: 16,
+                                      color: Colors.amber,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (taxClass) {
+                          setState(() => _selectedTaxClass = taxClass);
+                        },
+                        validator: (value) {
+                          if (value == null) return 'Steuerklasse erforderlich';
+                          return null;
+                        },
+                      ),
+                const SizedBox(height: 16),
+
+                // Bestand
+                TextFormField(
+                  controller: _stockController,
+                  decoration: const InputDecoration(
+                    labelText: 'Bestand (optional)',
+                    prefixIcon: Icon(Icons.inventory),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+
+                // Lebensmittel-Checkbox
+                CheckboxListTile(
+                  title: const Text('Ist Lebensmittel'),
+                  subtitle: const Text('Für spezielle Compliance-Regeln'),
+                  value: _isFoodItem,
+                  onChanged: (value) {
+                    setState(() => _isFoodItem = value ?? false);
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const SizedBox(height: 8),
+
+                // Aktiv-Status
+                SwitchListTile(
+                  title: const Text('Artikel ist aktiv'),
+                  subtitle: const Text('Aktive Artikel sind im POS verfügbar'),
+                  value: _isActive,
+                  onChanged: (value) => setState(() => _isActive = value),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Schließen'),
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Abbrechen'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _updateProduct,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Artikel aktualisieren'),
         ),
       ],
     );
@@ -1782,6 +2292,7 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
         colorHex: _selectedColor,
         iconName: _selectedIcon,
         isFavorites: _isFavorites,
+        displayOrder: 0,
       );
 
       if (mounted) {
@@ -2019,7 +2530,6 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
     }
   }
 }
-
 // ==================== KATEGORIEN-BEARBEITUNG DIALOG ====================
 
 class EditCategoryDialog extends StatefulWidget {
