@@ -132,17 +132,16 @@ class _PosSystemPageState extends State<PosSystemPage> {
   /// - Verwendet die neue onAppClosing Backend-Methode
   void _cleanupEmptyCartsOnClose() {
     try {
-      debugPrint('🧹 Backend-Bereinigung beim App-Close...');
+      debugPrint('🧹 Aggressive Backend-Bereinigung beim App-Close...');
 
       // Backend-Bereinigung im Hintergrund ausführen
       (() async {
         try {
           final client = Provider.of<Client>(context, listen: false);
-          final deviceId = await _getDeviceId();
 
-          // ✅ Neue Backend-Methode für App-Schließen
-          await client.pos.onAppClosing(deviceId);
-          debugPrint('✅ Backend-Bereinigung beim App-Close abgeschlossen');
+          // ✅ NEUE BUSINESS-LOGIC: Intelligente Bereinigung mit Statistiken
+          final stats = await client.pos.cleanupSessionsWithBusinessLogic();
+          debugPrint('✅ Backend-Bereinigung abgeschlossen: $stats');
         } catch (e) {
           debugPrint('⚠️ Fehler bei Backend-Bereinigung: $e');
           // Nicht kritisch für App-Close
@@ -659,10 +658,24 @@ class _PosSystemPageState extends State<PosSystemPage> {
     final cartToRemove = _activeCarts[index];
 
     try {
-      // Backend-Session löschen
+      // ✅ BACKEND-SESSION WIRKLICH LÖSCHEN (nicht nur leeren!)
       if (cartToRemove.posSession != null) {
         final client = Provider.of<Client>(context, listen: false);
-        await client.pos.clearCart(cartToRemove.posSession!.id!);
+        // ✅ NEUE METHODE: Session komplett aus DB löschen
+        final deleted = await client.pos.deleteCart(
+          cartToRemove.posSession!.id!,
+        );
+        if (deleted) {
+          debugPrint(
+            '✅ Session ${cartToRemove.posSession!.id} wirklich aus DB gelöscht',
+          );
+        } else {
+          debugPrint(
+            '⚠️ Session ${cartToRemove.posSession!.id} konnte nicht gelöscht werden (bezahlt?)',
+          );
+          // Fallback: Session leeren
+          await client.pos.clearCart(cartToRemove.posSession!.id!);
+        }
       }
 
       setState(() {
@@ -2676,6 +2689,86 @@ class _PosSystemPageState extends State<PosSystemPage> {
               ),
             ),
     );
+  }
+
+  /// **📊 DEBUG: Session-Statistiken anzeigen**
+  Future<void> _showSessionStats() async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final stats = await client.pos.getSessionStats();
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('📊 Session-Statistiken'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('📋 Total Sessions: ${stats['total']}'),
+                  const SizedBox(height: 8),
+                  Text('✅ Aktive Sessions: ${stats['active']}'),
+                  Text('💰 Bezahlte Sessions: ${stats['completed']}'),
+                  Text('🗑️ Abandoned Sessions: ${stats['abandoned']}'),
+                  const SizedBox(height: 8),
+                  Text('👤 Mit Kunde: ${stats['with_customer']}'),
+                  Text('📦 Mit Artikeln: ${stats['with_items']}'),
+                  Text('🔄 Leer: ${stats['empty']}'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Schließen'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  // Backend-Bereinigung ausführen
+                  try {
+                    final cleanupStats = await client.pos
+                        .cleanupSessionsWithBusinessLogic();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '✅ Bereinigung: ${cleanupStats['deleted_from_db']} Sessions gelöscht',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('❌ Fehler: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('🧹 Bereinigen'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Fehler beim Laden der Statistiken: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 
