@@ -2019,7 +2019,6 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
     }
   }
 }
-
 // ==================== KATEGORIEN-BEARBEITUNG DIALOG ====================
 
 class EditCategoryDialog extends StatefulWidget {
