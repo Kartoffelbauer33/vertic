@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
@@ -111,6 +113,21 @@ class _PosSystemPageState extends State<PosSystemPage> {
     // });
 
     _initializeData();
+
+    // 🔄 AUTOMATISCHES REFRESH: Smart-Refresh für neue Artikel
+    _startSmartRefresh();
+  }
+
+  /// **🔄 INTELLIGENTES REFRESH-SYSTEM: Automatisches Laden neuer Artikel**
+  void _startSmartRefresh() {
+    // Refresh alle 60 Sekunden - nur wenn App aktiv ist
+    Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        debugPrint('🔄 Smart-Refresh: Prüfe auf neue Artikel (automatisch)');
+        _loadAvailableItems();
+      }
+    });
   }
 
   @override
@@ -1307,7 +1324,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
       }
 
       // 🆕 2. BACKEND-KATEGORIEN LADEN
-      final categories = await client.productManagement.getProductCategories();
+      final categories = await client.productManagement.getProductCategories(
+        onlyActive: true,
+      );
       final products = await client.productManagement.getProducts(
         onlyActive: true,
       );
@@ -1366,7 +1385,26 @@ class _PosSystemPageState extends State<PosSystemPage> {
       debugPrint('🏪 Kategorisierung aktualisiert:');
       newCategorizedItems.forEach((categoryName, items) {
         debugPrint('  • $categoryName: ${items.length} Artikel');
+        if (items.isNotEmpty) {
+          for (final item in items) {
+            if (item is Product) {
+              debugPrint(
+                '    - Produkt: ${item.name} (€${item.price}, Kategorie-ID: ${item.categoryId})',
+              );
+            } else if (item is TicketType) {
+              debugPrint('    - Ticket: ${item.name} (€${item.defaultPrice})');
+            }
+          }
+        }
       });
+
+      // 🔍 EXTRA DEBUG: Kategorie-Details anzeigen
+      debugPrint('🔍 Backend-Kategorien-Details:');
+      for (final category in categories) {
+        debugPrint(
+          '  • Kategorie ${category.id}: "${category.name}" (Icon: ${category.iconName}, Aktiv: ${category.isActive})',
+        );
+      }
     } catch (e) {
       debugPrint('❌ Fehler beim Laden der Backend-Daten: $e');
       if (mounted) {
@@ -1379,7 +1417,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
   /// **🎨 HILFSMETHODE: Emoji für Kategorie-Icons**
   String _getCategoryEmoji(String? iconName) {
-    switch (iconName) {
+    switch (iconName?.toLowerCase()) {
       case 'fastfood':
         return '🍕';
       case 'local_drink':
@@ -1396,7 +1434,52 @@ class _PosSystemPageState extends State<PosSystemPage> {
         return '⭐';
       case 'shopping_bag':
         return '🛍️';
+      case 'category':
+        return '📦';
+      // 🍽️ ERWEITERTE FOOD & DRINK ICONS
+      case 'restaurant':
+      case 'dining':
+      case 'food':
+        return '🍽️';
+      case 'coffee':
+        return '☕';
+      case 'wine_bar':
+        return '🍷';
+      case 'local_bar':
+        return '🍺';
+      // 🏃 SPORT & FITNESS
+      case 'fitness_center':
+      case 'gym':
+        return '🏋️';
+      case 'pool':
+        return '🏊';
+      // 🛍️ SHOPPING & RETAIL
+      case 'store':
+        return '🏪';
+      case 'shopping_cart':
+        return '🛒';
+      // 🔧 TOOLS & EQUIPMENT
+      case 'hardware':
+        return '🔨';
+      case 'construction':
+        return '🚧';
+      // 🎭 ENTERTAINMENT
+      case 'movie':
+      case 'theater':
+        return '🎭';
+      case 'music':
+        return '🎵';
+      // 💊 HEALTH & WELLNESS
+      case 'medication':
+      case 'health':
+        return '💊';
+      case 'spa':
+        return '🧘';
       default:
+        // 🔍 DEBUG: Unbekannte Icons loggen
+        debugPrint(
+          '🎨 Unbekanntes Icon: "$iconName" - verwende Standard-Emoji 📦',
+        );
         return '📦';
     }
   }
@@ -1739,11 +1822,12 @@ class _PosSystemPageState extends State<PosSystemPage> {
               ),
               const SizedBox(height: 16),
 
-              // Kategorie-Buttons mit RBAC-Filter
-              SizedBox(
-                height: 85, // Erhöht von 80 auf 85 für mehrzeilige Texte
+              // Kategorie-Buttons mit RBAC-Filter - Layout optimiert gegen Assertion-Fehler
+              Container(
+                height: 85, // Feste Höhe für bessere Performance
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(), // Bessere Performance
                   itemCount: visibleCategories.length,
                   itemBuilder: (context, index) {
                     final category = visibleCategories[index];
@@ -1763,11 +1847,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
                             setState(() => _selectedCategory = category);
                           },
                           child: Container(
-                            width: 110, // Reduziert von 120 auf 110
+                            width: 110, // Feste Breite verhindert Layout-Bugs
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 10,
-                            ), // Optimiert
+                            ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               color: isSelected
@@ -1780,21 +1864,17 @@ class _PosSystemPageState extends State<PosSystemPage> {
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize:
-                                  MainAxisSize.min, // Wichtig für Overflow-Fix
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   categoryData['icon'],
                                   color: isSelected
                                       ? Colors.white
                                       : categoryData['color'],
-                                  size: 24, // Reduziert von 28 auf 24
+                                  size: 24,
                                 ),
-                                const SizedBox(
-                                  height: 3,
-                                ), // Reduziert von 4 auf 3
+                                const SizedBox(height: 3),
                                 Flexible(
-                                  // Flexibler Text-Container
                                   child: Text(
                                     categoryData['name'],
                                     style: TextStyle(
@@ -1802,23 +1882,23 @@ class _PosSystemPageState extends State<PosSystemPage> {
                                           ? Colors.white
                                           : Colors.grey[700],
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 10, // Reduziert von 12 auf 10
-                                      height: 1.1, // Kompakter Line-Height
+                                      fontSize: 10,
+                                      height: 1.1,
                                     ),
                                     textAlign: TextAlign.center,
-                                    maxLines: 2, // Max 2 Zeilen
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 if (itemCount > 0) ...[
-                                  const SizedBox(height: 1), // Reduziert
+                                  const SizedBox(height: 1),
                                   Text(
                                     '$itemCount',
                                     style: TextStyle(
                                       color: isSelected
                                           ? Colors.white70
                                           : Colors.grey[500],
-                                      fontSize: 9, // Reduziert von 10 auf 9
+                                      fontSize: 9,
                                     ),
                                   ),
                                 ],

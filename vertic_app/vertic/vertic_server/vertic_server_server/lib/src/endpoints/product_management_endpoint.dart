@@ -440,16 +440,29 @@ class ProductManagementEndpoint extends Endpoint {
     }
   }
 
-  /// **🔄 SICHERE PRODUKT-AKTUALISIERUNG**
+  /// **🔄 SICHERE PRODUKT-AKTUALISIERUNG - FIXED**
   Future<Product> updateProduct(
     Session session,
-    int productId,
-    Map<String, dynamic> updates,
-  ) async {
+    int productId, {
+    String? name,
+    String? description,
+    double? price,
+    String? barcode,
+    int? categoryId,
+    int? stockQuantity,
+    bool? isActive,
+    bool? isFoodItem,
+    int? taxClassId,
+    int? defaultCountryId,
+    bool? requiresTSESignature,
+    bool? requiresAgeVerification,
+    bool? isSubjectToSpecialTax,
+  }) async {
     final startTime = DateTime.now();
     session.log('🔄 ProductManagement: updateProduct() - START');
     session.log('   Produkt-ID: $productId');
-    session.log('   Updates: ${updates.keys.join(", ")}');
+    session
+        .log('   Parameter: name=$name, price=$price, categoryId=$categoryId');
 
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
@@ -483,15 +496,54 @@ class ProductManagementEndpoint extends Endpoint {
       session.log(
           '✅ ProductManagement: Produkt gefunden: ${existingProduct.name}');
 
-      // Update-Fields setzen
+      // 🔍 Kategorie validieren (falls geändert)
+      if (categoryId != null && categoryId != existingProduct.categoryId) {
+        session.log(
+            '🔍 ProductManagement: Validiere neue Kategorie-ID: $categoryId');
+        final category = await ProductCategory.db.findById(session, categoryId);
+        if (category == null) {
+          session.log(
+              '❌ ProductManagement: Kategorie nicht gefunden: $categoryId',
+              level: LogLevel.error);
+          throw Exception('Kategorie mit ID $categoryId nicht gefunden');
+        }
+        session
+            .log('✅ ProductManagement: Kategorie validiert: ${category.name}');
+      }
+
+      // 🏛️ Tax Class validieren (falls geändert)
+      if (taxClassId != null && taxClassId != existingProduct.taxClassId) {
+        session.log(
+            '🔍 ProductManagement: Validiere neue Tax-Class-ID: $taxClassId');
+        final taxClass = await TaxClass.db.findById(session, taxClassId);
+        if (taxClass == null) {
+          session.log(
+              '❌ ProductManagement: Tax Class nicht gefunden: $taxClassId',
+              level: LogLevel.error);
+          throw Exception('Tax Class mit ID $taxClassId nicht gefunden');
+        }
+        session
+            .log('✅ ProductManagement: Tax Class validiert: ${taxClass.name}');
+      }
+
+      // Update-Product mit allen Feldern
       final updatedProduct = existingProduct.copyWith(
-        name: updates['name'] ?? existingProduct.name,
-        description: updates['description'] ?? existingProduct.description,
-        price: updates['price'] ?? existingProduct.price,
-        costPrice: updates['costPrice'] ?? existingProduct.costPrice,
-        stockQuantity:
-            updates['stockQuantity'] ?? existingProduct.stockQuantity,
-        isActive: updates['isActive'] ?? existingProduct.isActive,
+        name: name ?? existingProduct.name,
+        description: description ?? existingProduct.description,
+        price: price ?? existingProduct.price,
+        barcode: barcode ?? existingProduct.barcode,
+        categoryId: categoryId ?? existingProduct.categoryId,
+        stockQuantity: stockQuantity ?? existingProduct.stockQuantity,
+        isActive: isActive ?? existingProduct.isActive,
+        isFoodItem: isFoodItem ?? existingProduct.isFoodItem,
+        taxClassId: taxClassId ?? existingProduct.taxClassId,
+        defaultCountryId: defaultCountryId ?? existingProduct.defaultCountryId,
+        requiresTSESignature:
+            requiresTSESignature ?? existingProduct.requiresTSESignature,
+        requiresAgeVerification:
+            requiresAgeVerification ?? existingProduct.requiresAgeVerification,
+        isSubjectToSpecialTax:
+            isSubjectToSpecialTax ?? existingProduct.isSubjectToSpecialTax,
         updatedAt: DateTime.now(),
       );
 
@@ -503,7 +555,9 @@ class ProductManagementEndpoint extends Endpoint {
           '✅ ProductManagement: Produkt aktualisiert in ${duration.inMilliseconds}ms:');
       session.log('   ID: ${savedProduct.id}, Name: ${savedProduct.name}');
       session.log(
-          '   Preis: €${savedProduct.price}, Aktiv: ${savedProduct.isActive}');
+          '   Preis: €${savedProduct.price}, Kategorie: ${savedProduct.categoryId}');
+      session.log(
+          '   Aktiv: ${savedProduct.isActive}, TSE: ${savedProduct.requiresTSESignature}');
 
       return savedProduct;
     } catch (e, stackTrace) {
