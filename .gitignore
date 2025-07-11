@@ -96,7 +96,7 @@
 # ========================================
 **/.idea/
 **/.vscode/
-**/.cursor/
+
 **/*.iml
 **/*.ipr
 **/*.iws
@@ -107,6 +107,8 @@
 **/.history
 **/.svn/
 **/migrate_working_dir/
+**/TO-DO-Frontend.md
+**/TO-DO-Backend.md
 
 # ========================================
 # 📱 MOBILE PLATFORM SPECIFIC
