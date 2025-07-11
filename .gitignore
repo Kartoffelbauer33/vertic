@@ -107,8 +107,6 @@
 **/.history
 **/.svn/
 **/migrate_working_dir/
-**/TO-DO-Frontend.md
-**/TO-DO-Backend.md
 
 # ========================================
 # 📱 MOBILE PLATFORM SPECIFIC
@@ -175,3 +173,13 @@ ehthumbs.db
 **/test/
 # MIGRATIONS SIND WICHTIG FÜR PRODUCTION - NICHT IGNORIEREN!
 # **/migrations/ 
+
+
+#Rules spezifisch für die Entwicklung Front und Backend
+.cursor/rules/frontend_developer_role.mdc
+.cursor/rules/backend_developer_role.mdc
+
+#To-Dos
+**/TO-DO-Frontend.md
+**/TO-DO-Backend.md
+
