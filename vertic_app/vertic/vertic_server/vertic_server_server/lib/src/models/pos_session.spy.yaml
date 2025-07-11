@@ -5,9 +5,15 @@ fields:
   customerId: int?
   hallId: int
   deviceId: String  # REQUIRED Geräte-ID für gerätespezifische Sessions
-  status: String, default='active'
+  status: String, default='active'  # active, completed, abandoned, deleted
   totalAmount: double, default=0.0
   discountAmount: double, default=0.0
   paymentMethod: String?
   createdAt: DateTime
-  completedAt: DateTime? 
+  completedAt: DateTime?
+  
+# STATUS-DEFINITIONEN:
+# 'active'    - Aktive Session die bearbeitet wird
+# 'completed' - Bezahlte Session (für History behalten)
+# 'abandoned' - Leere Session ohne Kunde (kann gelöscht werden)
+# 'deleted'   - Gelöschte Session (kann aus DB entfernt werden) 
