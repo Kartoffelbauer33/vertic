@@ -14,9 +14,40 @@ import 'pages/statistics_page.dart';
 import 'auth/permission_wrapper.dart';
 import 'config/environment.dart';
 import 'services/background_scanner_service.dart';
+import 'design_system/design_system.dart';
 
 // Globale Client-Instanz (SessionManager entfernt!)
 late Client client;
+
+// Theme Provider für manuelles Theme-Switching
+class ThemeProvider extends ChangeNotifier {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  ThemeMode get themeMode => _themeMode;
+
+  bool get isDarkMode {
+    if (_themeMode == ThemeMode.system) {
+      return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    }
+    return _themeMode == ThemeMode.dark;
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    _themeMode = mode;
+    notifyListeners();
+  }
+
+  void toggleTheme() {
+    if (_themeMode == ThemeMode.light) {
+      _themeMode = ThemeMode.dark;
+    } else if (_themeMode == ThemeMode.dark) {
+      _themeMode = ThemeMode.system;
+    } else {
+      _themeMode = ThemeMode.light;
+    }
+    notifyListeners();
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,9 +64,9 @@ void main() async {
   )..connectivityMonitor = FlutterConnectivityMonitor();
 
   // Debug-Info ausgeben
-  print('🚀 Vertic Staff startet...');
-  print('📡 Server: ${Environment.environmentInfo}');
-  print('🔗 URL: ${Environment.serverUrl}');
+  // print('🚀 Vertic Staff startet...');
+  // print('📡 Server: ${Environment.environmentInfo}');
+  // print('🔗 URL: ${Environment.serverUrl}');
 
   // 🚀 NEUES STAFF-AUTH-SYSTEM: Kein SessionManager mehr!
   // Der StaffAuthProvider übernimmt die komplette Authentication
@@ -47,6 +78,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => StaffAuthProvider(client)),
         ChangeNotifierProvider(create: (_) => PermissionProvider(client)),
         ChangeNotifierProvider(create: (_) => BackgroundScannerService(client)),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const MyApp(),
     ),
@@ -104,19 +136,20 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return Consumer<StaffAuthProvider>(
       builder: (context, staffAuth, child) {
-        return MaterialApp(
-          title: 'Vertic Staff',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF00897B),
-            ),
-            useMaterial3: true,
-          ),
-          // 🎯 Routing basiert auf Staff-Auth-Status
-          home: staffAuth.isAuthenticated
-              ? const StaffHomePage()
-              : const LoginPage(),
-          debugShowCheckedModeBanner: false,
+        return Consumer<ThemeProvider>(
+          builder: (context, themeProvider, child) {
+            return MaterialApp(
+              title: 'Vertic Staff',
+              theme: VerticTheme.light(context),
+              darkTheme: VerticTheme.dark(context),
+              themeMode: themeProvider.themeMode,
+              // 🎯 Routing basiert auf Staff-Auth-Status
+              home: staffAuth.isAuthenticated
+                  ? const StaffHomePage()
+                  : const LoginPage(),
+              debugShowCheckedModeBanner: false,
+            );
+          },
         );
       },
     );
@@ -290,6 +323,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
         requiredPermission: 'can_access_admin_dashboard',
         child: AdminDashboardPage(isSuperUser: isSuperUser),
       ),
+      const DesignSystemShowcasePage(), // Design System Showcase hinzugefügt
       _buildSettingsPage(context),
     ].where((widget) {
       if (widget is PermissionWrapper) {
@@ -364,6 +398,14 @@ class _StaffHomePageState extends State<StaffHomePage> {
         ),
       );
     }
+
+    // Design System Showcase (nur für Development)
+    items.add(
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.palette),
+        label: 'Design',
+      ),
+    );
 
     items.add(
       const BottomNavigationBarItem(
