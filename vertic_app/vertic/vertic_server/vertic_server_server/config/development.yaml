@@ -29,10 +29,10 @@ webServer:
 
 # This is the database setup for your server.
 database:
-  host: localhost
+  host: 159.69.144.208
   port: 5432
-  name: test_db
-  user: postgres
+  name: vertic
+  user: vertic_dev
   #requireSsl: true # defaults to false
   #isUnixSocket: true # defaults to false
 

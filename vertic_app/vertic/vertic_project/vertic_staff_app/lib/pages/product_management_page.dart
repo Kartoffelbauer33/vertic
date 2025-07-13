@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
 
 import '../auth/permission_provider.dart';
+import 'pos_system_page.dart' show ProductCatalogEvents;
 
 /// **📦 VEREINTE ARTIKEL & KATEGORIEN-VERWALTUNG**
 ///
@@ -903,18 +904,15 @@ class _ProductManagementPageState extends State<ProductManagementPage>
         onProductCreated: (product) {
           _loadProducts(); // Reload nach Erstellung
 
-          // 🔄 NEUES FEATURE: Signalisiere anderen Seiten (z.B. POS) dass sie refreshen sollen
-          _notifyOtherSystemsOfProductChange();
+          // 🔄 EVENT-TRIGGER: Benachrichtige POS-System über neuen Artikel
+          ProductCatalogEvents().notifyProductCreated(product.name);
+          debugPrint(
+            '🆕 Event ausgelöst: Neuer Artikel "${product.name}" erstellt',
+          );
         },
         availableCategories: _allCategories,
       ),
     );
-  }
-
-  /// **🔄 NEUE METHODE: Benachrichtigt andere Systeme über Artikel-Änderungen**
-  void _notifyOtherSystemsOfProductChange() {
-    // Für spätere Implementierung: Event-Bus oder ähnliches
-    debugPrint('🔄 Artikel-Änderung: Andere Systeme sollten refreshen');
   }
 
   void _editProduct(Product product) {
@@ -1228,6 +1226,23 @@ class _ProductManagementPageState extends State<ProductManagementPage>
         }
       }
     }
+  }
+
+  void _showAddCategoryDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => CreateCategoryDialog(
+        onCategoryCreated: (category) {
+          _loadCategories(); // Reload nach Erstellung
+
+          // 🔄 EVENT-TRIGGER: Benachrichtige POS-System über neue Kategorie
+          ProductCatalogEvents().notifyCategoryCreated(category.name);
+          debugPrint(
+            '🆕 Event ausgelöst: Neue Kategorie "${category.name}" erstellt',
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -1896,6 +1911,13 @@ class _EditProductDialogState extends State<EditProductDialog> {
       if (mounted) {
         Navigator.of(context).pop();
         widget.onProductUpdated(updatedProduct);
+
+        // 🔄 EVENT-TRIGGER: Benachrichtige POS-System über Artikel-Update
+        ProductCatalogEvents().notifyProductUpdated(updatedProduct.name);
+        debugPrint(
+          '✏️ Event ausgelöst: Artikel "${updatedProduct.name}" aktualisiert',
+        );
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

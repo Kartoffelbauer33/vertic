@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
@@ -114,26 +112,53 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
     _initializeData();
 
-    // 🔄 AUTOMATISCHES REFRESH: Smart-Refresh für neue Artikel
-    _startSmartRefresh();
+    // 🔄 EVENT-BASED REFRESH: Registriere für Artikel-Änderungen
+    _registerForProductUpdates();
   }
 
-  /// **🔄 INTELLIGENTES REFRESH-SYSTEM: Automatisches Laden neuer Artikel**
-  void _startSmartRefresh() {
-    // Refresh alle 60 Sekunden - nur wenn App aktiv ist
-    Timer.periodic(const Duration(seconds: 60), (timer) {
-      if (mounted &&
-          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        debugPrint('🔄 Smart-Refresh: Prüfe auf neue Artikel (automatisch)');
-        _loadAvailableItems();
+  /// **🔄 INTELLIGENTES EVENT-SYSTEM: Reagiert auf Artikel-Änderungen**
+  void _registerForProductUpdates() {
+    // Registriere beim globalen Event-System
+    ProductCatalogEvents().addListener(() {
+      if (mounted) {
+        refreshProductCatalog();
       }
     });
+    debugPrint('📡 POS-System: Registriert für automatische Artikel-Updates');
+  }
+
+  /// **🔄 ÖFFENTLICHE METHODE: Refresh von anderen Seiten auslösen**
+  static void triggerRefresh() {
+    debugPrint('🔄 Event-Trigger: Artikel-Katalog wird aktualisiert...');
+    // Trigger über das Event-System
+    ProductCatalogEvents().notifyProductChanged();
+  }
+
+  /// **🔄 NEUE METHODE: Manueller Refresh bei Änderungen**
+  Future<void> refreshProductCatalog() async {
+    debugPrint('🔄 Artikel-Katalog: Refresh nach Änderung gestartet');
+    try {
+      await _loadAvailableItems();
+      if (mounted) {
+        setState(() {});
+        debugPrint('✅ Artikel-Katalog erfolgreich aktualisiert');
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Artikel-Refresh: $e');
+    }
   }
 
   @override
   void dispose() {
     // 🧹 **CLEANUP: Leere Warenkörbe beim App-Close löschen**
     _cleanupEmptyCartsOnClose();
+
+    // 🔄 Event-Listener entfernen
+    ProductCatalogEvents().removeListener(() {
+      if (mounted) {
+        refreshProductCatalog();
+      }
+    });
 
     _searchController.dispose();
     _manualCodeController.dispose();
@@ -2859,4 +2884,63 @@ class CategoryConfig {
   final String name;
 
   CategoryConfig({required this.color, required this.icon, required this.name});
+}
+
+/// **🔄 GLOBALES EVENT-SYSTEM für Artikel-Updates**
+class ProductCatalogEvents {
+  static final _instance = ProductCatalogEvents._internal();
+  factory ProductCatalogEvents() => _instance;
+  ProductCatalogEvents._internal();
+
+  final List<VoidCallback> _listeners = [];
+
+  /// Registriere einen Listener für Artikel-Änderungen
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+    debugPrint(
+      '📡 ProductCatalogEvents: Listener registriert (${_listeners.length} total)',
+    );
+  }
+
+  /// Entferne einen Listener
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+    debugPrint(
+      '📡 ProductCatalogEvents: Listener entfernt (${_listeners.length} total)',
+    );
+  }
+
+  /// Benachrichtige alle Listener über Änderungen
+  void notifyProductChanged() {
+    debugPrint(
+      '🔄 ProductCatalogEvents: Benachrichtige ${_listeners.length} Listener',
+    );
+    for (final listener in _listeners) {
+      try {
+        listener();
+      } catch (e) {
+        debugPrint('❌ Fehler beim Benachrichtigen eines Listeners: $e');
+      }
+    }
+  }
+
+  /// Spezielle Benachrichtigung für neue Artikel
+  void notifyProductCreated(String productName) {
+    debugPrint('🆕 ProductCatalogEvents: Neuer Artikel erstellt: $productName');
+    notifyProductChanged();
+  }
+
+  /// Spezielle Benachrichtigung für Artikel-Updates
+  void notifyProductUpdated(String productName) {
+    debugPrint('✏️ ProductCatalogEvents: Artikel aktualisiert: $productName');
+    notifyProductChanged();
+  }
+
+  /// Spezielle Benachrichtigung für neue Kategorien
+  void notifyCategoryCreated(String categoryName) {
+    debugPrint(
+      '🆕 ProductCatalogEvents: Neue Kategorie erstellt: $categoryName',
+    );
+    notifyProductChanged();
+  }
 }

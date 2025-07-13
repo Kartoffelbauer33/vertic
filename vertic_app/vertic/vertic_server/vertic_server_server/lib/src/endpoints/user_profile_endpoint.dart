@@ -206,25 +206,24 @@ class UserProfileEndpoint extends Endpoint {
 
     // 2. FALLBACK: Client-App Authentication prüfen (für Client-App)
     final authInfo = await session.authenticated;
-    final userIdentifier = authInfo?.userIdentifier;
-    if (userIdentifier != null) {
-      // Finde AppUser basierend auf userIdentifier
+    if (authInfo != null) {
+      // **NEUE METHODE: Finde AppUser basierend auf userInfoId (nicht mehr Email!)**
       final appUser = await AppUser.db.findFirstRow(
         session,
-        where: (u) => u.email.equals(userIdentifier),
+        where: (u) => u.userInfoId.equals(authInfo.userId),
       );
       if (appUser != null) {
         authenticatedUserId = appUser.id;
         authSource = 'Client-Auth';
         session.log(
-            '🔑 $authSource: Client-Email $userIdentifier → AppUser-ID $authenticatedUserId');
+            '🔑 $authSource: UserInfo.id=${authInfo.userId} → AppUser-ID $authenticatedUserId (${appUser.email})');
 
         // Client-App: Nur eigenes Profil sehen (Email-basierte Validierung)
         session.log(
-            '🔍 PROFILE Client Email-Validierung: userIdentifier="$userIdentifier" vs angefragt="$email"');
-        if (userIdentifier.toLowerCase() != email.toLowerCase()) {
+            '🔍 PROFILE Client Email-Validierung: authenticated="${appUser.email}" vs angefragt="$email"');
+        if (appUser.email?.toLowerCase() != email.toLowerCase()) {
           session.log(
-              '❌ AppUser darf nur sein eigenes Profil sehen - userIdentifier: "$userIdentifier" != angefragt: "$email"',
+              '❌ AppUser darf nur sein eigenes Profil sehen - authenticated: "${appUser.email}" != angefragt: "$email"',
               level: LogLevel.warning);
           return null;
         }
@@ -232,7 +231,7 @@ class UserProfileEndpoint extends Endpoint {
             .log('✅ PROFILE Client Email-Validierung erfolgreich für: $email');
       } else {
         session.log(
-            '🔑 Client-Auth FEHLER: Kein AppUser für userIdentifier $userIdentifier gefunden!',
+            '🔑 Client-Auth FEHLER: Kein AppUser für UserInfo.id=${authInfo.userId} gefunden!',
             level: LogLevel.error);
         return null;
       }
