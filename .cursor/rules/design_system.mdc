@@ -1,0 +1,139 @@
+---
+alwaysApply: false
+---
+# Vertic Design System: Coding Regeln
+
+Diese Regeln sind verbindlich für jede UI-Entwicklung und stellen sicher, dass der Code den im **[Vertic Design System](mdc:docs/design/VERTIC_DESIGN_SYSTEM.md)** definierten Standards entspricht.
+
+## 1. Absolute Grundlagen: Keine Ausnahmen
+
+### 1.1. Single Source of Truth für Design-Token
+**Verwenden Sie für alle Design-Token (Farben, Textstile, Abstände etc.) AUSSCHLIESSLICH die definierten `ThemeExtension`-Klassen.**
+
+*   **Rationale**: Dies ist das Kernprinzip des Systems. Es gewährleistet Konsistenz und ermöglicht globale Design-Änderungen an einer einzigen Stelle.
+*   **Korrekt**:
+    ```dart
+    Container(
+      color: Theme.of(context).appColors.primary,
+      padding: Theme.of(context).appDimensions.pagePadding,
+    )
+    ```
+*   **FALSCH**:
+    ```dart
+    // NIEMALS hartcodierte Werte verwenden!
+    Container(
+      color: Colors.blue, 
+      padding: const EdgeInsets.all(16.0),
+    )
+    ```
+*   **Detail-Dokumentation**:
+    *   [Farben](mdc:docs/design/foundations/01_colors.md)
+    *   [Typografie](mdc:docs/design/foundations/02_typography.md)
+    *   [Abstände & Layout](mdc:docs/design/foundations/03_spacing_and_layout.md)
+
+### 1.2. Wiederverwendbare Komponenten verwenden
+**Erstellen Sie keine einmaligen Widgets für gängige UI-Elemente. Nutzen Sie die vordefinierten Komponenten aus dem Design-System.**
+
+*   **Rationale**: Vermeidet redundanten Code und stellt sicher, dass alle Instanzen eines Elementtyps (z.B. alle primären Buttons) identisch aussehen und sich identisch verhalten.
+*   **Korrekt**: `PrimaryButton(onPressed: () {}, text: 'Senden')`
+*   **FALSCH**: `ElevatedButton(onPressed: () {}, child: Text('Senden'), style: ...)`
+*   **Detail-Dokumentation**:
+    *   [Buttons](mdc:docs/design/components/01_buttons.md)
+    *   [Eingabefelder](mdc:docs/design/components/02_inputs.md)
+
+## 2. Responsivität & Barrierefreiheit (Standardmäßig)
+
+Jede neue Komponente und jede neue Seite **MUSS** von Grund auf responsiv und barrierefrei sein.
+
+### 2.1. Responsives Layout
+*   **Keine festen Breiten/Höhen**: Vermeiden Sie `width: 300`. Nutzen Sie `Expanded`, `Flexible` und `LayoutBuilder`.
+*   **Breakpoint-Logik**: Verwenden Sie `LayoutBuilder`, um zwischen Layouts für verschiedene Bildschirmgrößen zu wechseln.
+*   **Detail-Dokumentation**: [Responsives Design](mdc:docs/design/patterns/01_responsive_design.md)
+
+### 2.2. Barrierefreiheit (A11y)
+*   **Labels für alles Interaktive**: `IconButton`s benötigen `tooltip`s. Bilder benötigen semantische Labels.
+*   **Mindest-Touch-Größe**: Interaktive Elemente müssen mindestens 48x48dp groß sein.
+*   **Fokus-Management**: Stellen Sie sicher, dass die Tastaturnavigation logisch ist und einen sichtbaren Fokusindikator hat.
+*   **Detail-Dokumentation**: [Barrierefreiheit](mdc:docs/design/patterns/02_accessibility.md)
+
+## 3. Quick-Reference
+
+| Thema                  | Regel                                                               | Dokumentation                                                                |
+| ---------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Farben**             | `Theme.of(context).appColors` verwenden                           | [Link](mdc:docs/design/foundations/01_colors.md)                             |
+| **Texte**              | `Theme.of(context).appTexts` verwenden, mit `.copyWith()` anpassen | [Link](mdc:docs/design/foundations/02_typography.md)                         |
+| **Abstände**           | `Theme.of(context).appDimensions` für `padding`, `SizedBox`      | [Link](mdc:docs/design/foundations/03_spacing_and_layout.md)                 |
+| **Schatten**           | `Theme.of(context).appShadows` verwenden                          | [Link](mdc:docs/design/foundations/05_shadows_and_elevation.md)              |
+| **Animationen**        | `Theme.of(context).appAnimations` für `duration` und `curve`     | [Link](mdc:docs/design/foundations/06_animations.md)                         |
+| **Buttons**            | `PrimaryButton`, `SecondaryButton` etc. verwenden                 | [Link](mdc:docs/design/components/01_buttons.md)                             |
+| **Responsivität**      | `LayoutBuilder` verwenden, Breakpoints beachten                     | [Link](mdc:docs/design/patterns/01_responsive_design.md)                     |
+| **Barrierefreiheit**   | Semantik, Fokus und Touch-Ziele sicherstellen                       | [Link](mdc:docs/design/patterns/02_accessibility.md)                         |
+| **Hauptdokumentation** | -                                                                   | [Link](mdc:docs/design/VERTIC_DESIGN_SYSTEM.md)                              |
+# Vertic Design System: Coding Regeln
+
+Diese Regeln sind verbindlich für jede UI-Entwicklung und stellen sicher, dass der Code den im **[Vertic Design System](mdc:docs/design/VERTIC_DESIGN_SYSTEM.md)** definierten Standards entspricht.
+
+## 1. Absolute Grundlagen: Keine Ausnahmen
+
+### 1.1. Single Source of Truth für Design-Token
+**Verwenden Sie für alle Design-Token (Farben, Textstile, Abstände etc.) AUSSCHLIESSLICH die definierten `ThemeExtension`-Klassen.**
+
+*   **Rationale**: Dies ist das Kernprinzip des Systems. Es gewährleistet Konsistenz und ermöglicht globale Design-Änderungen an einer einzigen Stelle.
+*   **Korrekt**:
+    ```dart
+    Container(
+      color: Theme.of(context).appColors.primary,
+      padding: Theme.of(context).appDimensions.pagePadding,
+    )
+    ```
+*   **FALSCH**:
+    ```dart
+    // NIEMALS hartcodierte Werte verwenden!
+    Container(
+      color: Colors.blue, 
+      padding: const EdgeInsets.all(16.0),
+    )
+    ```
+*   **Detail-Dokumentation**:
+    *   [Farben](mdc:docs/design/foundations/01_colors.md)
+    *   [Typografie](mdc:docs/design/foundations/02_typography.md)
+    *   [Abstände & Layout](mdc:docs/design/foundations/03_spacing_and_layout.md)
+
+### 1.2. Wiederverwendbare Komponenten verwenden
+**Erstellen Sie keine einmaligen Widgets für gängige UI-Elemente. Nutzen Sie die vordefinierten Komponenten aus dem Design-System.**
+
+*   **Rationale**: Vermeidet redundanten Code und stellt sicher, dass alle Instanzen eines Elementtyps (z.B. alle primären Buttons) identisch aussehen und sich identisch verhalten.
+*   **Korrekt**: `PrimaryButton(onPressed: () {}, text: 'Senden')`
+*   **FALSCH**: `ElevatedButton(onPressed: () {}, child: Text('Senden'), style: ...)`
+*   **Detail-Dokumentation**:
+    *   [Buttons](mdc:docs/design/components/01_buttons.md)
+    *   [Eingabefelder](mdc:docs/design/components/02_inputs.md)
+
+## 2. Responsivität & Barrierefreiheit (Standardmäßig)
+
+Jede neue Komponente und jede neue Seite **MUSS** von Grund auf responsiv und barrierefrei sein.
+
+### 2.1. Responsives Layout
+*   **Keine festen Breiten/Höhen**: Vermeiden Sie `width: 300`. Nutzen Sie `Expanded`, `Flexible` und `LayoutBuilder`.
+*   **Breakpoint-Logik**: Verwenden Sie `LayoutBuilder`, um zwischen Layouts für verschiedene Bildschirmgrößen zu wechseln.
+*   **Detail-Dokumentation**: [Responsives Design](mdc:docs/design/patterns/01_responsive_design.md)
+
+### 2.2. Barrierefreiheit (A11y)
+*   **Labels für alles Interaktive**: `IconButton`s benötigen `tooltip`s. Bilder benötigen semantische Labels.
+*   **Mindest-Touch-Größe**: Interaktive Elemente müssen mindestens 48x48dp groß sein.
+*   **Fokus-Management**: Stellen Sie sicher, dass die Tastaturnavigation logisch ist und einen sichtbaren Fokusindikator hat.
+*   **Detail-Dokumentation**: [Barrierefreiheit](mdc:docs/design/patterns/02_accessibility.md)
+
+## 3. Quick-Reference
+
+| Thema                  | Regel                                                               | Dokumentation                                                                |
+| ---------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Farben**             | `Theme.of(context).appColors` verwenden                           | [Link](mdc:docs/design/foundations/01_colors.md)                             |
+| **Texte**              | `Theme.of(context).appTexts` verwenden, mit `.copyWith()` anpassen | [Link](mdc:docs/design/foundations/02_typography.md)                         |
+| **Abstände**           | `Theme.of(context).appDimensions` für `padding`, `SizedBox`      | [Link](mdc:docs/design/foundations/03_spacing_and_layout.md)                 |
+| **Schatten**           | `Theme.of(context).appShadows` verwenden                          | [Link](mdc:docs/design/foundations/05_shadows_and_elevation.md)              |
+| **Animationen**        | `Theme.of(context).appAnimations` für `duration` und `curve`     | [Link](mdc:docs/design/foundations/06_animations.md)                         |
+| **Buttons**            | `PrimaryButton`, `SecondaryButton` etc. verwenden                 | [Link](mdc:docs/design/components/01_buttons.md)                             |
+| **Responsivität**      | `LayoutBuilder` verwenden, Breakpoints beachten                     | [Link](mdc:docs/design/patterns/01_responsive_design.md)                     |
+| **Barrierefreiheit**   | Semantik, Fokus und Touch-Ziele sicherstellen                       | [Link](mdc:docs/design/patterns/02_accessibility.md)                         |
+| **Hauptdokumentation** | -                                                                   | [Link](mdc:docs/design/VERTIC_DESIGN_SYSTEM.md)                              |
