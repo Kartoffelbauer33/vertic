@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
@@ -311,7 +312,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
     final isSuperUser =
         staffAuth.currentStaffUser?.staffLevel == StaffUserType.superUser;
 
-    return <Widget>[
+    final pages = <Widget>[
       const PosSystemPage(),
       PermissionWrapper(
         requiredPermission: 'can_create_products',
@@ -323,9 +324,15 @@ class _StaffHomePageState extends State<StaffHomePage> {
         requiredPermission: 'can_access_admin_dashboard',
         child: AdminDashboardPage(isSuperUser: isSuperUser),
       ),
-      const DesignSystemShowcasePage(), // Design System Showcase hinzugefügt
       _buildSettingsPage(context),
-    ].where((widget) {
+    ];
+
+    // Design System Showcase nur in Debug-Modus hinzufügen
+    if (kDebugMode) {
+      pages.insert(pages.length - 1, const DesignSystemShowcasePage());
+    }
+
+    return pages.where((widget) {
       if (widget is PermissionWrapper) {
         final permissionProvider = Provider.of<PermissionProvider>(
           context,
@@ -399,13 +406,15 @@ class _StaffHomePageState extends State<StaffHomePage> {
       );
     }
 
-    // Design System Showcase (nur für Development)
-    items.add(
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.palette),
-        label: 'Design',
-      ),
-    );
+    // Design System Showcase (nur in Debug-Modus)
+    if (kDebugMode) {
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.palette),
+          label: 'Design',
+        ),
+      );
+    }
 
     items.add(
       const BottomNavigationBarItem(

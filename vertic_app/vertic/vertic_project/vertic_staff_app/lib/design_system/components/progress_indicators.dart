@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme_extensions.dart';
-import '../foundations/colors.dart';
 import '../foundations/typography.dart';
 import '../foundations/spacing.dart';
 
@@ -224,7 +223,8 @@ class VerticProgressIndicator extends StatelessWidget {
     AppSpacingTheme spacing,
     AppTypographyTheme typography,
   ) {
-    // Placeholder für Step Progress - würde normalerweise eine Liste von Schritten benötigen
+    // TODO: Implement full step progress indicator using a list of steps as input
+    // This is currently a placeholder and needs proper implementation
     return Container(
       padding: spacing.cardPadding,
       decoration: BoxDecoration(
@@ -232,7 +232,7 @@ class VerticProgressIndicator extends StatelessWidget {
         borderRadius: BorderRadius.circular(spacing.radiusMd),
       ),
       child: Text(
-        'Step Progress - würde normalerweise eine Liste von Schritten benötigen',
+        'Step Progress - Implementation pending (see TODO)',
         style: typography.bodyMedium,
       ),
     );

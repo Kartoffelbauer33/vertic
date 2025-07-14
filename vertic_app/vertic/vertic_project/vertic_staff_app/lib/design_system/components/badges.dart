@@ -47,6 +47,57 @@ enum VerticBadgeColor {
   info,
 }
 
+/// **🛠️ BADGE UTILITIES**
+/// 
+/// Gemeinsame Helper-Methoden für alle Badge-Komponenten
+/// um Code-Duplizierung zu vermeiden
+class VerticBadgeUtils {
+  static Color getBadgeColor(VerticBadgeColor color, AppColorsTheme colors) {
+    switch (color) {
+      case VerticBadgeColor.primary:
+        return colors.primary;
+      case VerticBadgeColor.secondary:
+        return colors.secondary;
+      case VerticBadgeColor.error:
+        return colors.error;
+      case VerticBadgeColor.warning:
+        return colors.warning;
+      case VerticBadgeColor.success:
+        return colors.success;
+      case VerticBadgeColor.info:
+        return colors.info;
+    }
+  }
+
+  static Color getTextColor(VerticBadgeColor color, AppColorsTheme colors) {
+    switch (color) {
+      case VerticBadgeColor.primary:
+        return colors.onPrimary;
+      case VerticBadgeColor.secondary:
+        return colors.onSecondary;
+      case VerticBadgeColor.error:
+        return colors.onError;
+      case VerticBadgeColor.warning:
+        return colors.onWarning;
+      case VerticBadgeColor.success:
+        return colors.onSuccess;
+      case VerticBadgeColor.info:
+        return colors.onInfo;
+    }
+  }
+
+  static TextStyle getTextStyle(VerticBadgeSize size, AppTypographyTheme typography) {
+    switch (size) {
+      case VerticBadgeSize.small:
+        return typography.labelSmall;
+      case VerticBadgeSize.medium:
+        return typography.labelMedium;
+      case VerticBadgeSize.large:
+        return typography.labelLarge;
+    }
+  }
+}
+
 class VerticBadge extends StatelessWidget {
   final Widget child;
   final int? count;
@@ -125,7 +176,7 @@ class VerticBadge extends StatelessWidget {
         decoration: BoxDecoration(
           color: badgeColor,
           shape: BoxShape.circle,
-          border: variant == VerticBadgeVariant.outlined
+          border: variant == VerticBadgeVariant.dot
               ? Border.all(color: textColor, width: 1)
               : null,
         ),
@@ -188,6 +239,7 @@ class VerticBadge extends StatelessWidget {
   }
 
   TextStyle _getTextStyle(AppTypographyTheme typography) {
+    // Spezielle Logik für VerticBadge: kleine und mittlere Badges verwenden labelSmall
     switch (size) {
       case VerticBadgeSize.small:
         return typography.labelSmall;
@@ -199,37 +251,11 @@ class VerticBadge extends StatelessWidget {
   }
 
   Color _getBadgeColor(AppColorsTheme colors) {
-    switch (color) {
-      case VerticBadgeColor.primary:
-        return colors.primary;
-      case VerticBadgeColor.secondary:
-        return colors.secondary;
-      case VerticBadgeColor.error:
-        return colors.error;
-      case VerticBadgeColor.warning:
-        return colors.warning;
-      case VerticBadgeColor.success:
-        return colors.success;
-      case VerticBadgeColor.info:
-        return colors.info;
-    }
+    return VerticBadgeUtils.getBadgeColor(color, colors);
   }
 
   Color _getTextColor(AppColorsTheme colors) {
-    switch (color) {
-      case VerticBadgeColor.primary:
-        return colors.onPrimary;
-      case VerticBadgeColor.secondary:
-        return colors.onSecondary;
-      case VerticBadgeColor.error:
-        return colors.onError;
-      case VerticBadgeColor.warning:
-        return colors.onWarning;
-      case VerticBadgeColor.success:
-        return colors.onSuccess;
-      case VerticBadgeColor.info:
-        return colors.onInfo;
-    }
+    return VerticBadgeUtils.getTextColor(color, colors);
   }
 }
 
@@ -287,47 +313,14 @@ class VerticStatusBadge extends StatelessWidget {
   }
 
   TextStyle _getTextStyle(AppTypographyTheme typography) {
-    switch (size) {
-      case VerticBadgeSize.small:
-        return typography.labelSmall;
-      case VerticBadgeSize.medium:
-        return typography.labelMedium;
-      case VerticBadgeSize.large:
-        return typography.labelLarge;
-    }
+    return VerticBadgeUtils.getTextStyle(size, typography);
   }
 
   Color _getBadgeColor(AppColorsTheme colors) {
-    switch (color) {
-      case VerticBadgeColor.primary:
-        return colors.primary;
-      case VerticBadgeColor.secondary:
-        return colors.secondary;
-      case VerticBadgeColor.error:
-        return colors.error;
-      case VerticBadgeColor.warning:
-        return colors.warning;
-      case VerticBadgeColor.success:
-        return colors.success;
-      case VerticBadgeColor.info:
-        return colors.info;
-    }
+    return VerticBadgeUtils.getBadgeColor(color, colors);
   }
 
   Color _getTextColor(AppColorsTheme colors) {
-    switch (color) {
-      case VerticBadgeColor.primary:
-        return colors.onPrimary;
-      case VerticBadgeColor.secondary:
-        return colors.onSecondary;
-      case VerticBadgeColor.error:
-        return colors.onError;
-      case VerticBadgeColor.warning:
-        return colors.onWarning;
-      case VerticBadgeColor.success:
-        return colors.onSuccess;
-      case VerticBadgeColor.info:
-        return colors.onInfo;
-    }
+    return VerticBadgeUtils.getTextColor(color, colors);
   }
 } 
