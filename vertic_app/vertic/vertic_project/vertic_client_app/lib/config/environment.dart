@@ -25,7 +25,7 @@ class Environment {
       return _stagingServer;
     }
 
-    // Default: Lokaler Server
+    // Default: Lokaler Server (Database ist remote)
     return _localServer;
   }
 
