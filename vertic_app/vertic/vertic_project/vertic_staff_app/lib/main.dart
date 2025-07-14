@@ -139,16 +139,16 @@ class _MyAppState extends State<MyApp> {
       builder: (context, staffAuth, child) {
         return Consumer<ThemeProvider>(
           builder: (context, themeProvider, child) {
-            return MaterialApp(
-              title: 'Vertic Staff',
+        return MaterialApp(
+          title: 'Vertic Staff',
               theme: VerticTheme.light(context),
               darkTheme: VerticTheme.dark(context),
               themeMode: themeProvider.themeMode,
-              // 🎯 Routing basiert auf Staff-Auth-Status
-              home: staffAuth.isAuthenticated
-                  ? const StaffHomePage()
-                  : const LoginPage(),
-              debugShowCheckedModeBanner: false,
+          // 🎯 Routing basiert auf Staff-Auth-Status
+          home: staffAuth.isAuthenticated
+              ? const StaffHomePage()
+              : const LoginPage(),
+          debugShowCheckedModeBanner: false,
             );
           },
         );
