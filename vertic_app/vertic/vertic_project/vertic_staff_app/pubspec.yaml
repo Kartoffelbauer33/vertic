@@ -50,6 +50,8 @@ dependencies:
   # Gerätespezifische Session-Verwaltung
   device_info_plus: ^11.5.0  # Für Geräte-Identifikation
 
+  lucide_icons_flutter: ^3.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

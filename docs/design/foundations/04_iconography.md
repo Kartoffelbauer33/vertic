@@ -4,10 +4,8 @@ Icons sind ein wesentlicher Bestandteil einer intuitiven Benutzeroberfläche. Si
 
 ## 1. Icon-Bibliothek
 
-Wir verwenden eine einzige, konsistente Icon-Bibliothek für die gesamte Anwendung, um ein einheitliches Erscheinungsbild zu gewährleisten.
-
-*   **Empfehlung**: **`Remix Icon`** oder **`Lucide`**. Beide bieten eine große Auswahl an klaren, modernen und gut lesbaren Icons im Outline-Stil, der gut zu unserem Design passt.
-*   **Paket**: Wir nutzen ein Flutter-Paket wie `remixicon` oder `lucide_flutter`, um einfach auf die Icons zugreifen zu können.
+Wir verwenden eine einzige, konsistente Icon-Bibliothek für die gesamte Anwendung, um ein einheitliches Erscheinungsbild zu gewährleisten. Es wiird Lucide als Iconset verwendet
+*   **Paket**: Wir nutzen ein Flutter-Paket`lucide_flutter`, um einfach auf die Icons zugreifen zu können.
 
 ```yaml
 # pubspec.yaml
