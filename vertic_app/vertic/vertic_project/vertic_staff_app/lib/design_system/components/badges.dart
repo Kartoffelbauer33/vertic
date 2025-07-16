@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
-import '../theme_extensions.dart';
+
 import '../foundations/colors.dart';
-import '../foundations/typography.dart';
 import '../foundations/spacing.dart';
+import '../foundations/typography.dart';
+import '../theme_extensions.dart';
 
 /// **🏅 VERTIC BADGE COMPONENT**
-/// 
+///
 /// Kleine Indikatoren für Benachrichtigungen, Status oder Zähler.
-/// 
+///
 /// **Varianten:**
 /// - `VerticBadgeVariant.filled` - Gefüllter Badge (Standard)
 /// - `VerticBadgeVariant.outlined` - Umrandeter Badge
 /// - `VerticBadgeVariant.dot` - Punkt-Badge ohne Text
-/// 
+///
 /// **Größen:**
 /// - `VerticBadgeSize.small` - Kompakte Größe
 /// - `VerticBadgeSize.medium` - Standard Größe
 /// - `VerticBadgeSize.large` - Große Größe
-/// 
+///
 /// **Verwendung:**
 /// ```dart
 /// VerticBadge(
@@ -26,29 +27,14 @@ import '../foundations/spacing.dart';
 /// )
 /// ```
 
-enum VerticBadgeVariant {
-  filled,
-  outlined,
-  dot,
-}
+enum VerticBadgeVariant { filled, outlined, dot }
 
-enum VerticBadgeSize {
-  small,
-  medium,
-  large,
-}
+enum VerticBadgeSize { small, medium, large }
 
-enum VerticBadgeColor {
-  primary,
-  secondary,
-  error,
-  warning,
-  success,
-  info,
-}
+enum VerticBadgeColor { primary, secondary, error, warning, success, info }
 
 /// **🛠️ BADGE UTILITIES**
-/// 
+///
 /// Gemeinsame Helper-Methoden für alle Badge-Komponenten
 /// um Code-Duplizierung zu vermeiden
 class VerticBadgeUtils {
@@ -86,7 +72,10 @@ class VerticBadgeUtils {
     }
   }
 
-  static TextStyle getTextStyle(VerticBadgeSize size, AppTypographyTheme typography) {
+  static TextStyle getTextStyle(
+    VerticBadgeSize size,
+    AppTypographyTheme typography,
+  ) {
     switch (size) {
       case VerticBadgeSize.small:
         return typography.labelSmall;
@@ -134,7 +123,7 @@ class VerticBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shouldShow = _shouldShowBadge();
-    
+
     if (!shouldShow) {
       return child;
     }
@@ -143,11 +132,7 @@ class VerticBadge extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         child,
-        Positioned(
-          right: -4,
-          top: -4,
-          child: _buildBadge(context),
-        ),
+        Positioned(right: -4, top: -4, child: _buildBadge(context)),
       ],
     );
   }
@@ -177,14 +162,14 @@ class VerticBadge extends StatelessWidget {
           color: badgeColor,
           shape: BoxShape.circle,
           border: variant == VerticBadgeVariant.dot
-              ? Border.all(color: textColor, width: 1)
+              ? Border.all(color: context.colors.surface, width: 1.5)
               : null,
         ),
       );
     }
 
     final displayText = _getDisplayText();
-    
+
     return Container(
       constraints: BoxConstraints(
         minWidth: badgeSize.width,
@@ -195,8 +180,8 @@ class VerticBadge extends StatelessWidget {
         vertical: spacing.xs / 2,
       ),
       decoration: BoxDecoration(
-        color: variant == VerticBadgeVariant.outlined 
-            ? Colors.transparent 
+        color: variant == VerticBadgeVariant.outlined
+            ? Colors.transparent
             : badgeColor,
         borderRadius: BorderRadius.circular(badgeSize.height / 2),
         border: variant == VerticBadgeVariant.outlined
@@ -206,8 +191,8 @@ class VerticBadge extends StatelessWidget {
       child: Text(
         displayText,
         style: textStyle.copyWith(
-          color: variant == VerticBadgeVariant.outlined 
-              ? badgeColor 
+          color: variant == VerticBadgeVariant.outlined
+              ? badgeColor
               : textColor,
           height: 1.0,
         ),
@@ -260,7 +245,7 @@ class VerticBadge extends StatelessWidget {
 }
 
 /// **🏅 VERTIC STATUS BADGE**
-/// 
+///
 /// Spezialisierter Badge für Status-Anzeigen
 class VerticStatusBadge extends StatelessWidget {
   final String label;
@@ -278,24 +263,20 @@ class VerticStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    final badgeColor = _getBadgeColor(colors);
-    final textColor = _getTextColor(colors);
-    final textStyle = _getTextStyle(typography);
+    final badgeColor = VerticBadgeUtils.getBadgeColor(color, context.colors);
+    final textColor = VerticBadgeUtils.getTextColor(color, context.colors);
+    final textStyle = VerticBadgeUtils.getTextStyle(size, context.typography);
 
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: spacing.sm,
-        vertical: spacing.xs,
+        horizontal: context.spacing.sm,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
-        color: variant == VerticBadgeVariant.outlined 
-            ? Colors.transparent 
+        color: variant == VerticBadgeVariant.outlined
+            ? Colors.transparent
             : badgeColor,
-        borderRadius: BorderRadius.circular(spacing.radiusSm),
+        borderRadius: BorderRadius.circular(context.spacing.radiusSm),
         border: variant == VerticBadgeVariant.outlined
             ? Border.all(color: badgeColor, width: 1)
             : null,
@@ -303,24 +284,10 @@ class VerticStatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: textStyle.copyWith(
-          color: variant == VerticBadgeVariant.outlined 
-              ? badgeColor 
-              : textColor,
+          color: variant == VerticBadgeVariant.outlined ? badgeColor : textColor,
           fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
-
-  TextStyle _getTextStyle(AppTypographyTheme typography) {
-    return VerticBadgeUtils.getTextStyle(size, typography);
-  }
-
-  Color _getBadgeColor(AppColorsTheme colors) {
-    return VerticBadgeUtils.getBadgeColor(color, colors);
-  }
-
-  Color _getTextColor(AppColorsTheme colors) {
-    return VerticBadgeUtils.getTextColor(color, colors);
-  }
-} 
+}
