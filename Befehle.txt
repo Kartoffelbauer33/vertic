@@ -4,4 +4,4 @@ serverpod generate; serverpod create-migration; dart pub get; dart run bin/main.
 
 flutter clean && flutter pub get && flutter run -d mac
 
-flutter clean && serverpod generate && dart pub get && dart run bin/main.dart --apply-migrations
+serverpod generate && dart pub get && dart run bin/main.dart --apply-migrations

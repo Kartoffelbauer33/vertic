@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-Bitte versuche trotz deiner Dummheit nicht ständig && zu verwenden bei Powershell! das funktioniert nicht! du musst ; das semicolon verwenden wenn du mehrere Befehle eingeben willst!

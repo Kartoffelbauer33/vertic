@@ -1,4 +1,6 @@
 ---
-alwaysApply: true
+trigger: always_on
+description:
+globs:
 ---
 Wenn du das Backend veränderst oder erweiterst dann suche zuerst in den bestehenden files und yaml nach den entsprechenden Begriffen usw. achte darauf nichts doppelt zu erstellen keine redundanzen usw. Suche immer zuerst nach eventuell bereits bestehenden Dateien die wir verwenden können.

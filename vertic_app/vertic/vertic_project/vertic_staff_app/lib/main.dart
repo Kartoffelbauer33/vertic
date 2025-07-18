@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
@@ -14,9 +15,40 @@ import 'pages/statistics_page.dart';
 import 'auth/permission_wrapper.dart';
 import 'config/environment.dart';
 import 'services/background_scanner_service.dart';
+import 'design_system/design_system.dart';
 
 // Globale Client-Instanz (SessionManager entfernt!)
 late Client client;
+
+// Theme Provider für manuelles Theme-Switching
+class ThemeProvider extends ChangeNotifier {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  ThemeMode get themeMode => _themeMode;
+
+  bool get isDarkMode {
+    if (_themeMode == ThemeMode.system) {
+      return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    }
+    return _themeMode == ThemeMode.dark;
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    _themeMode = mode;
+    notifyListeners();
+  }
+
+  void toggleTheme() {
+    if (_themeMode == ThemeMode.light) {
+      _themeMode = ThemeMode.dark;
+    } else if (_themeMode == ThemeMode.dark) {
+      _themeMode = ThemeMode.system;
+    } else {
+      _themeMode = ThemeMode.light;
+    }
+    notifyListeners();
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,9 +65,9 @@ void main() async {
   )..connectivityMonitor = FlutterConnectivityMonitor();
 
   // Debug-Info ausgeben
-  print('🚀 Vertic Staff startet...');
-  print('📡 Server: ${Environment.environmentInfo}');
-  print('🔗 URL: ${Environment.serverUrl}');
+  // print('🚀 Vertic Staff startet...');
+  // print('📡 Server: ${Environment.environmentInfo}');
+  // print('🔗 URL: ${Environment.serverUrl}');
 
   // 🚀 NEUES STAFF-AUTH-SYSTEM: Kein SessionManager mehr!
   // Der StaffAuthProvider übernimmt die komplette Authentication
@@ -47,6 +79,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => StaffAuthProvider(client)),
         ChangeNotifierProvider(create: (_) => PermissionProvider(client)),
         ChangeNotifierProvider(create: (_) => BackgroundScannerService(client)),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const MyApp(),
     ),
@@ -104,19 +137,20 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return Consumer<StaffAuthProvider>(
       builder: (context, staffAuth, child) {
+        return Consumer<ThemeProvider>(
+          builder: (context, themeProvider, child) {
         return MaterialApp(
           title: 'Vertic Staff',
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF00897B),
-            ),
-            useMaterial3: true,
-          ),
+              theme: VerticTheme.light(context),
+              darkTheme: VerticTheme.dark(context),
+              themeMode: themeProvider.themeMode,
           // 🎯 Routing basiert auf Staff-Auth-Status
           home: staffAuth.isAuthenticated
               ? const StaffHomePage()
               : const LoginPage(),
           debugShowCheckedModeBanner: false,
+            );
+          },
         );
       },
     );
@@ -278,7 +312,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
     final isSuperUser =
         staffAuth.currentStaffUser?.staffLevel == StaffUserType.superUser;
 
-    return <Widget>[
+    final pages = <Widget>[
       const PosSystemPage(),
       PermissionWrapper(
         requiredPermission: 'can_create_products',
@@ -291,7 +325,14 @@ class _StaffHomePageState extends State<StaffHomePage> {
         child: AdminDashboardPage(isSuperUser: isSuperUser),
       ),
       _buildSettingsPage(context),
-    ].where((widget) {
+    ];
+
+    // Design System Showcase nur in Debug-Modus hinzufügen
+    if (kDebugMode) {
+      pages.insert(pages.length - 1, const DesignSystemShowcasePage());
+    }
+
+    return pages.where((widget) {
       if (widget is PermissionWrapper) {
         final permissionProvider = Provider.of<PermissionProvider>(
           context,
@@ -361,6 +402,16 @@ class _StaffHomePageState extends State<StaffHomePage> {
         const BottomNavigationBarItem(
           icon: Icon(Icons.admin_panel_settings),
           label: 'Admin',
+        ),
+      );
+    }
+
+    // Design System Showcase (nur in Debug-Modus)
+    if (kDebugMode) {
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.palette),
+          label: 'Design',
         ),
       );
     }
