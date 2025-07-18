@@ -729,4 +729,608 @@ class ProductManagementEndpoint extends Endpoint {
       rethrow;
     }
   }
+
+  // ==================== 🆕 HIERARCHISCHE KATEGORIEN-METHODEN ====================
+
+  /// **🏗️ TOP-LEVEL-KATEGORIEN ABRUFEN (Überkategorien)**
+  Future<List<ProductCategory>> getTopLevelCategories(
+    Session session, {
+    bool onlyActive = true,
+    int? hallId,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('🏗️ ProductManagement: getTopLevelCategories() - START');
+    session.log('   Filter: onlyActive=$onlyActive, hallId=$hallId');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    try {
+      var queryBuilder = ProductCategory.db.find(
+        session,
+        where: (t) => t.parentCategoryId.equals(null),
+      );
+
+      if (onlyActive) {
+        queryBuilder = ProductCategory.db.find(
+          session,
+          where: (t) =>
+              t.parentCategoryId.equals(null) & t.isActive.equals(true),
+        );
+        session.log(
+            '🔍 ProductManagement: Filter nur aktive Top-Level-Kategorien');
+      }
+
+      if (hallId != null) {
+        queryBuilder = ProductCategory.db.find(
+          session,
+          where: (t) =>
+              t.parentCategoryId.equals(null) &
+              t.isActive.equals(onlyActive) &
+              t.hallId.equals(hallId),
+        );
+        session.log('🔍 ProductManagement: Filter Hallen-ID: $hallId');
+      }
+
+      final categories = await queryBuilder;
+
+      // Nach displayOrder sortieren
+      categories.sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: ${categories.length} Top-Level-Kategorien abgerufen in ${duration.inMilliseconds}ms');
+
+      return categories;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: getTopLevelCategories() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **📁 UNTER-KATEGORIEN ABRUFEN**
+  Future<List<ProductCategory>> getSubCategories(
+    Session session,
+    int parentCategoryId, {
+    bool onlyActive = true,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('📁 ProductManagement: getSubCategories() - START');
+    session.log('   ParentID: $parentCategoryId, onlyActive: $onlyActive');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    try {
+      var queryBuilder = ProductCategory.db.find(
+        session,
+        where: (t) => t.parentCategoryId.equals(parentCategoryId),
+      );
+
+      if (onlyActive) {
+        queryBuilder = ProductCategory.db.find(
+          session,
+          where: (t) =>
+              t.parentCategoryId.equals(parentCategoryId) &
+              t.isActive.equals(true),
+        );
+        session.log('🔍 ProductManagement: Filter nur aktive Unter-Kategorien');
+      }
+
+      final categories = await queryBuilder;
+
+      // Nach displayOrder sortieren
+      categories.sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: ${categories.length} Unter-Kategorien für Parent $parentCategoryId abgerufen in ${duration.inMilliseconds}ms');
+
+      return categories;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: getSubCategories() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **🏗️ TOP-LEVEL-KATEGORIE ERSTELLEN (Überkategorie)**
+  Future<ProductCategory> createTopLevelCategory(
+    Session session,
+    String name, {
+    String? description,
+    String? colorHex,
+    String? iconName,
+    int? hallId,
+    int displayOrder = 0,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('🏗️ ProductManagement: createTopLevelCategory() - START');
+    session.log(
+        '   Name: "$name", Color: ${colorHex ?? '#607D8B'}, Icon: ${iconName ?? 'category'}');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    // Berechtigung prüfen
+    final hasPermission = await PermissionHelper.hasPermission(
+      session,
+      staffUserId,
+      'can_manage_product_categories',
+    );
+    if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
+      throw Exception('Keine Berechtigung zum Erstellen von Kategorien');
+    }
+
+    // Input-Validierung
+    if (name.trim().isEmpty) {
+      session.log('❌ ProductManagement: Leerer Kategorie-Name',
+          level: LogLevel.error);
+      throw Exception('VALIDATION_ERROR: Kategorie-Name darf nicht leer sein');
+    }
+
+    if (name.trim().length > 50) {
+      session.log(
+          '❌ ProductManagement: Kategorie-Name zu lang: ${name.length} Zeichen',
+          level: LogLevel.error);
+      throw Exception(
+          'VALIDATION_ERROR: Kategorie-Name darf maximal 50 Zeichen haben');
+    }
+
+    try {
+      // Erweiterte Name-Uniqueness prüfen (case-insensitive)
+      final existingCategory = await ProductCategory.db.find(
+        session,
+        where: (t) => t.name.equals(name.trim()),
+        limit: 1,
+      );
+
+      if (existingCategory.isNotEmpty) {
+        final existing = existingCategory.first;
+        session.log(
+            '❌ ProductManagement: Kategorie-Name bereits vorhanden: "$name" (ID: ${existing.id})',
+            level: LogLevel.error);
+        throw Exception(
+            'DUPLICATE_NAME_ERROR: Eine Kategorie mit dem Namen "${name.trim()}" existiert bereits. Bitte wählen Sie einen anderen Namen.');
+      }
+
+      final now = DateTime.now();
+      final newCategory = ProductCategory(
+        name: name.trim(),
+        description: description?.trim(),
+        colorHex: colorHex ?? '#607D8B',
+        iconName: iconName ?? 'category',
+        hallId: hallId,
+        displayOrder: displayOrder,
+        isActive: true,
+        level: 0, // Top-Level
+        hasChildren: false, // Neu erstellt, noch keine Kinder
+        parentCategoryId: null, // Top-Level hat keinen Parent
+        createdAt: now,
+        createdByStaffId: staffUserId,
+      );
+
+      final savedCategory =
+          await ProductCategory.db.insertRow(session, newCategory);
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: Neue Top-Level-Kategorie erstellt in ${duration.inMilliseconds}ms:');
+      session.log('   ID: ${savedCategory.id}, Name: ${savedCategory.name}');
+      session.log(
+          '   Level: ${savedCategory.level}, Parent: ${savedCategory.parentCategoryId}');
+
+      return savedCategory;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: createTopLevelCategory() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **📁 UNTER-KATEGORIE ERSTELLEN**
+  Future<ProductCategory> createSubCategory(
+    Session session,
+    String name,
+    int parentCategoryId, {
+    String? description,
+    String? colorHex,
+    String? iconName,
+    int? hallId,
+    int displayOrder = 0,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('📁 ProductManagement: createSubCategory() - START');
+    session.log('   Name: "$name", ParentID: $parentCategoryId');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    // Berechtigung prüfen
+    final hasPermission = await PermissionHelper.hasPermission(
+      session,
+      staffUserId,
+      'can_manage_product_categories',
+    );
+    if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
+      throw Exception('Keine Berechtigung zum Erstellen von Kategorien');
+    }
+
+    // Input-Validierung
+    if (name.trim().isEmpty) {
+      session.log('❌ ProductManagement: Leerer Kategorie-Name',
+          level: LogLevel.error);
+      throw Exception('VALIDATION_ERROR: Kategorie-Name darf nicht leer sein');
+    }
+
+    if (name.trim().length > 50) {
+      session.log(
+          '❌ ProductManagement: Kategorie-Name zu lang: ${name.length} Zeichen',
+          level: LogLevel.error);
+      throw Exception(
+          'VALIDATION_ERROR: Kategorie-Name darf maximal 50 Zeichen haben');
+    }
+
+    try {
+      // Parent-Kategorie existiert und validieren
+      final parentCategory = await ProductCategory.db.findFirstRow(
+        session,
+        where: (t) => t.id.equals(parentCategoryId),
+      );
+
+      if (parentCategory == null) {
+        session.log(
+            '❌ ProductManagement: Parent-Kategorie $parentCategoryId nicht gefunden',
+            level: LogLevel.error);
+        throw Exception(
+            'PARENT_NOT_FOUND_ERROR: Übergeordnete Kategorie mit ID $parentCategoryId wurde nicht gefunden');
+      }
+
+      // Prüfe ob Parent aktiv ist
+      if (!parentCategory.isActive) {
+        session.log(
+            '❌ ProductManagement: Parent-Kategorie $parentCategoryId ist inaktiv',
+            level: LogLevel.error);
+        throw Exception(
+            'PARENT_INACTIVE_ERROR: Die übergeordnete Kategorie "${parentCategory.name}" ist deaktiviert');
+      }
+
+      // Erweiterte Name-Uniqueness prüfen (auch innerhalb der Parent-Kategorie)
+      final existingCategory = await ProductCategory.db.find(
+        session,
+        where: (t) => t.name.equals(name.trim()),
+        limit: 1,
+      );
+
+      if (existingCategory.isNotEmpty) {
+        final existing = existingCategory.first;
+        session.log(
+            '❌ ProductManagement: Kategorie-Name bereits vorhanden: "$name" (ID: ${existing.id})',
+            level: LogLevel.error);
+
+        // Spezifische Nachricht je nach Parent-Hierarchie
+        if (existing.parentCategoryId == parentCategoryId) {
+          throw Exception(
+              'DUPLICATE_NAME_ERROR: Eine Unterkategorie mit dem Namen "${name.trim()}" existiert bereits unter "${parentCategory.name}". Bitte wählen Sie einen anderen Namen.');
+        } else {
+          throw Exception(
+              'DUPLICATE_NAME_ERROR: Eine Kategorie mit dem Namen "${name.trim()}" existiert bereits. Bitte wählen Sie einen anderen Namen.');
+        }
+      }
+
+      final now = DateTime.now();
+      final newCategory = ProductCategory(
+        name: name.trim(),
+        description: description?.trim(),
+        colorHex: colorHex ?? parentCategory.colorHex, // Erbe Parent-Farbe
+        iconName: iconName ?? parentCategory.iconName, // Erbe Parent-Icon
+        hallId: hallId ?? parentCategory.hallId, // Erbe Parent-Hall
+        displayOrder: displayOrder,
+        isActive: true,
+        level: parentCategory.level + 1, // Ein Level tiefer als Parent
+        hasChildren: false, // Neu erstellt, noch keine Kinder
+        parentCategoryId: parentCategoryId,
+        createdAt: now,
+        createdByStaffId: staffUserId,
+      );
+
+      final savedCategory =
+          await ProductCategory.db.insertRow(session, newCategory);
+
+      // Parent-Kategorie aktualisieren: hasChildren = true
+      final updatedParent = parentCategory.copyWith(
+        hasChildren: true,
+        updatedAt: now,
+      );
+      await ProductCategory.db.updateRow(session, updatedParent);
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: Neue Unter-Kategorie erstellt in ${duration.inMilliseconds}ms:');
+      session.log('   ID: ${savedCategory.id}, Name: ${savedCategory.name}');
+      session.log(
+          '   Level: ${savedCategory.level}, Parent: ${savedCategory.parentCategoryId}');
+      session.log('   Parent ${parentCategory.name} hasChildren aktualisiert');
+
+      return savedCategory;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: createSubCategory() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **📊 HIERARCHISCHE STRUKTUR ABRUFEN**
+  Future<Map<String, dynamic>> getCategoryHierarchy(
+    Session session, {
+    bool onlyActive = true,
+    int? hallId,
+  }) async {
+    final startTime = DateTime.now();
+    session.log('📊 ProductManagement: getCategoryHierarchy() - START');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    try {
+      // Top-Level-Kategorien abrufen
+      final topLevelCategories = await getTopLevelCategories(
+        session,
+        onlyActive: onlyActive,
+        hallId: hallId,
+      );
+
+      final hierarchy = <String, dynamic>{};
+
+      for (final topCategory in topLevelCategories) {
+        // Unter-Kategorien für diese Top-Level-Kategorie abrufen
+        final subCategories = await getSubCategories(
+          session,
+          topCategory.id!,
+          onlyActive: onlyActive,
+        );
+
+        // Produkte zählen (direkt in Top-Level und in Sub-Kategorien)
+        final topLevelProductCount = await Product.db.find(
+          session,
+          where: (t) =>
+              t.categoryId.equals(topCategory.id) &
+              t.isActive.equals(onlyActive),
+        );
+
+        int totalProductCount = topLevelProductCount.length;
+
+        final subCategoryData = <Map<String, dynamic>>[];
+        for (final subCategory in subCategories) {
+          final subProducts = await Product.db.find(
+            session,
+            where: (t) =>
+                t.categoryId.equals(subCategory.id) &
+                t.isActive.equals(onlyActive),
+          );
+
+          totalProductCount += subProducts.length;
+
+          subCategoryData.add({
+            'category': subCategory,
+            'productCount': subProducts.length,
+          });
+        }
+
+        hierarchy[topCategory.id.toString()] = {
+          'category': topCategory,
+          'productCount': totalProductCount,
+          'directProductCount': topLevelProductCount.length,
+          'subCategories': subCategoryData,
+        };
+      }
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: Hierarchie abgerufen in ${duration.inMilliseconds}ms');
+      session.log(
+          '   ${topLevelCategories.length} Top-Level-Kategorien verarbeitet');
+
+      return hierarchy;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: getCategoryHierarchy() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
+
+  /// **🗑️ KATEGORIE LÖSCHEN (Hierarchie-aware)**
+  Future<bool> deleteProductCategory(Session session, int categoryId) async {
+    final startTime = DateTime.now();
+    session.log('🗑️ ProductManagement: deleteProductCategory() - START');
+    session.log('   Kategorie-ID: $categoryId');
+
+    final staffUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (staffUserId == null) {
+      session.log('❌ ProductManagement: Nicht authentifiziert',
+          level: LogLevel.error);
+      throw Exception('Authentication erforderlich');
+    }
+
+    // Berechtigung prüfen
+    final hasPermission = await PermissionHelper.hasPermission(
+      session,
+      staffUserId,
+      'can_manage_product_categories',
+    );
+    if (!hasPermission) {
+      session.log(
+          '❌ ProductManagement: Keine Berechtigung für Staff $staffUserId',
+          level: LogLevel.error);
+      throw Exception('Keine Berechtigung zum Löschen von Kategorien');
+    }
+
+    try {
+      // Kategorie laden
+      final category = await ProductCategory.db.findById(session, categoryId);
+      if (category == null) {
+        session.log('❌ ProductManagement: Kategorie $categoryId nicht gefunden',
+            level: LogLevel.error);
+        throw Exception(
+            'CATEGORY_NOT_FOUND_ERROR: Kategorie mit ID $categoryId wurde nicht gefunden');
+      }
+
+      session.log('✅ ProductManagement: Kategorie gefunden: ${category.name}');
+
+      // System-Kategorien schützen
+      if (category.isSystemCategory) {
+        session.log(
+            '❌ ProductManagement: System-Kategorie kann nicht gelöscht werden',
+            level: LogLevel.error);
+        throw Exception(
+            'SYSTEM_CATEGORY_ERROR: System-Kategorien können nicht gelöscht werden');
+      }
+
+      // Favorites-Kategorie schützen
+      if (category.isFavorites) {
+        session.log(
+            '❌ ProductManagement: Favoriten-Kategorie kann nicht gelöscht werden',
+            level: LogLevel.error);
+        throw Exception(
+            'FAVORITES_CATEGORY_ERROR: Die Favoriten-Kategorie kann nicht gelöscht werden');
+      }
+
+      // Prüfe auf Produkte in dieser Kategorie
+      final productsInCategory = await Product.db.find(
+        session,
+        where: (t) => t.categoryId.equals(categoryId) & t.isActive.equals(true),
+      );
+
+      if (productsInCategory.isNotEmpty) {
+        session.log(
+            '❌ ProductManagement: Kategorie enthält noch ${productsInCategory.length} aktive Produkte',
+            level: LogLevel.error);
+        throw Exception(
+            'CATEGORY_HAS_PRODUCTS_ERROR: Die Kategorie "${category.name}" enthält noch ${productsInCategory.length} aktive Produkte. Bitte entfernen Sie zuerst alle Produkte aus dieser Kategorie.');
+      }
+
+      // Hierarchie-Prüfung: Hat diese Kategorie Unterkategorien?
+      if (category.hasChildren) {
+        final subCategories = await ProductCategory.db.find(
+          session,
+          where: (t) =>
+              t.parentCategoryId.equals(categoryId) & t.isActive.equals(true),
+        );
+
+        if (subCategories.isNotEmpty) {
+          session.log(
+              '❌ ProductManagement: Kategorie hat noch ${subCategories.length} Unterkategorien',
+              level: LogLevel.error);
+          final subCategoryNames =
+              subCategories.map((c) => '"${c.name}"').join(', ');
+          throw Exception(
+              'CATEGORY_HAS_SUBCATEGORIES_ERROR: Die Kategorie "${category.name}" hat noch ${subCategories.length} Unterkategorien: $subCategoryNames. Bitte löschen Sie zuerst alle Unterkategorien.');
+        }
+      }
+
+      final now = DateTime.now();
+
+      // LÖSCHUNG DURCHFÜHREN
+      session.log('💾 ProductManagement: Lösche Kategorie aus Datenbank...');
+
+      // Soft Delete: Kategorie als inaktiv markieren
+      final deletedCategory = category.copyWith(
+        isActive: false,
+        updatedAt: now,
+      );
+      await ProductCategory.db.updateRow(session, deletedCategory);
+
+      // Falls dies eine Unterkategorie war: Parent-Kategorie aktualisieren
+      if (category.parentCategoryId != null) {
+        final parentCategory = await ProductCategory.db
+            .findById(session, category.parentCategoryId!);
+        if (parentCategory != null) {
+          // Prüfe ob Parent noch andere aktive Kinder hat
+          final remainingSiblings = await ProductCategory.db.find(
+            session,
+            where: (t) =>
+                t.parentCategoryId.equals(category.parentCategoryId!) &
+                t.isActive.equals(true) &
+                t.id.notEquals(categoryId),
+          );
+
+          // Wenn keine aktiven Geschwister mehr: Parent hasChildren = false
+          if (remainingSiblings.isEmpty) {
+            final updatedParent = parentCategory.copyWith(
+              hasChildren: false,
+              updatedAt: now,
+            );
+            await ProductCategory.db.updateRow(session, updatedParent);
+            session.log(
+                '✅ ProductManagement: Parent-Kategorie "${parentCategory.name}" hasChildren aktualisiert');
+          }
+        }
+      }
+
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '✅ ProductManagement: Kategorie gelöscht (Soft Delete) in ${duration.inMilliseconds}ms:');
+      session.log('   ID: $categoryId, Name: ${category.name}');
+      session.log(
+          '   Level: ${category.level}, Parent: ${category.parentCategoryId}');
+      session.log('   Von Staff $staffUserId gelöscht');
+
+      return true;
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(startTime);
+      session.log(
+          '❌ ProductManagement: deleteProductCategory() Fehler nach ${duration.inMilliseconds}ms: $e',
+          level: LogLevel.error);
+      session.log('📍 Stack: $stackTrace', level: LogLevel.debug);
+      rethrow;
+    }
+  }
 }

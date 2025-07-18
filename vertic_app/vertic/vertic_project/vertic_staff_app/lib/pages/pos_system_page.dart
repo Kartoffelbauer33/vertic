@@ -80,6 +80,12 @@ class _PosSystemPageState extends State<PosSystemPage> {
   List<Product> _allProducts = [];
   String? _selectedCategory; // Wird dynamisch gesetzt
 
+  // 🆕 HIERARCHISCHE NAVIGATION
+  List<String> _categoryBreadcrumb = []; // Navigation-Pfad
+  Map<String, Map<String, dynamic>> _categoryHierarchy = {}; // Hierarchie-Daten
+  String? _currentTopLevelCategory; // Aktuelle Überkategorie
+  bool _showingSubCategories = false; // Zeigt Sub-Kategorien an
+
   // 🛒 MULTI-CART-SYSTEM
   List<CartSession> _activeCarts = []; // Alle aktiven Warenkörbe
   int _currentCartIndex = 0; // Index des aktuell angezeigten Warenkorbs
@@ -938,9 +944,29 @@ class _PosSystemPageState extends State<PosSystemPage> {
     String itemName,
     double price,
   ) async {
-    if (_currentSession == null) return;
+    debugPrint(
+      '🛒 DEBUG: _addItemToCart aufgerufen - Type: $itemType, ID: $itemId, Name: $itemName',
+    );
+    debugPrint(
+      '🛒 DEBUG: _currentSession ist null: ${_currentSession == null}',
+    );
+
+    if (_currentSession == null) {
+      debugPrint('❌ Keine aktive Session - erstelle neue Session');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Keine aktive Session - bitte neu starten'),
+          ),
+        );
+      }
+      return;
+    }
 
     try {
+      debugPrint(
+        '🛒 DEBUG: Sende zu Backend - Session ID: ${_currentSession!.id}',
+      );
       final client = Provider.of<Client>(context, listen: false);
       await client.pos.addToCart(
         _currentSession!.id!,
@@ -950,9 +976,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
         price,
         1, // quantity
       );
+      debugPrint('✅ Artikel erfolgreich zum Warenkorb hinzugefügt');
       // ⚡ OPTIMIZED CART UPDATE: Non-blocking reload
       _loadCartItems();
     } catch (e) {
+      debugPrint('❌ Fehler beim Hinzufügen zum Warenkorb: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Hinzufügen zum Warenkorb: $e')),
@@ -1360,76 +1388,21 @@ class _PosSystemPageState extends State<PosSystemPage> {
       debugPrint('  • Kategorien: ${categories.length}');
       debugPrint('  • Produkte: ${products.length}');
 
-      // 🆕 3. TICKET-KATEGORIEN erstellen (Tickets als spezielle Kategorien behandeln)
-      final hallentickets = filteredTickets
-          .where((ticket) => ticket.gymId != null)
-          .toList();
+      // 🆕 3. HIERARCHISCHE STRUKTUR AUFBAUEN
+      await _buildCategoryHierarchy(categories, products, filteredTickets);
 
-      final verticUniversal = filteredTickets
-          .where((ticket) => ticket.gymId == null && ticket.isVerticUniversal)
-          .toList();
-
-      // 🆕 4. ALLE DATEN KATEGORISIEREN
-      final newCategorizedItems = <String, List<dynamic>>{};
-
-      // Ticket-Kategorien (falls vorhanden)
-      if (hallentickets.isNotEmpty) {
-        newCategorizedItems['🎫 Hallentickets'] = hallentickets;
-      }
-      if (verticUniversal.isNotEmpty) {
-        newCategorizedItems['🎟️ Vertic Universal'] = verticUniversal;
-      }
-
-      // Backend-Kategorien mit Produkten
-      for (final category in categories) {
-        final categoryProducts = products
-            .where((product) => product.categoryId == category.id)
-            .toList();
-
-        if (categoryProducts.isNotEmpty || category.isActive) {
-          // Icon-Emoji für bessere Darstellung
-          final emoji = _getCategoryEmoji(category.iconName);
-          final categoryName = '$emoji ${category.name}';
-          newCategorizedItems[categoryName] = categoryProducts;
-        }
-      }
-
-      // 🆕 5. ERSTE KATEGORIE AUTOMATISCH AUSWÄHLEN
-      if (_selectedCategory == null && newCategorizedItems.isNotEmpty) {
-        _selectedCategory = newCategorizedItems.keys.first;
-        debugPrint('🎯 Auto-Select erste Kategorie: $_selectedCategory');
-      }
-
-      // 🆕 6. STATE AKTUALISIEREN
+      // 🆕 4. STATE AKTUALISIEREN
       setState(() {
         _allCategories = categories;
         _allProducts = products;
-        _categorizedItems = newCategorizedItems;
       });
 
-      debugPrint('🏪 Kategorisierung aktualisiert:');
-      newCategorizedItems.forEach((categoryName, items) {
-        debugPrint('  • $categoryName: ${items.length} Artikel');
-        if (items.isNotEmpty) {
-          for (final item in items) {
-            if (item is Product) {
-              debugPrint(
-                '    - Produkt: ${item.name} (€${item.price}, Kategorie-ID: ${item.categoryId})',
-              );
-            } else if (item is TicketType) {
-              debugPrint('    - Ticket: ${item.name} (€${item.defaultPrice})');
-            }
-          }
-        }
-      });
-
-      // 🔍 EXTRA DEBUG: Kategorie-Details anzeigen
-      debugPrint('🔍 Backend-Kategorien-Details:');
-      for (final category in categories) {
+      debugPrint('🏗️ Hierarchische Kategorien-Struktur aufgebaut');
+      _categoryHierarchy.forEach((topLevelName, data) {
         debugPrint(
-          '  • Kategorie ${category.id}: "${category.name}" (Icon: ${category.iconName}, Aktiv: ${category.isActive})',
+          '  🏗️ $topLevelName: ${data['subCategories']?.length ?? 0} Sub-Kategorien',
         );
-      }
+      });
     } catch (e) {
       debugPrint('❌ Fehler beim Laden der Backend-Daten: $e');
       if (mounted) {
@@ -1440,11 +1413,235 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
-  /// **🎨 HILFSMETHODE: Emoji für Kategorie-Icons**
-  String _getCategoryEmoji(String? iconName) {
-    switch (iconName?.toLowerCase()) {
+  /// **🏗️ NEUE METHODE: Hierarchische Kategorien-Struktur aufbauen**
+  Future<void> _buildCategoryHierarchy(
+    List<ProductCategory> categories,
+    List<Product> products,
+    List<TicketType> filteredTickets,
+  ) async {
+    debugPrint('🔧 DEBUG: _buildCategoryHierarchy START');
+    debugPrint('🔧 DEBUG: Eingehende Daten:');
+    debugPrint('   📦 Kategorien: ${categories.length}');
+    for (int i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      debugPrint(
+        '     🏷️  Kategorie $i: ID=${cat.id}, Name="${cat.name}", Level=${cat.level}, Parent=${cat.parentCategoryId}',
+      );
+    }
+    debugPrint('   📦 Produkte: ${products.length}');
+    for (int i = 0; i < products.length; i++) {
+      final prod = products[i];
+      debugPrint(
+        '     🛒 Produkt $i: ID=${prod.id}, Name="${prod.name}", KategorieID=${prod.categoryId}',
+      );
+    }
+    debugPrint('   🎫 Tickets: ${filteredTickets.length}');
+
+    final newCategorizedItems = <String, List<dynamic>>{};
+    final newHierarchy = <String, Map<String, dynamic>>{};
+
+    // 🎫 1. TICKET-KATEGORIEN (wie bisher)
+    final hallentickets = filteredTickets
+        .where((ticket) => ticket.gymId != null)
+        .toList();
+    final verticUniversal = filteredTickets
+        .where((ticket) => ticket.gymId == null && ticket.isVerticUniversal)
+        .toList();
+
+    debugPrint('🎫 TICKET-KATEGORIEN:');
+    debugPrint('   🏟️  Hallentickets: ${hallentickets.length}');
+    debugPrint('   🌐 Vertic Universal: ${verticUniversal.length}');
+
+    if (hallentickets.isNotEmpty) {
+      final categoryName = '🎫 Hallentickets';
+      newCategorizedItems[categoryName] = hallentickets;
+      newHierarchy[categoryName] = {
+        'type': 'tickets',
+        'items': hallentickets,
+        'subCategories': <String, List<dynamic>>{},
+        'icon': Icons.local_activity,
+        'color': Colors.blue,
+      };
+
+      // Auto-Select erste Kategorie wenn noch keine ausgewählt
+      if (_currentTopLevelCategory?.isEmpty ?? true) {
+        _currentTopLevelCategory = categoryName;
+        _selectedCategory =
+            categoryName; // ✅ Wichtig: Auch _selectedCategory setzen!
+        debugPrint('🎯 Auto-Select erste Top-Level-Kategorie: $categoryName');
+      }
+    }
+
+    if (verticUniversal.isNotEmpty) {
+      final categoryName = '🎟️ Vertic Universal';
+      newCategorizedItems[categoryName] = verticUniversal;
+      newHierarchy[categoryName] = {
+        'type': 'tickets',
+        'items': verticUniversal,
+        'subCategories': <String, List<dynamic>>{},
+        'icon': Icons.card_membership,
+        'color': Colors.purple,
+      };
+    }
+
+    // 🏗️ 2. ECHTE HIERARCHISCHE PRODUKT-KATEGORIEN AUFBAUEN
+    debugPrint('🏗️ HIERARCHISCHE PRODUKT-KATEGORIEN:');
+
+    // Filtere Top-Level-Kategorien (level = 0 oder parentCategoryId = null)
+    final topLevelCategories = categories
+        .where((cat) => cat.level == 0 || cat.parentCategoryId == null)
+        .toList();
+
+    debugPrint(
+      '🔍 Gefundene Top-Level-Kategorien: ${topLevelCategories.length}',
+    );
+    for (int i = 0; i < topLevelCategories.length; i++) {
+      final cat = topLevelCategories[i];
+      debugPrint(
+        '   📂 Top-Level $i: ID=${cat.id}, Name="${cat.name}", Level=${cat.level}',
+      );
+    }
+
+    for (final topCategory in topLevelCategories) {
+      debugPrint(
+        '\n🔍 VERARBEITE Top-Level-Kategorie: "${topCategory.name}" (ID: ${topCategory.id})',
+      );
+
+      // Icon und Farbe aus Kategorie-Daten
+      final categoryIcon = _getIconFromName(topCategory.iconName);
+      final categoryColor = _getColorFromHex(topCategory.colorHex);
+      debugPrint('   🎨 Icon: ${topCategory.iconName} → $categoryIcon');
+      debugPrint('   🎨 Farbe: ${topCategory.colorHex} → $categoryColor');
+
+      // Produkte dieser Top-Level-Kategorie
+      final categoryProducts = products
+          .where((product) => product.categoryId == topCategory.id)
+          .toList();
+      debugPrint('   📦 Direkte Produkte: ${categoryProducts.length}');
+      for (int i = 0; i < categoryProducts.length; i++) {
+        final prod = categoryProducts[i];
+        debugPrint('     🛒 Produkt $i: "${prod.name}" (€${prod.price})');
+      }
+
+      // Sub-Kategorien finden (parentCategoryId = topCategory.id)
+      final subCategories = categories
+          .where((cat) => cat.parentCategoryId == topCategory.id)
+          .toList();
+      debugPrint('   📁 Sub-Kategorien: ${subCategories.length}');
+
+      final subCategoryData = <String, List<dynamic>>{};
+
+      // Sub-Kategorien verarbeiten
+      for (final subCategory in subCategories) {
+        debugPrint(
+          '     🔍 Verarbeite Sub-Kategorie: "${subCategory.name}" (ID: ${subCategory.id})',
+        );
+        final subProducts = products
+            .where((product) => product.categoryId == subCategory.id)
+            .toList();
+        debugPrint('       📦 Sub-Produkte: ${subProducts.length}');
+
+        // ✅ IMMER hinzufügen, auch wenn keine Produkte (für Navigation)
+        subCategoryData[subCategory.name] = subProducts;
+        debugPrint(
+          '   📁 Sub-Kategorie: ${subCategory.name} (${subProducts.length} Produkte)',
+        );
+      }
+
+      // Kategorie-Name mit Emoji für bessere Darstellung
+      final displayName =
+          '${_getCategoryEmoji(topCategory.iconName)} ${topCategory.name}';
+      debugPrint('   🏷️  Display-Name: "$displayName"');
+
+      // Alle Items dieser Top-Level-Kategorie (direkte Produkte + Sub-Kategorie-Produkte)
+      final allItems = <dynamic>[...categoryProducts];
+      for (final subItems in subCategoryData.values) {
+        allItems.addAll(subItems);
+      }
+      debugPrint(
+        '   📊 Gesamt-Items: ${allItems.length} (${categoryProducts.length} direkt + ${allItems.length - categoryProducts.length} aus Sub-Kategorien)',
+      );
+
+      newCategorizedItems[displayName] = allItems;
+      newHierarchy[displayName] = {
+        'type': 'products',
+        'category': topCategory,
+        'items': categoryProducts, // Direkte Produkte
+        'subCategories': subCategoryData, // Sub-Kategorien mit ihren Produkten
+        'icon': categoryIcon,
+        'color': categoryColor,
+        'hasSubCategories': subCategories.isNotEmpty,
+      };
+
+      debugPrint('✅ Top-Level-Kategorie aufgebaut: $displayName');
+      debugPrint('   • Direkte Produkte: ${categoryProducts.length}');
+      debugPrint('   • Sub-Kategorien: ${subCategories.length}');
+      debugPrint('   • Gesamt-Items: ${allItems.length}');
+
+      // Auto-Select erste Produkt-Kategorie wenn noch keine Tickets
+      if (_currentTopLevelCategory?.isEmpty ?? true && allItems.isNotEmpty) {
+        _currentTopLevelCategory = displayName;
+        _selectedCategory =
+            displayName; // ✅ Wichtig: Auch _selectedCategory setzen!
+        debugPrint('🎯 Auto-Select erste Produkt-Kategorie: $displayName');
+      }
+    }
+
+    // 3. STATE AKTUALISIEREN
+    debugPrint('\n📊 FINALE ZUSAMMENFASSUNG:');
+    debugPrint(
+      '   🗂️  _categorizedItems: ${newCategorizedItems.keys.toList()}',
+    );
+    debugPrint('   🏗️ _categoryHierarchy: ${newHierarchy.keys.toList()}');
+    debugPrint('   🎯 _currentTopLevelCategory: $_currentTopLevelCategory');
+    debugPrint('   🎯 _selectedCategory: $_selectedCategory');
+
+    setState(() {
+      _categorizedItems = newCategorizedItems;
+      _categoryHierarchy = newHierarchy;
+    });
+
+    debugPrint('🔧 DEBUG: _buildCategoryHierarchy ENDE\n');
+  }
+
+  /// **🎨 HILFSMETHODEN FÜR KATEGORIE-DARSTELLUNG**
+
+  IconData _getIconFromName(String? iconName) {
+    switch (iconName) {
       case 'fastfood':
-        return '🍕';
+        return Icons.fastfood;
+      case 'local_drink':
+        return Icons.local_drink;
+      case 'lunch_dining':
+        return Icons.lunch_dining;
+      case 'sports':
+        return Icons.sports;
+      case 'checkroom':
+        return Icons.checkroom;
+      case 'build':
+        return Icons.build;
+      case 'favorite':
+        return Icons.favorite;
+      default:
+        return Icons.category;
+    }
+  }
+
+  Color _getColorFromHex(String? colorHex) {
+    if (colorHex == null || colorHex.isEmpty) {
+      return Colors.grey;
+    }
+    try {
+      return Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+
+  String _getCategoryEmoji(String? iconName) {
+    switch (iconName) {
+      case 'fastfood':
+        return '🍔';
       case 'local_drink':
         return '🥤';
       case 'lunch_dining':
@@ -1456,57 +1653,55 @@ class _PosSystemPageState extends State<PosSystemPage> {
       case 'build':
         return '🔧';
       case 'favorite':
-        return '⭐';
-      case 'shopping_bag':
-        return '🛍️';
-      case 'category':
-        return '📦';
-      // 🍽️ ERWEITERTE FOOD & DRINK ICONS
-      case 'restaurant':
-      case 'dining':
-      case 'food':
-        return '🍽️';
-      case 'coffee':
-        return '☕';
-      case 'wine_bar':
-        return '🍷';
-      case 'local_bar':
-        return '🍺';
-      // 🏃 SPORT & FITNESS
-      case 'fitness_center':
-      case 'gym':
-        return '🏋️';
-      case 'pool':
-        return '🏊';
-      // 🛍️ SHOPPING & RETAIL
-      case 'store':
-        return '🏪';
-      case 'shopping_cart':
-        return '🛒';
-      // 🔧 TOOLS & EQUIPMENT
-      case 'hardware':
-        return '🔨';
-      case 'construction':
-        return '🚧';
-      // 🎭 ENTERTAINMENT
-      case 'movie':
-      case 'theater':
-        return '🎭';
-      case 'music':
-        return '🎵';
-      // 💊 HEALTH & WELLNESS
-      case 'medication':
-      case 'health':
-        return '💊';
-      case 'spa':
-        return '🧘';
+        return '❤️';
       default:
-        // 🔍 DEBUG: Unbekannte Icons loggen
-        debugPrint(
-          '🎨 Unbekanntes Icon: "$iconName" - verwende Standard-Emoji 📦',
-        );
         return '📦';
     }
+  }
+
+  /// **🏗️ HILFSMETHODE: Top-Level-Gruppe für Kategorie bestimmen**
+  /// TODO: Nach Migration durch echte parentCategoryId ersetzen
+  String _getTopLevelGroupForCategory(ProductCategory category) {
+    final name = category.name.toLowerCase();
+
+    // Getränke-Gruppe
+    if (name.contains('getränk') ||
+        name.contains('drink') ||
+        name.contains('bier') ||
+        name.contains('wasser') ||
+        category.iconName == 'local_drink') {
+      return 'Getränke & Drinks';
+    }
+
+    // Essen-Gruppe
+    if (name.contains('essen') ||
+        name.contains('food') ||
+        name.contains('snack') ||
+        name.contains('lunch') ||
+        category.iconName == 'fastfood' ||
+        category.iconName == 'lunch_dining') {
+      return 'Essen & Snacks';
+    }
+
+    // Kleidung-Gruppe
+    if (name.contains('kleidung') ||
+        name.contains('bekleidung') ||
+        name.contains('shirt') ||
+        name.contains('schuhe') ||
+        category.iconName == 'checkroom') {
+      return 'Bekleidung & Zubehör';
+    }
+
+    // Sport-Gruppe
+    if (name.contains('sport') ||
+        name.contains('fitness') ||
+        name.contains('training') ||
+        category.iconName == 'sports') {
+      return 'Sport & Fitness';
+    }
+
+    // Standard-Gruppe
+    return 'Shop Artikel';
   }
 
   /// **🎨 HILFSMETHODE: Kategorie-Daten für UI abrufen**
@@ -1830,111 +2025,82 @@ class _PosSystemPageState extends State<PosSystemPage> {
   Widget _buildCategoryTabs() {
     return Consumer<PermissionProvider>(
       builder: (context, permissionProvider, _) {
-        // Alle Kategorien sind immer sichtbar (Artikel-Verwaltung ist jetzt separater Tab)
-        final visibleCategories = _categorizedItems.keys.toList();
-
         return Container(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Artikel-Katalog',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
+              // 🆕 BREADCRUMB-NAVIGATION
+              if (_categoryBreadcrumb.isNotEmpty) _buildBreadcrumbNavigation(),
+
+              // Titel mit hierarchie-Info
+              Row(
+                children: [
+                  Text(
+                    _showingSubCategories
+                        ? 'Unterkategorien'
+                        : 'Artikel-Katalog',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_showingSubCategories &&
+                      _currentTopLevelCategory != null) ...[
+                    TextButton.icon(
+                      onPressed: _navigateToTopLevel,
+                      icon: const Icon(Icons.arrow_upward, size: 16),
+                      label: const Text('Zurück zur Übersicht'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 16),
 
-              // Kategorie-Buttons mit RBAC-Filter - Layout optimiert gegen Assertion-Fehler
-              Container(
-                height: 85, // Feste Höhe für bessere Performance
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(), // Bessere Performance
-                  itemCount: visibleCategories.length,
-                  itemBuilder: (context, index) {
-                    final category = visibleCategories[index];
-                    final categoryData = _getCategoryDataByName(category);
-                    final isSelected = _selectedCategory == category;
+              // 🆕 HIERARCHISCHE KATEGORIE-ANZEIGE
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Immer zuerst Top-Level anzeigen
+                  _buildTopLevelCategoryTabs(),
 
-                    final itemCount = _categorizedItems[category]?.length ?? 0;
-
-                    return Container(
-                      margin: const EdgeInsets.only(right: 12),
-                      child: Material(
-                        elevation: isSelected ? 6 : 2,
-                        borderRadius: BorderRadius.circular(16),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () {
-                            setState(() => _selectedCategory = category);
-                          },
-                          child: Container(
-                            width: 110, // Feste Breite verhindert Layout-Bugs
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              color: isSelected
-                                  ? categoryData['color']
-                                  : Colors.white,
-                              border: Border.all(
-                                color: categoryData['color'],
-                                width: 2,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  categoryData['icon'],
-                                  color: isSelected
-                                      ? Colors.white
-                                      : categoryData['color'],
-                                  size: 24,
-                                ),
-                                const SizedBox(height: 3),
-                                Flexible(
-                                  child: Text(
-                                    categoryData['name'],
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Colors.grey[700],
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 10,
-                                      height: 1.1,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (itemCount > 0) ...[
-                                  const SizedBox(height: 1),
-                                  Text(
-                                    '$itemCount',
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.white70
-                                          : Colors.grey[500],
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                  // Dann Sub-Kategorien wenn verfügbar
+                  if (_showingSubCategories) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.subdirectory_arrow_right,
+                            size: 16,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Unterkategorien:',
+                            style: TextStyle(
+                              color: Colors.blue[700],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    const SizedBox(height: 4),
+                    _buildSubCategoryTabs(),
+                  ],
+                ],
               ),
             ],
           ),
@@ -1943,8 +2109,454 @@ class _PosSystemPageState extends State<PosSystemPage> {
     );
   }
 
+  /// **🍞 BREADCRUMB-NAVIGATION**
+  Widget _buildBreadcrumbNavigation() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.navigation, size: 16, color: Colors.blue),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Wrap(
+              children: _categoryBreadcrumb.asMap().entries.map((entry) {
+                final index = entry.key;
+                final categoryName = entry.value;
+                final isLast = index == _categoryBreadcrumb.length - 1;
+
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (index > 0) ...[
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 14,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    GestureDetector(
+                      onTap: isLast ? null : () => _navigateToBreadcrumb(index),
+                      child: Text(
+                        categoryName.length > 20
+                            ? '${categoryName.substring(0, 20)}...'
+                            : categoryName,
+                        style: TextStyle(
+                          color: isLast ? Colors.blue[800] : Colors.blue[600],
+                          fontWeight: isLast
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          decoration: isLast ? null : TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+          // Hierarchie-Level anzeigen
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Level ${_categoryBreadcrumb.length - 1}',
+              style: const TextStyle(fontSize: 10, color: Colors.blue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// **🏗️ TOP-LEVEL-KATEGORIEN ANZEIGEN**
+  Widget _buildTopLevelCategoryTabs() {
+    final visibleCategories = _categorizedItems.keys.toList();
+
+    debugPrint('🎨 UI-DEBUG: _buildTopLevelCategoryTabs()');
+    debugPrint(
+      '   📂 _categorizedItems.keys: ${_categorizedItems.keys.toList()}',
+    );
+    debugPrint(
+      '   📂 _categoryHierarchy.keys: ${_categoryHierarchy.keys.toList()}',
+    );
+    debugPrint('   📂 visibleCategories: $visibleCategories');
+    debugPrint('   🎯 _selectedCategory: $_selectedCategory');
+    debugPrint('   🎯 _currentTopLevelCategory: $_currentTopLevelCategory');
+
+    if (visibleCategories.isEmpty) {
+      debugPrint('❌ UI-DEBUG: Keine Kategorien verfügbar!');
+      return const Center(child: Text('Keine Kategorien verfügbar'));
+    }
+
+    return Container(
+      height: 60, // Reduziert von 85 auf 60 (ca. 30% kleiner)
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: visibleCategories.length,
+        itemBuilder: (context, index) {
+          final category = visibleCategories[index];
+          final hierarchyData = _categoryHierarchy[category];
+          final isSelected = _selectedCategory == category;
+          final hasSubCategories =
+              hierarchyData?['subCategories']?.isNotEmpty ?? false;
+
+          final itemCount = _categorizedItems[category]?.length ?? 0;
+          final subCategoryCount = hierarchyData?['subCategories']?.length ?? 0;
+
+          return Container(
+            margin: const EdgeInsets.only(right: 8), // Reduziert von 12 auf 8
+            child: Material(
+              elevation: isSelected ? 6 : 2,
+              borderRadius: BorderRadius.circular(
+                12,
+              ), // Reduziert von 16 auf 12
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _selectTopLevelCategory(category),
+                child: Container(
+                  width: 80, // Reduziert von 120 auf 80 (33% kleiner)
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6, // Reduziert von 8 auf 6
+                    vertical: 8, // Reduziert von 10 auf 8
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isSelected
+                        ? (hierarchyData?['color'] ?? Colors.blue)
+                        : Colors.white,
+                    border: Border.all(
+                      color: hierarchyData?['color'] ?? Colors.blue,
+                      width: 1.5, // Reduziert von 2 auf 1.5
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Icon mit Hierarchie-Indikator
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            hierarchyData?['icon'] ?? Icons.category,
+                            color: isSelected
+                                ? Colors.white
+                                : (hierarchyData?['color'] ?? Colors.blue),
+                            size: 16, // Weitere Reduktion von 18 auf 16
+                          ),
+                          if (hasSubCategories)
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.expand_more,
+                                  size: 4,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      // Kategorie-Name
+                      Flexible(
+                        child: Text(
+                          category.replaceAll(
+                            RegExp(r'^[^\s]+ '),
+                            '',
+                          ), // Emoji entfernen
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.grey[700],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 7, // Weitere Reduktion von 8 auf 7
+                            height: 1.0,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      // Kompakte Artikel-Anzahl mit Unterkategorie-Info
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '$itemCount',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white70
+                                  : Colors.grey[500],
+                              fontSize: 6,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (hasSubCategories) ...[
+                            Text(
+                              '+$subCategoryCount',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white70
+                                    : Colors.orange,
+                                fontSize: 5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// **📁 SUB-KATEGORIEN ANZEIGEN**
+  Widget _buildSubCategoryTabs() {
+    if (_currentTopLevelCategory == null) return const SizedBox();
+
+    final hierarchyData = _categoryHierarchy[_currentTopLevelCategory!];
+    final subCategories =
+        hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
+
+    return Container(
+      height: 60, // Reduziert von 85 auf 60
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: subCategories.length,
+        itemBuilder: (context, index) {
+          final subCategoryName = subCategories.keys.elementAt(index);
+          final subCategoryItems = subCategories[subCategoryName]!;
+          final isSelected = _selectedCategory == subCategoryName;
+
+          // Farbe vom Parent übernehmen
+          final parentColor = hierarchyData?['color'] ?? Colors.blue;
+
+          return Container(
+            margin: const EdgeInsets.only(right: 8), // Reduziert von 12 auf 8
+            child: Material(
+              elevation: isSelected ? 6 : 2,
+              borderRadius: BorderRadius.circular(
+                12,
+              ), // Reduziert von 16 auf 12
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _selectSubCategory(subCategoryName),
+                child: Container(
+                  width: 70, // Reduziert von 100 auf 70 (30% kleiner)
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6, // Reduziert von 8 auf 6
+                    vertical: 8, // Reduziert von 10 auf 8
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isSelected ? parentColor : Colors.white,
+                    border: Border.all(
+                      color: parentColor.withOpacity(0.7),
+                      width: 1.5, // Reduziert von 2 auf 1.5
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Sub-Kategorie Icon
+                      Icon(
+                        Icons.subdirectory_arrow_right,
+                        color: isSelected ? Colors.white : parentColor,
+                        size: 16, // Reduziert von 20 auf 16 (20% kleiner)
+                      ),
+                      const SizedBox(height: 3), // Reduziert von 4 auf 3
+                      // Sub-Kategorie Name
+                      Flexible(
+                        child: Text(
+                          subCategoryName.replaceAll(RegExp(r'^[^\s]+ '), ''),
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.grey[700],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 8, // Reduziert von 10 auf 8
+                            height: 1.1,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      // Artikel-Anzahl
+                      const SizedBox(height: 1),
+                      Text(
+                        '${subCategoryItems.length}',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white70 : Colors.grey[500],
+                          fontSize: 7, // Reduziert von 9 auf 7
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// **🎯 NAVIGATION: Top-Level-Kategorie auswählen**
+  void _selectTopLevelCategory(String categoryName) {
+    debugPrint('🎯 Top-Level-Kategorie ausgewählt: $categoryName');
+
+    // Prüfe ob diese Kategorie Unterkategorien hat
+    final hierarchyData = _categoryHierarchy[categoryName];
+    final subCategories =
+        hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
+    final hasSubCategories = subCategories.isNotEmpty;
+
+    debugPrint(
+      '🔍 DEBUG: hasSubCategories für $categoryName: $hasSubCategories',
+    );
+    debugPrint('🔍 DEBUG: subCategories Anzahl: ${subCategories.length}');
+
+    setState(() {
+      _selectedCategory = categoryName;
+      _currentTopLevelCategory = categoryName;
+      _categoryBreadcrumb = [categoryName];
+
+      // ✅ NEU: Automatisch Unterkategorien anzeigen wenn verfügbar
+      if (hasSubCategories) {
+        _showingSubCategories = true;
+        // Erste Unterkategorie automatisch auswählen
+        _selectedCategory = subCategories.keys.first;
+        _categoryBreadcrumb = [categoryName, subCategories.keys.first];
+        debugPrint(
+          '📁 ✅ Unterkategorien automatisch angezeigt für: $categoryName',
+        );
+        debugPrint(
+          '📁    → Erste Unterkategorie ausgewählt: ${subCategories.keys.first}',
+        );
+      } else {
+        _showingSubCategories = false;
+        debugPrint('📁 ❌ Keine Unterkategorien für: $categoryName');
+      }
+    });
+  }
+
+  /// **📁 NAVIGATION: Zu Sub-Kategorien wechseln**
+  void _navigateToSubCategories(String topLevelCategory) {
+    debugPrint(
+      '🔍 DEBUG: _navigateToSubCategories aufgerufen für: $topLevelCategory',
+    );
+
+    final hierarchyData = _categoryHierarchy[topLevelCategory];
+    debugPrint('🔍 DEBUG: hierarchyData gefunden: ${hierarchyData != null}');
+
+    final subCategories =
+        hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
+    debugPrint('🔍 DEBUG: subCategories Anzahl: ${subCategories.length}');
+    debugPrint('🔍 DEBUG: subCategories Keys: ${subCategories.keys.toList()}');
+
+    if (subCategories.isNotEmpty) {
+      setState(() {
+        _currentTopLevelCategory = topLevelCategory;
+        _showingSubCategories = true;
+        _selectedCategory =
+            subCategories.keys.first; // Erste Sub-Kategorie auswählen
+        _categoryBreadcrumb = [topLevelCategory, subCategories.keys.first];
+      });
+      debugPrint('📁 ✅ Zu Sub-Kategorien gewechselt: $topLevelCategory');
+      debugPrint('📁    → Zeige jetzt: $_selectedCategory');
+      debugPrint('📁    → _showingSubCategories: $_showingSubCategories');
+    } else {
+      debugPrint('⚠️ Keine Sub-Kategorien gefunden für: $topLevelCategory');
+    }
+  }
+
+  /// **📁 NAVIGATION: Sub-Kategorie auswählen**
+  void _selectSubCategory(String subCategoryName) {
+    setState(() {
+      _selectedCategory = subCategoryName;
+      if (_categoryBreadcrumb.length >= 2) {
+        _categoryBreadcrumb[1] = subCategoryName;
+      } else {
+        _categoryBreadcrumb = [_currentTopLevelCategory!, subCategoryName];
+      }
+    });
+    debugPrint('📁 Sub-Kategorie ausgewählt: $subCategoryName');
+  }
+
+  /// **🏠 NAVIGATION: Zurück zu Top-Level**
+  void _navigateToTopLevel() {
+    setState(() {
+      _showingSubCategories = false;
+      _selectedCategory = _currentTopLevelCategory;
+      _categoryBreadcrumb = [_currentTopLevelCategory!];
+    });
+    debugPrint('🏠 Zurück zu Top-Level: $_currentTopLevelCategory');
+  }
+
+  /// **🍞 NAVIGATION: Breadcrumb-Navigation**
+  void _navigateToBreadcrumb(int index) {
+    if (index == 0) {
+      // Zurück zu Top-Level
+      _navigateToTopLevel();
+    } else if (index == 1 && _categoryBreadcrumb.length > 1) {
+      // Sub-Kategorie auswählen
+      _selectSubCategory(_categoryBreadcrumb[index]);
+    }
+  }
+
   Widget _buildProductGrid() {
-    final items = _categorizedItems[_selectedCategory] ?? [];
+    // 🆕 HIERARCHISCHE ITEM-AUSWAHL
+    List<dynamic> items = [];
+
+    debugPrint('🛒 UI-DEBUG: _buildProductGrid()');
+    debugPrint('   📂 _showingSubCategories: $_showingSubCategories');
+    debugPrint('   📂 _currentTopLevelCategory: $_currentTopLevelCategory');
+    debugPrint('   📂 _selectedCategory: $_selectedCategory');
+
+    if (_showingSubCategories && _currentTopLevelCategory != null) {
+      // Sub-Kategorie-Items anzeigen
+      final hierarchyData = _categoryHierarchy[_currentTopLevelCategory!];
+      final subCategories =
+          hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
+      items = subCategories[_selectedCategory] ?? [];
+      debugPrint('   📦 Sub-Kategorie-Items: ${items.length}');
+    } else {
+      // Top-Level-Items anzeigen
+      items = _categorizedItems[_selectedCategory] ?? [];
+      debugPrint('   📦 Top-Level-Items: ${items.length}');
+    }
+
+    debugPrint('   🛒 Finale Items zum Anzeigen: ${items.length}');
 
     if (items.isEmpty) {
       return Expanded(
@@ -1953,17 +2565,29 @@ class _PosSystemPageState extends State<PosSystemPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                _selectedCategory != null
-                    ? _getCategoryDataByName(_selectedCategory!)['icon']
+                _showingSubCategories
+                    ? Icons.subdirectory_arrow_right
                     : Icons.category,
                 size: 64,
                 color: Colors.grey[400],
               ),
               const SizedBox(height: 16),
               Text(
-                'Keine Artikel in $_selectedCategory verfügbar',
+                _showingSubCategories
+                    ? 'Keine Artikel in dieser Unterkategorie verfügbar'
+                    : 'Keine Artikel in $_selectedCategory verfügbar',
                 style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 8),
+              if (_showingSubCategories) ...[
+                TextButton.icon(
+                  onPressed: _navigateToTopLevel,
+                  icon: const Icon(Icons.arrow_upward),
+                  label: const Text('Zurück zur Übersicht'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                ),
+              ],
             ],
           ),
         ),
@@ -1973,44 +2597,156 @@ class _PosSystemPageState extends State<PosSystemPage> {
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4, // Erhöht von 3 auf 4 für kleinere Karten
-            crossAxisSpacing: 8, // Reduziert von 12 auf 8
-            mainAxisSpacing: 8, // Reduziert von 12 auf 8
-            childAspectRatio:
-                1.0, // Reduziert von 1.2 auf 1.0 für quadratische Form
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            if (item is TicketType) {
-              return _buildTicketCard(item);
-            } else if (item is Product) {
-              return _buildProductCard(item);
-            }
-            return const SizedBox();
-          },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 🆕 HIERARCHIE-INFO-HEADER
+            if (_showingSubCategories) _buildSubCategoryHeader(),
+
+            // ARTIKEL-GRID
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6, // Erhöht von 4 auf 6 für kleinere Buttons
+                  crossAxisSpacing: 6, // Reduziert von 8 auf 6
+                  mainAxisSpacing: 6, // Reduziert von 8 auf 6
+                  childAspectRatio: 0.9, // Leicht angepasst von 1.0 auf 0.9
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  if (item is TicketType) {
+                    return _buildTicketCard(item);
+                  } else if (item is Product) {
+                    return _buildProductCard(item);
+                  }
+                  return const SizedBox();
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  /// **📁 SUB-KATEGORIE HEADER mit Statistiken**
+  Widget _buildSubCategoryHeader() {
+    if (_currentTopLevelCategory == null || _selectedCategory == null) {
+      return const SizedBox();
+    }
+
+    final hierarchyData = _categoryHierarchy[_currentTopLevelCategory!];
+    final subCategories =
+        hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
+    final currentItems = subCategories[_selectedCategory] ?? [];
+    final parentColor = hierarchyData?['color'] ?? Colors.blue;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: parentColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: parentColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.subdirectory_arrow_right, color: parentColor, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selectedCategory!.replaceAll(RegExp(r'^[^\s]+ '), ''),
+                  style: TextStyle(
+                    color: parentColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  '${currentItems.length} Artikel in dieser Unterkategorie',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          // Schnell-Navigation zu anderen Sub-Kategorien
+          if (subCategories.length > 1) ...[
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_horiz, color: parentColor),
+              tooltip: 'Andere Unterkategorien',
+              onSelected: (subCategory) => _selectSubCategory(subCategory),
+              itemBuilder: (context) {
+                return subCategories.keys
+                    .where((key) => key != _selectedCategory)
+                    .map((subCategory) {
+                      final itemCount = subCategories[subCategory]?.length ?? 0;
+                      return PopupMenuItem<String>(
+                        value: subCategory,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.subdirectory_arrow_right,
+                              size: 16,
+                              color: parentColor,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                subCategory.replaceAll(RegExp(r'^[^\s]+ '), ''),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: parentColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$itemCount',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: parentColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    })
+                    .toList();
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildTicketCard(TicketType ticketType) {
-    final categoryData = _getCategoryDataByName(_selectedCategory!);
+    // Null-Safety: Fallback wenn keine Kategorie ausgewählt
+    final selectedCat =
+        _selectedCategory ?? _currentTopLevelCategory ?? 'Vertic Universal';
+    final categoryData = _getCategoryDataByName(selectedCat);
 
     return Material(
-      elevation: 3,
-      borderRadius: BorderRadius.circular(12),
+      elevation: 2, // Reduziert von 3 auf 2
+      borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         onTap: () {
           _addIntelligentTicketToCart(ticketType);
         },
         child: Container(
-          padding: const EdgeInsets.all(8), // Reduziert von 12 auf 8
+          padding: const EdgeInsets.all(6), // Reduziert von 8 auf 6
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
+            borderRadius: BorderRadius.circular(8),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -2027,26 +2763,26 @@ class _PosSystemPageState extends State<PosSystemPage> {
               Icon(
                 categoryData['icon'],
                 color: categoryData['color'],
-                size: 24,
-              ), // Reduziert von 32 auf 24
-              const SizedBox(height: 4), // Reduziert von 8 auf 4
+                size: 18, // Reduziert von 24 auf 18 (25% kleiner)
+              ),
+              const SizedBox(height: 3), // Reduziert von 4 auf 3
               Text(
                 ticketType.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 11, // Reduziert von 14 auf 11
+                  fontSize: 9, // Reduziert von 11 auf 9 (ca. 20% kleiner)
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2), // Reduziert von 4 auf 2
+              const SizedBox(height: 2),
               Text(
                 '${ticketType.defaultPrice.toStringAsFixed(2)} €',
                 style: TextStyle(
                   color: categoryData['color'],
                   fontWeight: FontWeight.bold,
-                  fontSize: 13, // Reduziert von 16 auf 13
+                  fontSize: 10, // Reduziert von 13 auf 10 (ca. 25% kleiner)
                 ),
               ),
             ],
@@ -2057,20 +2793,23 @@ class _PosSystemPageState extends State<PosSystemPage> {
   }
 
   Widget _buildProductCard(Product product) {
-    final categoryData = _getCategoryDataByName(_selectedCategory!);
+    // Null-Safety: Fallback wenn keine Kategorie ausgewählt
+    final selectedCat =
+        _selectedCategory ?? _currentTopLevelCategory ?? 'Vertic Universal';
+    final categoryData = _getCategoryDataByName(selectedCat);
 
     return Material(
-      elevation: 3,
-      borderRadius: BorderRadius.circular(12),
+      elevation: 2, // Reduziert von 3 auf 2
+      borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         onTap: () {
           _addItemToCart('product', product.id!, product.name, product.price);
         },
         child: Container(
-          padding: const EdgeInsets.all(8), // Reduziert von 12 auf 8
+          padding: const EdgeInsets.all(6), // Reduziert von 8 auf 6
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
+            borderRadius: BorderRadius.circular(8),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -2087,26 +2826,26 @@ class _PosSystemPageState extends State<PosSystemPage> {
               Icon(
                 categoryData['icon'],
                 color: categoryData['color'],
-                size: 24,
-              ), // Reduziert von 32 auf 24
-              const SizedBox(height: 4), // Reduziert von 8 auf 4
+                size: 18, // Reduziert von 24 auf 18 (25% kleiner)
+              ),
+              const SizedBox(height: 3), // Reduziert von 4 auf 3
               Text(
                 product.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 11, // Reduziert von 14 auf 11
+                  fontSize: 9, // Reduziert von 11 auf 9 (ca. 20% kleiner)
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2), // Reduziert von 4 auf 2
+              const SizedBox(height: 2),
               Text(
                 '${product.price.toStringAsFixed(2)} €',
                 style: TextStyle(
                   color: categoryData['color'],
                   fontWeight: FontWeight.bold,
-                  fontSize: 13, // Reduziert von 16 auf 13
+                  fontSize: 10, // Reduziert von 13 auf 10 (ca. 25% kleiner)
                 ),
               ),
             ],
@@ -2143,6 +2882,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Header mit aktuellem Warenkorb-Namen
           Container(
@@ -2347,6 +3087,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
               border: Border(top: BorderSide(color: Colors.grey.shade300)),
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2777,6 +3518,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
                         ],
                       ),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [_buildCategoryTabs(), _buildProductGrid()],
                       ),
                     ),

@@ -143,6 +143,17 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       );
 
       if (mounted) {
+        // 🔍 DEBUG: Detaillierte Kategorie-Informationen
+        debugPrint(
+          '🔍 DEBUG: ${categories.length} Kategorien vom Backend erhalten:',
+        );
+        for (int i = 0; i < categories.length; i++) {
+          final cat = categories[i];
+          debugPrint(
+            '  [$i] "${cat.name}" - Level: ${cat.level}, ParentID: ${cat.parentCategoryId}, Aktiv: ${cat.isActive}',
+          );
+        }
+
         setState(() {
           _allCategories = categories;
           _filterCategories();
@@ -239,8 +250,8 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                   onPressed: _showCreateCategoryDialog,
                   backgroundColor: Colors.deepPurple,
                   foregroundColor: Colors.white,
-                  icon: const Icon(Icons.construction),
-                  label: const Text('Coming Soon'),
+                  icon: const Icon(Icons.add_circle),
+                  label: const Text('Neue Kategorie'),
                 );
         },
       ),
@@ -255,6 +266,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     }
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         _buildProductsFilterSection(),
         Expanded(
@@ -271,6 +283,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       padding: const EdgeInsets.all(16),
       color: Colors.white,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Suchfeld
           TextField(
@@ -363,10 +376,11 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4, // 4 Spalten wie im POS
+        crossAxisCount:
+            6, // 6 Spalten für kleinere Artikel-Karten (halb so groß)
         childAspectRatio: 0.85, // Höher für mehr Informationen
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisSpacing: 8, // Kleinerer Abstand für mehr Kompaktheit
+        mainAxisSpacing: 8,
       ),
       itemCount: _filteredProducts.length,
       itemBuilder: (context, index) {
@@ -404,6 +418,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
             border: Border.all(color: categoryConfig.color.withOpacity(0.3)),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header mit Icon und Aktionen
@@ -541,6 +556,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     }
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         _buildCategoriesFilterSection(),
         Expanded(
@@ -557,6 +573,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       padding: const EdgeInsets.all(16),
       color: Colors.white,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Suchfeld
           TextField(
@@ -645,59 +662,257 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   }
 
   Widget _buildCategoriesGrid() {
+    // 🏗️ HIERARCHISCHE DARSTELLUNG: Gruppiere Kategorien nach Parent-Child-Beziehung
+    final topLevelCategories = _filteredCategories
+        .where((cat) => cat.level == 0 || cat.parentCategoryId == null)
+        .toList();
+
+    // 🔍 DEBUG: Anzahl der Top-Level-Kategorien anzeigen
+    debugPrint(
+      '📊 DEBUG: ${topLevelCategories.length} Top-Level-Kategorien gefunden',
+    );
+    debugPrint(
+      '📊 DEBUG: Kategorien: ${topLevelCategories.map((c) => c.name).join(', ')}',
+    );
+
+    // Vereinfachte Grid-Darstellung für bessere Performance
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // 3 Spalten für Kategorien
-        childAspectRatio: 1.1, // Etwas breiter für mehr Informationen
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+        crossAxisCount:
+            6, // 6 Spalten für kleinere Kategorie-Karten (halb so groß)
+        childAspectRatio: 1.1,
+        crossAxisSpacing: 8, // Kleinerer Abstand für mehr Kompaktheit
+        mainAxisSpacing: 8,
       ),
-      itemCount: _filteredCategories.length,
+      itemCount: topLevelCategories.length,
       itemBuilder: (context, index) {
-        final category = _filteredCategories[index];
-        return _buildCategoryCard(category);
+        final category = topLevelCategories[index];
+        return _buildCategoryCard(category, isTopLevel: true);
       },
     );
   }
 
-  Widget _buildCategoryCard(ProductCategory category) {
+  /// **🏗️ HIERARCHISCHE KATEGORIE-SEKTION mit visueller Parent-Child-Darstellung**
+  Widget _buildHierarchicalCategorySection(
+    ProductCategory topCategory,
+    List<ProductCategory> subCategories,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 🏗️ TOP-LEVEL-KATEGORIE (größer dargestellt)
+          Container(
+            width: double.infinity,
+            child: _buildCategoryCard(topCategory, isTopLevel: true),
+          ),
+
+          // 📁 SUB-KATEGORIEN (eingerückt und kleiner)
+          if (subCategories.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.only(
+                left: 32,
+              ), // Einrückung für Hierarchie
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header für Unterkategorien
+                  Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: _getColorFromHex(topCategory.colorHex),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.subdirectory_arrow_right,
+                        size: 16,
+                        color: _getColorFromHex(topCategory.colorHex),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Unterkategorien (${subCategories.length})',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _getColorFromHex(topCategory.colorHex),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Grid für Unterkategorien
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2, // 2 Spalten für Unterkategorien
+                          childAspectRatio: 1.2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    itemCount: subCategories.length,
+                    itemBuilder: (context, index) {
+                      return _buildCategoryCard(
+                        subCategories[index],
+                        isSubCategory: true,
+                        parentColor: _getColorFromHex(topCategory.colorHex),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// **🎨 HILFSMETHODE: Farbe aus Hex-String extrahieren**
+  Color _getColorFromHex(String colorHex) {
+    try {
+      return Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+
+  /// **🔍 HILFSMETHODE: Prüft ob Kategorie Unterkategorien hat**
+  bool _hasSubCategories(ProductCategory category) {
+    return _allCategories.any((cat) => cat.parentCategoryId == category.id);
+  }
+
+  Widget _buildCategoryCard(
+    ProductCategory category, {
+    bool isTopLevel = false,
+    bool isSubCategory = false,
+    Color? parentColor,
+  }) {
     final categoryConfig = _getCategoryConfig(category);
 
+    // 🎨 HIERARCHIE-SPEZIFISCHE STYLING-ANPASSUNGEN
+    final cardElevation = isTopLevel
+        ? 6.0
+        : isSubCategory
+        ? 2.0
+        : 4.0;
+    final cardPadding = isTopLevel
+        ? 20.0
+        : isSubCategory
+        ? 12.0
+        : 16.0;
+    final iconSize = isTopLevel
+        ? 36.0
+        : isSubCategory
+        ? 24.0
+        : 32.0;
+    final nameSize = isTopLevel
+        ? 18.0
+        : isSubCategory
+        ? 14.0
+        : 16.0;
+    final borderWidth = isTopLevel
+        ? 3.0
+        : isSubCategory
+        ? 1.5
+        : 2.0;
+
+    // Für Unterkategorien: Parent-Farbe verwenden wenn vorhanden
+    final effectiveColor = isSubCategory && parentColor != null
+        ? parentColor
+        : categoryConfig.color;
+
     return Material(
-      elevation: 4,
-      borderRadius: BorderRadius.circular(16),
+      elevation: cardElevation,
+      borderRadius: BorderRadius.circular(isTopLevel ? 20 : 16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(isTopLevel ? 20 : 16),
         onTap: () => _showCategoryDetails(category),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(cardPadding),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(isTopLevel ? 20 : 16),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                categoryConfig.color.withOpacity(0.15),
-                categoryConfig.color.withOpacity(0.05),
+                effectiveColor.withOpacity(isTopLevel ? 0.2 : 0.15),
+                effectiveColor.withOpacity(isTopLevel ? 0.1 : 0.05),
               ],
             ),
             border: Border.all(
-              color: categoryConfig.color.withOpacity(0.4),
-              width: 2,
+              color: effectiveColor.withOpacity(isTopLevel ? 0.6 : 0.4),
+              width: borderWidth,
             ),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header mit Icon, Status und PopupMenu
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(
-                    categoryConfig.icon,
-                    color: categoryConfig.color,
-                    size: 32,
+                  // 🏗️ HIERARCHIE-SPEZIFISCHES ICON mit Indikatoren
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(
+                        categoryConfig.icon,
+                        color: effectiveColor,
+                        size: iconSize,
+                      ),
+                      // 🏗️ Überkategorie-Indikator
+                      if (isTopLevel && _hasSubCategories(category))
+                        Positioned(
+                          right: -4,
+                          bottom: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.purple,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1),
+                            ),
+                            child: const Icon(
+                              Icons.account_tree,
+                              size: 8,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      // 📁 Unterkategorie-Indikator
+                      if (isSubCategory)
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1),
+                            ),
+                            child: const Icon(
+                              Icons.subdirectory_arrow_right,
+                              size: 8,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   Row(
                     children: [
@@ -782,16 +997,68 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               ),
               const SizedBox(height: 12),
 
-              // Kategorie-Name
-              Text(
-                category.name,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: categoryConfig.color,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              // Kategorie-Name mit Hierarchie-Info
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 🏗️ Hierarchie-Label (nur für Top-Level mit Sub-Kategorien oder Sub-Kategorien)
+                  if (isTopLevel && _hasSubCategories(category))
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '🏗️ ÜBERKATEGORIE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.purple,
+                        ),
+                      ),
+                    ),
+                  if (isSubCategory) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '📁 UNTERKATEGORIE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  if ((isTopLevel && _hasSubCategories(category)) ||
+                      isSubCategory)
+                    const SizedBox(height: 4),
+
+                  // Kategorie-Name
+                  Text(
+                    category.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: nameSize,
+                      color: effectiveColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
 
@@ -817,6 +1084,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'Produkte: ${_getProductCountForCategory(category.id!)}',
@@ -1102,6 +1370,8 @@ class _ProductManagementPageState extends State<ProductManagementPage>
             ),
           );
         },
+        availableParentCategories:
+            _allCategories, // 🆕 Parent-Kategorien übergeben
       ),
     );
   }
@@ -1112,6 +1382,8 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       context: context,
       builder: (context) => EditCategoryDialog(
         category: category,
+        availableParentCategories:
+            _allCategories, // 🆕 Parent-Kategorien übergeben
         onCategoryUpdated: (updatedCategory) {
           _loadCategories(); // Reload nach Update
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1128,102 +1400,164 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   }
 
   /// **🗑️ KATEGORIE LÖSCHEN BESTÄTIGUNG**
-  void _showDeleteCategoryDialog(ProductCategory category) async {
+  void _showDeleteCategoryDialog(ProductCategory category) {
     final productCount = _getProductCountForCategory(category.id!);
+    final hasSubCategories = _allCategories.any(
+      (cat) => cat.parentCategoryId == category.id,
+    );
 
-    if (productCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '❌ Kategorie "${category.name}" kann nicht gelöscht werden - sie enthält $productCount Produkte',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('🗑️ Kategorie löschen'),
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 28),
+            const SizedBox(width: 12),
+            const Text('Kategorie löschen'),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Möchten Sie die Kategorie "${category.name}" wirklich löschen?',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.warning, color: Colors.orange, size: 16),
-                      SizedBox(width: 8),
-                      Text(
-                        'Wichtiger Hinweis',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+            const SizedBox(height: 16),
+            if (productCount > 0) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning,
+                      color: Colors.orange.shade700,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Diese Kategorie enthält $productCount Produkte. Diese werden ebenfalls betroffen.',
+                        style: TextStyle(color: Colors.orange.shade700),
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 4),
-                  Text('• System-Kategorien können nicht gelöscht werden'),
-                  Text('• Favoriten-Kategorie kann nicht gelöscht werden'),
-                  Text(
-                    '• Kategorien mit Produkten können nicht gelöscht werden',
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 12),
+            ],
+            if (hasSubCategories) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error, color: Colors.red.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Diese Überkategorie hat Unterkategorien. Diese werden ebenfalls gelöscht.',
+                        style: TextStyle(color: Colors.red.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            const Text(
+              'Diese Aktion kann nicht rückgängig gemacht werden.',
+              style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('Abbrechen'),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _deleteCategory(category);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Löschen'),
           ),
         ],
       ),
     );
+  }
 
-    if (confirmed == true) {
-      try {
-        final client = Provider.of<Client>(context, listen: false);
-        // TODO: deleteProductCategory implementieren
-        throw Exception('Delete-Funktion wird noch implementiert');
+  /// **🗑️ KATEGORIE LÖSCHEN - Backend-Integration**
+  Future<void> _deleteCategory(ProductCategory category) async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
 
+      final success = await client.productManagement.deleteProductCategory(
+        category.id!,
+      );
+
+      if (success) {
+        await _loadCategories(); // Reload nach Löschung
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Kategorie "${category.name}" wurde gelöscht'),
+              content: Text(
+                '✅ Kategorie "${category.name}" erfolgreich gelöscht',
+              ),
               backgroundColor: Colors.green,
             ),
           );
-          _loadCategories();
         }
-      } catch (e) {
+      } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Fehler beim Löschen: $e'),
-              backgroundColor: Colors.red,
+            const SnackBar(
+              content: Text(
+                '❌ Kategorie konnte nicht gelöscht werden (möglicherweise bereits bezahlt)',
+              ),
+              backgroundColor: Colors.orange,
             ),
           );
         }
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Löschen der Kategorie: $e');
+      if (mounted) {
+        String errorMessage = 'Unbekannter Fehler';
+
+        if (e.toString().contains('DUPLICATE_NAME_ERROR')) {
+          errorMessage = 'Eine Kategorie mit diesem Namen existiert bereits';
+        } else if (e.toString().contains('VALIDATION_ERROR')) {
+          errorMessage = 'Ungültige Kategorie-Daten';
+        } else if (e.toString().contains('HAS_PRODUCTS_ERROR')) {
+          errorMessage =
+              'Kategorie kann nicht gelöscht werden - enthält noch Produkte';
+        } else if (e.toString().contains('HAS_SUBCATEGORIES_ERROR')) {
+          errorMessage =
+              'Überkategorie kann nicht gelöscht werden - hat noch Unterkategorien';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ $errorMessage'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -1241,6 +1575,8 @@ class _ProductManagementPageState extends State<ProductManagementPage>
             '🆕 Event ausgelöst: Neue Kategorie "${category.name}" erstellt',
           );
         },
+        availableParentCategories:
+            _allCategories, // 🆕 Parent-Kategorien übergeben
       ),
     );
   }
@@ -2253,8 +2589,13 @@ class _EditProductDialogState extends State<EditProductDialog> {
 
 class CreateCategoryDialog extends StatefulWidget {
   final Function(ProductCategory) onCategoryCreated;
+  final List<ProductCategory> availableParentCategories;
 
-  const CreateCategoryDialog({super.key, required this.onCategoryCreated});
+  const CreateCategoryDialog({
+    super.key,
+    required this.onCategoryCreated,
+    required this.availableParentCategories,
+  });
 
   @override
   State<CreateCategoryDialog> createState() => _CreateCategoryDialogState();
@@ -2269,6 +2610,8 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
   String _selectedIcon = 'category';
   bool _isFavorites = false;
   bool _isLoading = false;
+  bool _isTopLevelCategory = false; // 🆕 Überkategorie-Flag
+  ProductCategory? _selectedParentCategory; // 🆕 Parent-Kategorie
 
   final List<Map<String, dynamic>> _availableColors = [
     {'name': 'Grau', 'hex': '#607D8B'},
@@ -2299,6 +2642,8 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
     super.dispose();
   }
 
+  /// **🏗️ INTELLIGENTE KATEGORIE-ERSTELLUNG**
+  /// Unterstützt sowohl normale Kategorien als auch Überkategorien
   Future<void> _createCategory() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -2306,27 +2651,73 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
 
     try {
       final client = Provider.of<Client>(context, listen: false);
-      final newCategory = await client.productManagement.createProductCategory(
-        _nameController.text.trim(),
-        description: _descriptionController.text.trim().isNotEmpty
-            ? _descriptionController.text.trim()
-            : null,
-        colorHex: _selectedColor,
-        iconName: _selectedIcon,
-        isFavorites: _isFavorites,
-        displayOrder: 0,
-      );
+
+      ProductCategory newCategory;
+
+      if (_isTopLevelCategory) {
+        // 🏗️ Überkategorie erstellen
+        newCategory = await client.productManagement.createTopLevelCategory(
+          _nameController.text.trim(),
+          description: _descriptionController.text.trim().isNotEmpty
+              ? _descriptionController.text.trim()
+              : null,
+          colorHex: _selectedColor,
+          iconName: _selectedIcon,
+          displayOrder: 0,
+        );
+        debugPrint('🏗️ Überkategorie erstellt: ${newCategory.name}');
+      } else if (_selectedParentCategory != null) {
+        // 📁 Unterkategorie erstellen
+        newCategory = await client.productManagement.createSubCategory(
+          _nameController.text.trim(),
+          _selectedParentCategory!.id!,
+          description: _descriptionController.text.trim().isNotEmpty
+              ? _descriptionController.text.trim()
+              : null,
+          colorHex: _selectedColor,
+          iconName: _selectedIcon,
+          displayOrder: 0,
+        );
+        debugPrint(
+          '📁 Unterkategorie erstellt: ${newCategory.name} (Parent: ${_selectedParentCategory!.name})',
+        );
+      } else {
+        // 📂 Normale Kategorie erstellen (wie bisher)
+        newCategory = await client.productManagement.createProductCategory(
+          _nameController.text.trim(),
+          description: _descriptionController.text.trim().isNotEmpty
+              ? _descriptionController.text.trim()
+              : null,
+          colorHex: _selectedColor,
+          iconName: _selectedIcon,
+          isFavorites: _isFavorites,
+          displayOrder: 0,
+        );
+        debugPrint('📂 Normale Kategorie erstellt: ${newCategory.name}');
+      }
 
       if (mounted) {
         Navigator.of(context).pop();
         widget.onCategoryCreated(newCategory);
       }
     } catch (e) {
+      debugPrint('❌ Fehler beim Erstellen der Kategorie: $e');
       if (mounted) {
+        // 🎯 INTELLIGENTE FEHLERMELDUNG basierend auf Backend-Error-Codes
+        String userFriendlyMessage = _parseErrorMessage(e.toString());
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Fehler beim Erstellen: $e'),
+            content: Text(userFriendlyMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
           ),
         );
       }
@@ -2337,18 +2728,102 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
     }
   }
 
+  /// **🎯 PARSE ERROR MESSAGE**
+  /// Konvertiert Backend-Error-Codes in benutzerfreundliche Nachrichten
+  String _parseErrorMessage(String errorMessage) {
+    final name = _nameController.text.trim();
+
+    // DUPLICATE_NAME_ERROR
+    if (errorMessage.contains('DUPLICATE_NAME_ERROR')) {
+      if (_selectedParentCategory != null) {
+        return '❌ Doppelter Name\n\nEine Unterkategorie mit dem Namen "$name" existiert bereits unter "${_selectedParentCategory!.name}".\n\nBitte wählen Sie einen anderen Namen.';
+      } else {
+        return '❌ Doppelter Name\n\nEine Kategorie mit dem Namen "$name" existiert bereits.\n\nBitte wählen Sie einen anderen Namen.';
+      }
+    }
+
+    // VALIDATION_ERROR
+    if (errorMessage.contains('VALIDATION_ERROR')) {
+      if (errorMessage.contains('leer')) {
+        return '❌ Ungültige Eingabe\n\nDer Kategorie-Name darf nicht leer sein.';
+      }
+      if (errorMessage.contains('50 Zeichen')) {
+        return '❌ Name zu lang\n\nDer Kategorie-Name darf maximal 50 Zeichen haben.\n\nAktuell: ${name.length} Zeichen';
+      }
+      return '❌ Ungültige Eingabe\n\nBitte überprüfen Sie Ihre Eingaben.';
+    }
+
+    // PARENT_NOT_FOUND_ERROR
+    if (errorMessage.contains('PARENT_NOT_FOUND_ERROR')) {
+      return '❌ Übergeordnete Kategorie nicht gefunden\n\nDie ausgewählte übergeordnete Kategorie "${_selectedParentCategory?.name}" wurde nicht gefunden.\n\nBitte wählen Sie eine andere Kategorie.';
+    }
+
+    // PARENT_INACTIVE_ERROR
+    if (errorMessage.contains('PARENT_INACTIVE_ERROR')) {
+      return '❌ Übergeordnete Kategorie deaktiviert\n\nDie ausgewählte übergeordnete Kategorie "${_selectedParentCategory?.name}" ist deaktiviert.\n\nBitte wählen Sie eine aktive Kategorie.';
+    }
+
+    // Authentication/Permission Errors
+    if (errorMessage.contains('Authentication') ||
+        errorMessage.contains('Berechtigung')) {
+      return '🔐 Berechtigung fehlt\n\nSie haben keine Berechtigung zum Erstellen von Kategorien.\n\nBitte wenden Sie sich an einen Administrator.';
+    }
+
+    // Server Connection Errors
+    if (errorMessage.contains('Internal server error') ||
+        errorMessage.contains('statusCode = 500') ||
+        errorMessage.contains('Connection failed')) {
+      return '🔌 Verbindungsfehler\n\nEs konnte keine Verbindung zum Server hergestellt werden.\n\nBitte versuchen Sie es später erneut.';
+    }
+
+    // Generic fallback
+    return '❌ Unbekannter Fehler\n\nBeim Erstellen der Kategorie ist ein Fehler aufgetreten:\n\n${errorMessage.length > 100 ? errorMessage.substring(0, 100) + '...' : errorMessage}';
+  }
+
+  /// **🎨 HILFSMETHODE: Nur Top-Level-Kategorien für Parent-Auswahl**
+  List<ProductCategory> get _topLevelCategories {
+    // 🔧 TEMPORÄR: Filtere nach manueller Logic bis parentCategoryId verfügbar ist
+    // TODO: Nach Migration auf parentCategoryId und level Felder umstellen
+    return widget.availableParentCategories
+        .where(
+          (category) =>
+              !category.isSystemCategory, // Nur Custom-Kategorien als Parent
+        )
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.add_circle, color: Colors.green),
-          SizedBox(width: 8),
-          Text('🆕 Neue Kategorie erstellen'),
+          Icon(
+            _isTopLevelCategory
+                ? Icons.account_tree
+                : _selectedParentCategory != null
+                ? Icons.subdirectory_arrow_right
+                : Icons.category,
+            color: _isTopLevelCategory
+                ? Colors.purple
+                : _selectedParentCategory != null
+                ? Colors.blue
+                : Colors.green,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _isTopLevelCategory
+                  ? '🏗️ Neue Überkategorie erstellen'
+                  : _selectedParentCategory != null
+                  ? '📁 Neue Unterkategorie erstellen'
+                  : '📂 Neue Kategorie erstellen',
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
         ],
       ),
       content: SizedBox(
-        width: 400,
+        width: 450, // Etwas breiter für Parent-Dropdown
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -2356,12 +2831,130 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 🆕 KATEGORIE-TYP AUSWAHL
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '🏗️ Kategorie-Typ auswählen:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        value: _isTopLevelCategory,
+                        onChanged: (value) {
+                          setState(() {
+                            _isTopLevelCategory = value ?? false;
+                            if (_isTopLevelCategory) {
+                              _selectedParentCategory =
+                                  null; // Reset Parent wenn Überkategorie
+                            }
+                          });
+                        },
+                        title: const Text('Als Überkategorie erstellen'),
+                        subtitle: const Text(
+                          'Überkategorien können Unterkategorien enthalten und werden im POS hierarchisch dargestellt',
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                        activeColor: Colors.purple,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 🆕 PARENT-KATEGORIE AUSWÄHLEN (nur wenn nicht Überkategorie)
+                if (!_isTopLevelCategory &&
+                    widget.availableParentCategories.isNotEmpty) ...[
+                  const Text(
+                    'Übergeordnete Kategorie:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<ProductCategory?>(
+                    value: _selectedParentCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Übergeordnete Kategorie (optional)',
+                      hintText: 'Leer lassen für Top-Level-Kategorie',
+                      prefixIcon: Icon(Icons.account_tree),
+                    ),
+                    items: [
+                      const DropdownMenuItem<ProductCategory?>(
+                        value: null,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.arrow_upward,
+                              size: 16,
+                              color: Colors.green,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              '🏗️ Top-Level-Kategorie (keine Übergeordnete)',
+                            ),
+                          ],
+                        ),
+                      ),
+                      ..._topLevelCategories.map((category) {
+                        return DropdownMenuItem<ProductCategory?>(
+                          value: category,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Color(
+                                    int.parse(
+                                      category.colorHex.replaceFirst(
+                                        '#',
+                                        '0xFF',
+                                      ),
+                                    ),
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_downward,
+                                size: 16,
+                                color: Colors.blue,
+                              ),
+                              const SizedBox(width: 4),
+                              Text('📁 Unter "${category.name}"'),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                    onChanged: (category) {
+                      setState(() {
+                        _selectedParentCategory = category;
+                        // Bei Parent-Auswahl: Farbe und Icon übernehmen
+                        if (category != null) {
+                          _selectedColor = category.colorHex;
+                          _selectedIcon = category.iconName;
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Name
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(
                     labelText: 'Kategorie-Name *',
-                    hintText: 'z.B. Getränke, Snacks, Sport...',
+                    hintText: 'z.B. Shop, Getränke, Snacks...',
                     prefixIcon: Icon(Icons.label),
                   ),
                   validator: (value) {
@@ -2385,7 +2978,47 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Farbe
+                // 🎨 VERERBUNG-INFO bei Sub-Kategorien
+                if (_selectedParentCategory != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.arrow_downward,
+                              color: Colors.blue,
+                              size: 16,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Vererbung von Überkategorie',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '• Farbe und Icon werden von "${_selectedParentCategory!.name}" übernommen',
+                        ),
+                        Text(
+                          '• Level: Unterkategorie (wird nach Migration implementiert)',
+                        ),
+                        Text('• Kann später individuell angepasst werden'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Farbe (anpassbar auch bei Sub-Kategorien)
                 const Text(
                   'Farbe:',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -2425,7 +3058,7 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Icon
+                // Icon (anpassbar auch bei Sub-Kategorien)
                 const Text(
                   'Icon:',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -2466,44 +3099,69 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Favoriten-Kategorie Checkbox
-                CheckboxListTile(
-                  title: const Text('Als Favoriten-Kategorie markieren'),
-                  subtitle: const Text('Nur eine Favoriten-Kategorie möglich'),
-                  value: _isFavorites,
-                  onChanged: (value) =>
-                      setState(() => _isFavorites = value ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                const SizedBox(height: 16),
+                // Favoriten-Kategorie Checkbox (nur bei normalen Kategorien)
+                if (!_isTopLevelCategory &&
+                    _selectedParentCategory == null) ...[
+                  CheckboxListTile(
+                    title: const Text('Als Favoriten-Kategorie markieren'),
+                    subtitle: const Text(
+                      'Nur eine Favoriten-Kategorie möglich',
+                    ),
+                    value: _isFavorites,
+                    onChanged: (value) =>
+                        setState(() => _isFavorites = value ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // Hinweis
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    border: Border.all(color: Colors.green.withOpacity(0.3)),
                   ),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      const Row(
                         children: [
-                          Icon(Icons.info, color: Colors.blue, size: 16),
+                          Icon(Icons.lightbulb, color: Colors.green, size: 16),
                           SizedBox(width: 8),
                           Text(
-                            'Hinweis',
+                            'Hierarchisches Kategorie-System',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        '• Steuerklassen werden für einzelne Produkte gesetzt',
+                        _isTopLevelCategory
+                            ? '🏗️ Überkategorie: Kann Unterkategorien enthalten'
+                            : _selectedParentCategory != null
+                            ? '📁 Unterkategorie: Wird unter "${_selectedParentCategory!.name}" angezeigt'
+                            : '📂 Normale Kategorie: Funktioniert wie bisher',
                       ),
-                      Text('• Kategorien dienen der thematischen Ordnung'),
-                      Text('• System-Kategorien können nicht gelöscht werden'),
+                      if (_isTopLevelCategory) ...[
+                        const Text(
+                          '• Ideal für große Bereiche wie "Shop", "Getränke", etc.',
+                        ),
+                        const Text(
+                          '• Ermöglicht hierarchische Navigation im POS',
+                        ),
+                      ] else if (_selectedParentCategory != null) ...[
+                        const Text(
+                          '• Erbt Eigenschaften von der Überkategorie',
+                        ),
+                        const Text('• Erscheint als Unterpunkt im POS-System'),
+                      ] else ...[
+                        const Text('• Funktioniert wie gewohnt'),
+                        const Text(
+                          '• Kann als Favoriten-Kategorie markiert werden',
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -2525,7 +3183,13 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Erstellen'),
+              : Text(
+                  _isTopLevelCategory
+                      ? 'Überkategorie erstellen'
+                      : _selectedParentCategory != null
+                      ? 'Unterkategorie erstellen'
+                      : 'Kategorie erstellen',
+                ),
         ),
       ],
     );
@@ -2552,16 +3216,19 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
     }
   }
 }
+
 // ==================== KATEGORIEN-BEARBEITUNG DIALOG ====================
 
 class EditCategoryDialog extends StatefulWidget {
   final ProductCategory category;
   final Function(ProductCategory) onCategoryUpdated;
+  final List<ProductCategory> availableParentCategories;
 
   const EditCategoryDialog({
     super.key,
     required this.category,
     required this.onCategoryUpdated,
+    required this.availableParentCategories,
   });
 
   @override
@@ -2578,6 +3245,7 @@ class _EditCategoryDialogState extends State<EditCategoryDialog> {
   late bool _isFavorites;
   late bool _isActive;
   bool _isLoading = false;
+  ProductCategory? _selectedParentCategory; // 🆕 Parent-Kategorie
 
   final List<Map<String, dynamic>> _availableColors = [
     {'name': 'Grau', 'hex': '#607D8B'},
@@ -2612,6 +3280,13 @@ class _EditCategoryDialogState extends State<EditCategoryDialog> {
     _selectedIcon = widget.category.iconName;
     _isFavorites = widget.category.isFavorites;
     _isActive = widget.category.isActive;
+
+    // 🆕 Parent-Kategorie setzen falls vorhanden
+    if (widget.category.parentCategoryId != null) {
+      _selectedParentCategory = widget.availableParentCategories
+          .where((cat) => cat.id == widget.category.parentCategoryId)
+          .firstOrNull;
+    }
   }
 
   @override
@@ -2722,6 +3397,77 @@ class _EditCategoryDialogState extends State<EditCategoryDialog> {
                   maxLines: 2,
                 ),
                 const SizedBox(height: 16),
+
+                // 🆕 PARENT-KATEGORIE ÄNDERN (nur für Custom-Kategorien)
+                if (!isSystemCategory &&
+                    widget.availableParentCategories.isNotEmpty) ...[
+                  const Text(
+                    'Übergeordnete Kategorie:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<ProductCategory?>(
+                    value: _selectedParentCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Übergeordnete Kategorie (optional)',
+                      hintText: 'Leer lassen für Top-Level-Kategorie',
+                      prefixIcon: Icon(Icons.account_tree),
+                    ),
+                    items: [
+                      const DropdownMenuItem<ProductCategory?>(
+                        value: null,
+                        child: Text('🏗️ Als Top-Level-Kategorie'),
+                      ),
+                      ...widget.availableParentCategories
+                          .where(
+                            (cat) =>
+                                cat.id !=
+                                    widget
+                                        .category
+                                        .id && // Nicht sich selbst als Parent
+                                cat.parentCategoryId != widget.category.id,
+                          ) // Nicht eigene Kinder als Parent
+                          .map((category) {
+                            return DropdownMenuItem<ProductCategory?>(
+                              value: category,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: Color(
+                                        int.parse(
+                                          category.colorHex.replaceFirst(
+                                            '#',
+                                            '0xFF',
+                                          ),
+                                        ),
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.arrow_downward,
+                                    size: 16,
+                                    color: Colors.blue,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('📁 Unter "${category.name}"'),
+                                ],
+                              ),
+                            );
+                          }),
+                    ],
+                    onChanged: (category) {
+                      setState(() {
+                        _selectedParentCategory = category;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // Farbe
                 const Text(

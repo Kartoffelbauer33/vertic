@@ -6,6 +6,10 @@ fields:
   description: String?           # Optionale Beschreibung
   hallId: int?                   # Hallen-spezifisch
   
+  # 🆕 HIERARCHIE-SUPPORT: Self-Relation für Parent-Child-Beziehung
+  parentCategory: ProductCategory?, relation(name=category_hierarchy, optional, onDelete=SetNull)
+  childCategories: List<ProductCategory>?, relation(name=category_hierarchy)
+  
   # Erweiterte Darstellung
   colorHex: String, default='#607D8B' # Farbe als Hex-Code (default grau)
   iconName: String, default='category' # Icon-Name (default category)
@@ -15,6 +19,10 @@ fields:
   isActive: bool, default=true   # Kategorie ist verfügbar (bestehend)
   isFavorites: bool, default=false # Ist die spezielle Favoriten-Kategorie
   isSystemCategory: bool, default=false # System-Kategorie (nicht löschbar)
+  
+  # 🆕 HIERARCHIE-EIGENSCHAFTEN
+  level: int, default=0          # Hierarchie-Level (0 = Top-Level, 1 = Sub, etc.)
+  hasChildren: bool, default=false # Hat Unterkategorien (Performance-Optimierung)
   
   # Metadaten
   createdByStaffId: int?         # Wer hat die Kategorie erstellt (nullable für bestehende)
@@ -31,4 +39,12 @@ indexes:
   categories_system_idx:
     fields: isSystemCategory
   categories_hall_idx:
-    fields: hallId 
+    fields: hallId
+  # 🆕 HIERARCHIE-INDEXES
+  categories_parent_idx:
+    fields: parentCategoryId
+  categories_level_idx:
+    fields: level
+  categories_has_children_idx:
+    fields: hasChildren
+ 
