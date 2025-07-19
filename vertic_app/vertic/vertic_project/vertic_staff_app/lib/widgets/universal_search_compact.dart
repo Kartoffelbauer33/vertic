@@ -364,13 +364,22 @@ class ProductSearchWidget extends StatelessWidget {
   }
 }
 
-/// **🏪 POS-SYSTEM MULTI-ENTITY SUCHFUNKTION**
-/// Sucht sowohl nach Kunden als auch nach Produkten für das POS-System
+/// **🏪 POS-SYSTEM UNIFIED SEARCH**
+/// Einheitliche Suche für:
+/// - 👥 Kunden (über UniversalSearch)
+/// - 🛒 Produkte (über UniversalSearch) 
+/// - 🔍 Live-Filter für Artikel/Kategorien (direkte Integration)
 class PosSearchWidget extends StatelessWidget {
   final Function(AppUser)? onCustomerSelected;
   final Function(Product)? onProductSelected;
   final String hintText;
   final bool autofocus;
+  
+  // 🔍 LIVE-FILTER INTEGRATION
+  final Function(String query)? onLiveFilterChanged;
+  final String? liveFilterQuery;
+  final bool? isLiveFilterActive;
+  final VoidCallback? onLiveFilterReset;
 
   const PosSearchWidget({
     super.key,
@@ -378,6 +387,11 @@ class PosSearchWidget extends StatelessWidget {
     this.onProductSelected,
     this.hintText = 'Kunde oder Produkt suchen...',
     this.autofocus = false,
+    // Live-Filter Parameters
+    this.onLiveFilterChanged,
+    this.liveFilterQuery,
+    this.isLiveFilterActive,
+    this.onLiveFilterReset,
   });
 
   @override
@@ -387,6 +401,8 @@ class PosSearchWidget extends StatelessWidget {
       entityTypes: const ['customer', 'product'], // 🎯 BEIDE TYPEN!
       autofocus: autofocus,
       maxResults: 20,
+      // 🔍 LIVE-FILTER INTEGRATION: Weiterleitung der Query-Änderungen
+      onQueryChanged: onLiveFilterChanged,
       onResultSelected: (result) async {
         try {
           final client = Provider.of<Client>(context, listen: false);

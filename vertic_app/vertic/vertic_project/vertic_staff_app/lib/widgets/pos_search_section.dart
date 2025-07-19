@@ -9,6 +9,7 @@ import 'universal_search_compact.dart';
 /// - ✅ Nutzt universelle Suchfunktion
 /// - ✅ Saubere Callback-Struktur
 /// - ✅ Auto-Focus für Scanner-Integration
+/// - 🔍 Live-Filter für Artikel-Suche
 class PosSearchSection extends StatelessWidget {
   final AppUser? selectedCustomer;
   final Function(AppUser customer) onCustomerSelected;
@@ -16,6 +17,12 @@ class PosSearchSection extends StatelessWidget {
   final VoidCallback? onCustomerRemoved;
   final bool autofocus;
   final String hintText;
+  
+  // 🔍 LIVE-FILTER PROPERTIES
+  final Function(String query)? onLiveFilterChanged;
+  final String? liveFilterQuery;
+  final bool? isLiveFilterActive;
+  final VoidCallback? onLiveFilterReset;
 
   const PosSearchSection({
     super.key,
@@ -25,6 +32,11 @@ class PosSearchSection extends StatelessWidget {
     this.onCustomerRemoved,
     this.autofocus = false,
     this.hintText = 'Kunde oder Produkt suchen...',
+    // 🔍 LIVE-FILTER PARAMETERS
+    this.onLiveFilterChanged,
+    this.liveFilterQuery,
+    this.isLiveFilterActive,
+    this.onLiveFilterReset,
   });
 
   @override
@@ -70,12 +82,17 @@ class PosSearchSection extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               children: [
-                // 🔍 NEUE POS MULTI-ENTITY SUCHE
+                // 🔍 UNIFIED POS SEARCH (Kunden + Artikel Live-Filter)
                 PosSearchWidget(
                   hintText: hintText,
                   autofocus: autofocus,
                   onCustomerSelected: onCustomerSelected,
                   onProductSelected: onProductSelected,
+                  // Live-Filter Integration
+                  onLiveFilterChanged: onLiveFilterChanged,
+                  liveFilterQuery: liveFilterQuery,
+                  isLiveFilterActive: isLiveFilterActive,
+                  onLiveFilterReset: onLiveFilterReset,
                 ),
 
                 const SizedBox(height: 16),
@@ -161,4 +178,6 @@ class PosSearchSection extends StatelessWidget {
       ),
     );
   }
+
+
 }

@@ -108,7 +108,7 @@ class PosEndpoint extends Endpoint {
     return sessions.isNotEmpty ? sessions.first : null;
   }
 
-  /// Cart-Items einer Session abrufen
+  /// Cart-Items einer Session abrufen (Performance-optimiert)
   Future<List<PosCartItem>> getCartItems(Session session, int sessionId) async {
     final staffUserId =
         await StaffAuthHelper.getAuthenticatedStaffUserId(session);
@@ -116,6 +116,17 @@ class PosEndpoint extends Endpoint {
       throw Exception('Authentication erforderlich');
     }
 
+    // 🚀 PERFORMANCE: Direkte DB-Abfrage ohne Debug-Overhead
+    return await PosCartItem.db.find(
+      session,
+      where: (t) => t.sessionId.equals(sessionId),
+      orderBy: (t) => t.addedAt,
+    );
+  }
+
+  /// Cart-Items einer Session abrufen (Schnelle Version ohne Auth-Check für interne Calls)
+  Future<List<PosCartItem>> getCartItemsFast(Session session, int sessionId) async {
+    // 🚀 PERFORMANCE: Optimierte Version für häufige interne Aufrufe
     return await PosCartItem.db.find(
       session,
       where: (t) => t.sessionId.equals(sessionId),
@@ -170,18 +181,23 @@ class PosEndpoint extends Endpoint {
       );
 
       stats['total'] = allSessions.length;
-      session.log(
-          '🔍 BUSINESS-LOGIC: ${allSessions.length} aktive Sessions gefunden');
+      
+      // 🚀 PERFORMANCE: Debug-Ausgaben nur bei Bedarf
+      const bool enableBusinessLogicDebug = false; // Setze auf true für Debugging
+      
+      if (enableBusinessLogicDebug) {
+        session.log(
+            '🔍 BUSINESS-LOGIC: ${allSessions.length} aktive Sessions gefunden');
+      }
 
       for (final posSession in allSessions) {
-        session.log(
-            '🔍 ANALYSE Session ${posSession.id}: Kunde=${posSession.customerId}, Total=${posSession.totalAmount}');
+        if (enableBusinessLogicDebug) {
+          session.log(
+              '🔍 ANALYSE Session ${posSession.id}: Kunde=${posSession.customerId}, Total=${posSession.totalAmount}');
+        }
 
-        // **📦 CART-ITEMS LADEN**
-        final cartItems = await PosCartItem.db.find(
-          session,
-          where: (t) => t.sessionId.equals(posSession.id!),
-        );
+        // **📦 CART-ITEMS LADEN (Performance-optimiert)**
+        final cartItems = await getCartItemsFast(session, posSession.id!);
 
         final hasItems = cartItems.isNotEmpty;
         final hasCustomer = posSession.customerId != null;
@@ -189,8 +205,10 @@ class PosEndpoint extends Endpoint {
             posSession.totalAmount > 0 && posSession.completedAt != null;
         final isEmpty = !hasItems && !hasCustomer;
 
-        session.log(
-            '🔍 ANALYSE Session ${posSession.id}: Items=${cartItems.length}, Customer=$hasCustomer, Paid=$isPaid, Empty=$isEmpty');
+        if (enableBusinessLogicDebug) {
+          session.log(
+              '🔍 ANALYSE Session ${posSession.id}: Items=${cartItems.length}, Customer=$hasCustomer, Paid=$isPaid, Empty=$isEmpty');
+        }
 
         // **🎯 BUSINESS-RULE 1: Bezahlte Sessions → History**
         if (isPaid) {
@@ -306,14 +324,21 @@ class PosEndpoint extends Endpoint {
             t.status.equals('active') &
             t.deviceId.equals(deviceId),
       );
-      session.log(
-          '🔍 DEBUG: Sessions VOR Bereinigung: ${sessionsBeforeCleanup.length}');
+      // 🚀 PERFORMANCE: Debug-Ausgaben nur bei Bedarf
+      const bool enableDebugLogging = false; // Setze auf true für Debugging
+      
+      if (enableDebugLogging) {
+        session.log(
+            '🔍 DEBUG: Sessions VOR Bereinigung: ${sessionsBeforeCleanup.length}');
+      }
 
       // 1. Zuerst leere Sessions bereinigen (wirklich löschen!)
       final cleanedCount = await cleanupEmptySessions(session);
-      session.log('🧹 DEBUG: $cleanedCount leere Sessions wirklich gelöscht');
+      if (enableDebugLogging) {
+        session.log('🧹 DEBUG: $cleanedCount leere Sessions wirklich gelöscht');
+      }
 
-      // **🔍 DEBUG: Sessions NACH Bereinigung laden**
+      // **🔍 Sessions NACH Bereinigung laden (ohne Debug-Overhead)**
       final activeSessions = await PosSession.db.find(
         session,
         where: (t) =>
@@ -323,17 +348,16 @@ class PosEndpoint extends Endpoint {
         orderBy: (t) => t.createdAt,
       );
 
-      session.log(
-          '📋 DEBUG: ${activeSessions.length} aktive Sessions mit Inhalt gefunden nach Bereinigung');
-
-      // **🔍 DEBUG: Jede Session detailliert loggen**
-      for (final posSession in activeSessions) {
-        final cartItems = await PosCartItem.db.find(
-          session,
-          where: (t) => t.sessionId.equals(posSession.id!),
-        );
+      if (enableDebugLogging) {
         session.log(
-            '📋 DEBUG: Session ${posSession.id} - ${cartItems.length} Items, Kunde: ${posSession.customerId}, Device: ${posSession.deviceId}');
+            '📋 DEBUG: ${activeSessions.length} aktive Sessions mit Inhalt gefunden nach Bereinigung');
+        
+        // **🔍 DEBUG: Jede Session detailliert loggen (nur wenn Debug aktiv)**
+        for (final posSession in activeSessions) {
+          final cartItems = await getCartItemsFast(session, posSession.id!);
+          session.log(
+              '📋 DEBUG: Session ${posSession.id} - ${cartItems.length} Items, Kunde: ${posSession.customerId}, Device: ${posSession.deviceId}');
+        }
       }
 
       // 3. Falls keine Sessions vorhanden, neue erstellen

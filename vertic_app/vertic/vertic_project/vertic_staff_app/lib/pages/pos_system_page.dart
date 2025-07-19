@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
@@ -93,6 +94,20 @@ class _PosSystemPageState extends State<PosSystemPage> {
   List<CartSession> _activeCarts = []; // Alle aktiven Warenkörbe
   int _currentCartIndex = 0; // Index des aktuell angezeigten Warenkorbs
 
+  // 🔍 LIVE-FILTER STATE
+  String _liveSearchQuery = '';
+  Timer? _searchDebounceTimer;
+  List<Product> _filteredProducts = [];
+  List<ProductCategory> _filteredCategories = [];
+  Map<String, int> _categoryArticleCounts = {};
+  bool _isLiveSearchActive = false;
+
+  // 🎯 FILTER-OPTIONEN
+  Set<String> _activeFilters = {};
+  String _sortOption = 'relevance'; // relevance, alphabetical, price_asc, price_desc
+  bool _showOnlyTickets = false;
+  bool _showOnlyProducts = false;
+
   // 🎨 DYNAMISCHE ICON-MAPPING für Backend-Kategorien
   final Map<String, IconData> _iconMapping = {
     'category': Icons.category,
@@ -168,6 +183,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
         refreshProductCatalog();
       }
     });
+
+    // 🔍 Live-Filter Cleanup
+    _searchDebounceTimer?.cancel();
 
     _manualCodeController.dispose();
     _searchController.dispose();
@@ -640,6 +658,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
         createdAt: DateTime.now(),
       );
 
+      // 🚀 PERFORMANCE: Sofortiger UI-Update
       setState(() {
         _activeCarts.add(newCart);
         _currentCartIndex = _activeCarts.length - 1;
@@ -648,12 +667,29 @@ class _PosSystemPageState extends State<PosSystemPage> {
         _cartItems = [];
       });
 
-      // 🎯 WICHTIG: Artikel-Katalog für neuen Warenkorb aktualisieren
-      await _loadAvailableItems();
+      // ✅ Sofortiges visuelles Feedback
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.add_shopping_cart, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('Neuer Warenkorb erstellt: ${newCart.displayName}'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
 
-      debugPrint(
-        '🛒 Neuer gerätespezifischer Warenkorb erstellt: ${newCart.displayName}',
-      );
+      // 🚀 PERFORMANCE: Artikel-Katalog im Hintergrund laden
+      _loadAvailableItems().catchError((e) {
+        debugPrint('⚠️ Hintergrund-Laden der Artikel fehlgeschlagen: $e');
+      });
+
+      debugPrint('🚀 Schnelle Warenkorb-Erstellung: ${newCart.displayName}');
     } catch (e) {
       debugPrint('❌ Fehler beim Erstellen des Warenkorbs: $e');
       if (mounted) {
@@ -667,92 +703,198 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
-  /// **🔄 NEUE METHODE: Wechselt zwischen Warenkörben**
+  /// **🚀 PERFORMANCE-OPTIMIERT: Schneller Warenkorb-Wechsel**
   Future<void> _switchToCart(int index) async {
     if (index < 0 || index >= _activeCarts.length) return;
+    if (index == _currentCartIndex) return; // Bereits aktiver Cart
 
     final targetCart = _activeCarts[index];
 
+    // 🚀 PERFORMANCE: Sofortiger UI-Update ohne Backend-Call
+    setState(() {
+      _currentCartIndex = index;
+      _selectedCustomer = targetCart.customer;
+      _currentSession = targetCart.posSession;
+      // Verwende gecachte Items aus dem CartSession-Objekt
+      _cartItems = targetCart.items;
+      // 🎯 Suchfeld zurücksetzen
+      _searchText = '';
+      _searchController.clear();
+      _filteredUsers = _allUsers;
+    });
+
+    // 🚀 PERFORMANCE: Backend-Sync asynchron im Hintergrund
+    _syncCartInBackground(targetCart);
+
+    debugPrint('🚀 Schneller Warenkorb-Wechsel: ${targetCart.displayName}');
+  }
+
+  /// **🔄 HINTERGRUND-SYNC: Synchronisiert Cart-Daten ohne UI-Blockierung**
+  Future<void> _syncCartInBackground(CartSession targetCart) async {
     try {
-      // Cart-Items vom Backend laden
       final client = Provider.of<Client>(context, listen: false);
-      final items = await client.pos.getCartItems(targetCart.posSession!.id!);
-
-      setState(() {
-        _currentCartIndex = index;
-        _selectedCustomer = targetCart.customer;
-        _currentSession = targetCart.posSession;
-        _cartItems = items;
-        // 🎯 WICHTIG: Suchfeld zurücksetzen beim Warenkorb-Wechsel
-        _searchText = '';
-        _searchController.clear();
-        _filteredUsers = _allUsers;
-      });
-
-      // 🎯 KRITISCH: Artikel-Katalog für aktuellen Kunden aktualisieren
-      await _loadAvailableItems();
-
-      debugPrint('🔄 Zu Warenkorb gewechselt: ${targetCart.displayName}');
+      final freshItems = await client.pos.getCartItems(targetCart.posSession!.id!);
+      
+      // Nur UI updaten wenn sich Daten geändert haben
+      if (!_areCartItemsEqual(_cartItems, freshItems)) {
+        setState(() {
+          _cartItems = freshItems;
+          // Update auch im CartSession-Cache
+          final updatedCart = targetCart.copyWith(items: freshItems);
+          _activeCarts[_currentCartIndex] = updatedCart;
+        });
+        debugPrint('🔄 Cart-Daten im Hintergrund synchronisiert');
+      }
     } catch (e) {
-      debugPrint('❌ Fehler beim Wechseln des Warenkorbs: $e');
+      debugPrint('⚠️ Hintergrund-Sync Fehler (nicht kritisch): $e');
     }
   }
 
-  /// **🗑️ NEUE METHODE: Warenkorb entfernen**
-  Future<void> _removeCart(int index) async {
-    if (index < 0 || index >= _activeCarts.length) return;
+  /// **🔍 HILFSMETHODE: Vergleicht Cart-Items auf Änderungen**
+  bool _areCartItemsEqual(List<PosCartItem> items1, List<PosCartItem> items2) {
+    if (items1.length != items2.length) return false;
+    
+    for (int i = 0; i < items1.length; i++) {
+      final item1 = items1[i];
+      final item2 = items2[i];
+      if (item1.id != item2.id || 
+          item1.quantity != item2.quantity || 
+          item1.unitPrice != item2.unitPrice) {
+        return false;
+      }
+    }
+    return true;
+  }
 
-    final cartToRemove = _activeCarts[index];
 
-    try {
-      // ✅ BACKEND-SESSION WIRKLICH LÖSCHEN (nicht nur leeren!)
-      if (cartToRemove.posSession != null) {
-        final client = Provider.of<Client>(context, listen: false);
-        // ✅ NEUE METHODE: Session komplett aus DB löschen
-        final deleted = await client.pos.deleteCart(
-          cartToRemove.posSession!.id!,
+
+
+
+/// **🚀 PERFORMANCE-OPTIMIERT: Schnelle Warenkorb-Entfernung mit optimistischem UI**
+Future<void> _removeCart(int index) async {
+  if (index < 0 || index >= _activeCarts.length) return;
+
+  final cartToRemove = _activeCarts[index];
+  final cartBackup = List<CartSession>.from(_activeCarts); // Backup für Rollback
+  final currentIndexBackup = _currentCartIndex;
+  final sessionBackup = _currentSession;
+  final customerBackup = _selectedCustomer;
+  final itemsBackup = List<PosCartItem>.from(_cartItems);
+
+  // 🚀 PERFORMANCE: Sofortiger optimistischer UI-Update
+  setState(() {
+    _activeCarts.removeAt(index);
+
+    // Aktuellen Index anpassen
+    if (_currentCartIndex >= _activeCarts.length &&
+        _activeCarts.isNotEmpty) {
+      _currentCartIndex = _activeCarts.length - 1;
+    } else if (_activeCarts.isEmpty) {
+      _currentCartIndex = 0;
+      _selectedCustomer = null;
+      _currentSession = null;
+      _cartItems = [];
+    } else if (index <= _currentCartIndex && _currentCartIndex > 0) {
+      _currentCartIndex--; // Index nach links verschieben
+    }
+
+    // Zu neuem aktuellem Warenkorb wechseln (falls vorhanden)
+    if (_activeCarts.isNotEmpty && _currentCartIndex < _activeCarts.length) {
+      final newCurrentCart = _activeCarts[_currentCartIndex];
+      _selectedCustomer = newCurrentCart.customer;
+      _currentSession = newCurrentCart.posSession;
+      _cartItems = newCurrentCart.items;
+    }
+  });
+
+  // ✅ Sofortiges visuelles Feedback
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.delete, color: Colors.white),
+            const SizedBox(width: 8),
+            Text('Warenkorb entfernt: ${cartToRemove.displayName}'),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // 🚀 PERFORMANCE: Backend-Sync und Fallback-Handling im Hintergrund
+  _syncRemoveCartInBackground(
+    cartToRemove, 
+    cartBackup, 
+    currentIndexBackup, 
+    sessionBackup, 
+    customerBackup, 
+    itemsBackup
+  );
+
+  debugPrint('🚀 Schnelle Warenkorb-Entfernung: ${cartToRemove.displayName}');
+}
+
+/// **🔄 HINTERGRUND-SYNC: Warenkorb-Entfernung ohne UI-Blockierung**
+Future<void> _syncRemoveCartInBackground(
+  CartSession cartToRemove,
+  List<CartSession> cartBackup,
+  int currentIndexBackup,
+  PosSession? sessionBackup,
+  AppUser? customerBackup,
+  List<PosCartItem> itemsBackup,
+) async {
+  try {
+    final client = Provider.of<Client>(context, listen: false);
+    
+    // ✅ BACKEND-SESSION WIRKLICH LÖSCHEN (nicht nur leeren!)
+    if (cartToRemove.posSession != null) {
+      final deleted = await client.pos.deleteCart(
+        cartToRemove.posSession!.id!,
+      );
+      if (deleted) {
+        debugPrint(
+          '🔄 Session ${cartToRemove.posSession!.id} erfolgreich im Backend gelöscht',
         );
-        if (deleted) {
-          debugPrint(
-            '✅ Session ${cartToRemove.posSession!.id} wirklich aus DB gelöscht',
-          );
-        } else {
-          debugPrint(
-            '⚠️ Session ${cartToRemove.posSession!.id} konnte nicht gelöscht werden (bezahlt?)',
-          );
-          // Fallback: Session leeren
-          await client.pos.clearCart(cartToRemove.posSession!.id!);
-        }
-      }
-
-      setState(() {
-        _activeCarts.removeAt(index);
-
-        // Aktuellen Index anpassen
-        if (_currentCartIndex >= _activeCarts.length &&
-            _activeCarts.isNotEmpty) {
-          _currentCartIndex = _activeCarts.length - 1;
-        } else if (_activeCarts.isEmpty) {
-          _currentCartIndex = 0;
-          _selectedCustomer = null;
-          _currentSession = null;
-          _cartItems = [];
-        }
-      });
-
-      // Falls kein Warenkorb mehr vorhanden, neuen erstellen
-      if (_activeCarts.isEmpty) {
-        await _createNewCart();
       } else {
-        // Zu aktuellem Warenkorb wechseln
-        await _switchToCart(_currentCartIndex);
+        debugPrint(
+          '⚠️ Session ${cartToRemove.posSession!.id} konnte nicht gelöscht werden (bezahlt?)',
+        );
+        // Fallback: Session leeren
+        await client.pos.clearCart(cartToRemove.posSession!.id!);
       }
+    }
 
-      debugPrint('🗑️ Warenkorb entfernt: ${cartToRemove.displayName}');
-    } catch (e) {
-      debugPrint('❌ Fehler beim Entfernen des Warenkorbs: $e');
+    // Falls kein Warenkorb mehr vorhanden, neuen erstellen
+    if (_activeCarts.isEmpty) {
+      await _createNewCart();
+    }
+
+    debugPrint('🔄 Warenkorb erfolgreich im Backend entfernt: ${cartToRemove.displayName}');
+  } catch (e) {
+    // ⚠️ Rollback bei Fehler: Stelle ursprünglichen Zustand wieder her
+    setState(() {
+      _activeCarts.clear();
+      _activeCarts.addAll(cartBackup);
+      _currentCartIndex = currentIndexBackup;
+      _currentSession = sessionBackup;
+      _selectedCustomer = customerBackup;
+      _cartItems = itemsBackup;
+    });
+
+    debugPrint('❌ Warenkorb-Entfernung fehlgeschlagen, Rollback: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler beim Entfernen: ${cartToRemove.displayName}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
+}
 
   Future<void> _loadCartItems() async {
     if (_currentSession == null) return;
@@ -789,28 +931,57 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
-  /// **🧹 INTELLIGENTE KUNDENAUSWAHL: Behandelt Kundenwechsel mit Multi-Cart-System**
+  /// **🚀 PERFORMANCE-OPTIMIERT: Schnelle Kundenzuordnung mit optimistischem UI**
   Future<void> _handleCustomerChange(AppUser newCustomer) async {
+    // 🎯 SMARTE LOGIK: Prüfe aktuellen Warenkorb-Status
+    final currentCart = _activeCarts.isNotEmpty
+        ? _activeCarts[_currentCartIndex]
+        : null;
+    final hasItems = _cartItems.isNotEmpty;
+    final hasCurrentCustomer = _selectedCustomer != null;
+    final isDifferentCustomer =
+        hasCurrentCustomer && _selectedCustomer!.id != newCustomer.id;
+
+    // 🚀 PERFORMANCE: Sofortiger UI-Update für bessere UX
+    setState(() {
+      _selectedCustomer = newCustomer;
+      // Sofortiges visuelles Feedback
+      _searchText = '';
+      _searchController.clear();
+      _filteredUsers = _allUsers;
+    });
+
+    // Sofortiges Erfolgs-Feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✅ Kunde zugeordnet: ${newCustomer.firstName} ${newCustomer.lastName}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // 🚀 PERFORMANCE: Backend-Sync asynchron im Hintergrund
+    _syncCustomerChangeInBackground(newCustomer, currentCart, hasItems, hasCurrentCustomer, isDifferentCustomer);
+
+    debugPrint('🚀 Schnelle Kundenzuordnung: ${newCustomer.firstName} ${newCustomer.lastName}');
+  }
+
+  /// **🔄 HINTERGRUND-SYNC: Synchronisiert Kundenzuordnung ohne UI-Blockierung**
+  Future<void> _syncCustomerChangeInBackground(
+    AppUser newCustomer,
+    CartSession? currentCart,
+    bool hasItems,
+    bool hasCurrentCustomer,
+    bool isDifferentCustomer,
+  ) async {
     try {
-      // 🎯 SMARTE LOGIK: Prüfe aktuellen Warenkorb-Status
-      final currentCart = _activeCarts.isNotEmpty
-          ? _activeCarts[_currentCartIndex]
-          : null;
-      final hasItems = _cartItems.isNotEmpty;
-      final hasCurrentCustomer = _selectedCustomer != null;
-      final isDifferentCustomer =
-          hasCurrentCustomer && _selectedCustomer!.id != newCustomer.id;
-
-      debugPrint('🔍 Warenkorb-Status:');
-      debugPrint('  • Hat Artikel: $hasItems');
-      debugPrint('  • Hat Kunde: $hasCurrentCustomer');
-      debugPrint('  • Anderer Kunde: $isDifferentCustomer');
-
       // 1. SZENARIO: Leerer Warenkorb oder gleicher Kunde → Einfach zuordnen
       if (!hasItems || (!hasCurrentCustomer || !isDifferentCustomer)) {
-        debugPrint('✅ Kunde zu aktuellem Warenkorb zuordnen');
-
-        // 🖥️ KRITISCH: Gerätespezifische Session mit Kunde erstellen/aktualisieren
+        // 🖥️ Gerätespezifische Session mit Kunde erstellen/aktualisieren
         final client = Provider.of<Client>(context, listen: false);
         final deviceId = await _getDeviceId();
         final newSession = await client.pos.createDeviceSession(
@@ -818,12 +989,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
           newCustomer.id,
         );
 
-        debugPrint(
-          '🖥️ Gerätespezifische Session für Kunde erstellt: ${newSession.id}',
-        );
-
         setState(() {
-          _selectedCustomer = newCustomer;
           _currentSession = newSession;
           if (currentCart != null) {
             _activeCarts[_currentCartIndex] = currentCart.copyWith(
@@ -832,6 +998,8 @@ class _PosSystemPageState extends State<PosSystemPage> {
             );
           }
         });
+
+        debugPrint('🔄 Kunde im Hintergrund synchronisiert: ${newSession.id}');
       }
       // 2. SZENARIO: Warenkorb mit anderem Kunden → Neuen Warenkorb erstellen
       else if (hasItems && isDifferentCustomer) {
@@ -969,37 +1137,127 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
+  /// **🚀 PERFORMANCE-OPTIMIERT: Schnelles Artikel-Hinzufügen mit optimistischem UI**
+/// **🔧 BUG-FIX: Prüft auf bestehende Items und erhöht Menge statt Duplikate zu erstellen**
   Future<void> _addItemToCart(
     String itemType,
     int itemId,
     String itemName,
     double price,
   ) async {
-    debugPrint(
-      '🛒 DEBUG: _addItemToCart aufgerufen - Type: $itemType, ID: $itemId, Name: $itemName',
-    );
-    debugPrint(
-      '🛒 DEBUG: _currentSession ist null: ${_currentSession == null}',
-    );
-
     if (_currentSession == null) {
-      debugPrint('❌ Keine aktive Session - erstelle neue Session');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Keine aktive Session - bitte neu starten'),
+            backgroundColor: Colors.red,
           ),
         );
       }
       return;
     }
 
+    // 🔧 BUG-FIX: Prüfe ob Item bereits im Warenkorb existiert
+    final existingItemIndex = _cartItems.indexWhere(
+      (item) => item.itemType == itemType && item.itemId == itemId,
+    );
+
+    if (existingItemIndex != -1) {
+      // ✅ Item existiert bereits - erhöhe Menge
+      final existingItem = _cartItems[existingItemIndex];
+      final newQuantity = existingItem.quantity + 1;
+      final newTotalPrice = existingItem.unitPrice * newQuantity;
+
+      // 🚀 PERFORMANCE: Sofortiger optimistischer UI-Update
+      setState(() {
+        _cartItems[existingItemIndex] = PosCartItem(
+          id: existingItem.id,
+          sessionId: existingItem.sessionId,
+          itemType: existingItem.itemType,
+          itemId: existingItem.itemId,
+          itemName: existingItem.itemName,
+          unitPrice: existingItem.unitPrice,
+          quantity: newQuantity,
+          totalPrice: newTotalPrice,
+          addedAt: existingItem.addedAt,
+        );
+        
+        // Update auch im CartSession-Cache
+        if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+          final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+            items: List.from(_cartItems),
+          );
+          _activeCarts[_currentCartIndex] = updatedCart;
+        }
+      });
+
+      // 🔄 Backend-Sync für Mengen-Update
+      if (existingItem.id != null) {
+        _updateCartItemQuantity(existingItem.id!, newQuantity);
+      }
+
+      debugPrint('🔢 Artikel-Menge erhöht: $itemName (${existingItem.quantity} → $newQuantity)');
+      
+      // ✅ Visuelles Feedback für Mengen-Erhöhung
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.add, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('$itemName: ${existingItem.quantity} → $newQuantity'),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 🆕 Item existiert noch nicht - neues Item hinzufügen
+    final optimisticItem = PosCartItem(
+      sessionId: _currentSession!.id!,
+      itemType: itemType,
+      itemId: itemId,
+      itemName: itemName,
+      unitPrice: price,
+      quantity: 1,
+      totalPrice: price,
+      addedAt: DateTime.now(),
+    );
+
+    // 🚀 PERFORMANCE: Sofortiger UI-Update
+    setState(() {
+      _cartItems.add(optimisticItem);
+      // Update auch im CartSession-Cache
+      if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+        final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+          items: List.from(_cartItems),
+        );
+        _activeCarts[_currentCartIndex] = updatedCart;
+      }
+    });
+
+    // 🚀 PERFORMANCE: Backend-Sync asynchron im Hintergrund
+    _syncAddItemInBackground(itemType, itemId, itemName, price, optimisticItem);
+
+    debugPrint('🆕 Neuer Artikel hinzugefügt: $itemName');
+  }
+
+  /// **🔄 HINTERGRUND-SYNC: Synchronisiert Artikel-Hinzufügen ohne UI-Blockierung**
+  Future<void> _syncAddItemInBackground(
+    String itemType,
+    int itemId,
+    String itemName,
+    double price,
+    PosCartItem optimisticItem,
+  ) async {
     try {
-      debugPrint(
-        '🛒 DEBUG: Sende zu Backend - Session ID: ${_currentSession!.id}',
-      );
       final client = Provider.of<Client>(context, listen: false);
-      await client.pos.addToCart(
+      final realItem = await client.pos.addToCart(
         _currentSession!.id!,
         itemType,
         itemId,
@@ -1007,149 +1265,128 @@ class _PosSystemPageState extends State<PosSystemPage> {
         price,
         1, // quantity
       );
-      debugPrint('✅ Artikel erfolgreich zum Warenkorb hinzugefügt');
-      // ⚡ OPTIMIZED CART UPDATE: Non-blocking reload
-      _loadCartItems();
-    } catch (e) {
-      debugPrint('❌ Fehler beim Hinzufügen zum Warenkorb: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Hinzufügen zum Warenkorb: $e')),
-        );
-      }
-    }
-  }
 
-  /// **🧠 INTELLIGENTE TICKETAUSWAHL für POS-System**
-  /// Verwendet die bewährte Logik aus der Client-App
-  Future<void> _addIntelligentTicketToCart(TicketType selectedTicket) async {
-    if (_currentSession == null) return;
+      // Ersetze optimistisches Item durch echtes Backend-Item
+      setState(() {
+        final index = _cartItems.indexWhere((item) =>
+          item.itemId == optimisticItem.itemId &&
+          item.addedAt == optimisticItem.addedAt);
 
-    setState(() => _isLoading = true);
-
-    try {
-      final client = Provider.of<Client>(context, listen: false);
-
-      // 🧠 INTELLIGENTE PREISBERECHNUNG basierend auf Kundenstatus
-      double finalPrice = selectedTicket.defaultPrice;
-      TicketType finalTicket = selectedTicket;
-
-      // Nur wenn Kunde vorhanden, intelligente Berechnung verwenden
-      if (_selectedCustomer != null) {
-        try {
-          final optimalPrice = await client.ticket
-              .calculateOptimalPriceForCustomer(
-                selectedTicket.id!,
-                _selectedCustomer!.id!,
-              );
-
-          // 🎯 INTELLIGENTE TICKETAUSWAHL basierend auf Alter & Status
-          final recommendedTicket = await client.ticket
-              .getRecommendedTicketTypeForCustomer(
-                'single', // Kategorie für Einzeltickets
-                _selectedCustomer!.id!,
-              );
-
-          // Verwende empfohlenes Ticket falls vorhanden, sonst das ausgewählte
-          finalTicket = recommendedTicket ?? selectedTicket;
-          finalPrice = optimalPrice;
-        } catch (e) {
-          debugPrint('⚠️ Kunde-spezifische Preisberechnung fehlgeschlagen: $e');
-          // Fallback zu Standard-Preis
+        if (index >= 0) {
+          _cartItems[index] = realItem;
+          // Update auch im CartSession-Cache
+          if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+            final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+              items: List.from(_cartItems),
+            );
+            _activeCarts[_currentCartIndex] = updatedCart;
+          }
         }
-      }
+      });
 
-      // Berechne Ersparnis für UI-Feedback
-      final savings = selectedTicket.defaultPrice - finalPrice;
-      final hasSavings = savings > 0.01;
+      debugPrint('🔄 Artikel im Hintergrund synchronisiert: $itemName');
+    } catch (e) {
+      // ⚠️ Rollback bei Fehler: Entferne optimistisches Item
+      setState(() {
+        _cartItems.removeWhere((item) =>
+          item.itemId == optimisticItem.itemId &&
+          item.addedAt == optimisticItem.addedAt);
 
-      // Zum Warenkorb hinzufügen mit optimalem Preis
-      await client.pos.addToCart(
-        _currentSession!.id!,
-        'ticket',
-        finalTicket.id!,
-        finalTicket.name,
-        finalPrice,
-        1, // quantity
-      );
+        // Update auch im CartSession-Cache
+        if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+          final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+            items: List.from(_cartItems),
+          );
+          _activeCarts[_currentCartIndex] = updatedCart;
+        }
+      });
 
-      // ⚡ OPTIMIZED CART UPDATE: Non-blocking reload
-      _loadCartItems();
-
-      // ✅ SUCCESS FEEDBACK mit Ersparnis-Info
+      debugPrint('❌ Artikel-Hinzufügen fehlgeschlagen, Rollback: $e');
       if (mounted) {
-        final message = hasSavings
-            ? '✅ ${finalTicket.name} → ${finalPrice.toStringAsFixed(2)}€\n💰 Ersparnis: ${savings.toStringAsFixed(2)}€'
-            : '✅ ${finalTicket.name} → ${finalPrice.toStringAsFixed(2)}€';
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
+            content: Text('Fehler beim Hinzufügen: $itemName'),
+            backgroundColor: Colors.red,
           ),
         );
       }
-
-      debugPrint(
-        '🧠 Intelligente Auswahl: ${selectedTicket.name} → ${finalTicket.name}',
-      );
-      debugPrint(
-        '💰 Preis-Optimierung: ${selectedTicket.defaultPrice}€ → ${finalPrice}€',
-      );
-      if (hasSavings && _selectedCustomer != null) {
-        debugPrint(
-          '🎉 Ersparnis für ${_selectedCustomer!.firstName}: ${savings.toStringAsFixed(2)}€',
-        );
-      }
-    } catch (e) {
-      debugPrint('❌ Fehler bei intelligenter Ticketauswahl: $e');
-
-      // Fallback: Verwende Standard-Preis
-      try {
-        await _addItemToCart(
-          'ticket',
-          selectedTicket.id!,
-          selectedTicket.name,
-          selectedTicket.defaultPrice,
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '⚠️ Ticket hinzugefügt (Standard-Preis): ${selectedTicket.defaultPrice}€',
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      } catch (fallbackError) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Fehler beim Hinzufügen: $fallbackError'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  /// **🚀 PERFORMANCE-OPTIMIERT: Schnelles Artikel-Entfernen mit optimistischem UI**
   Future<void> _removeItemFromCart(int cartItemId) async {
+    // Finde das zu entfernende Item für Rollback
+    PosCartItem? itemToRemove;
+    try {
+      itemToRemove = _cartItems.firstWhere((item) => item.id == cartItemId);
+    } catch (e) {
+      debugPrint('⚠️ Item zum Entfernen nicht gefunden: $cartItemId');
+      return;
+    }
+
+    // 🚀 PERFORMANCE: Sofortiger optimistischer UI-Update
+    setState(() {
+      _cartItems.removeWhere((item) => item.id == cartItemId);
+      // Update auch im CartSession-Cache
+      if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+        final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+          items: List.from(_cartItems),
+        );
+        _activeCarts[_currentCartIndex] = updatedCart;
+      }
+    });
+
+    // ✅ Sofortiges visuelles Feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.delete, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('${itemToRemove.itemName} entfernt'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+
+    // 🔄 Backend-Sync im Hintergrund
+    _syncRemoveItemInBackground(cartItemId, itemToRemove);
+
+    debugPrint('🚀 Schnelles Artikel-Entfernen: ${itemToRemove.itemName}');
+  }
+
+  /// **🔄 HINTERGRUND-SYNC: Artikel-Entfernung ohne UI-Blockierung**
+  Future<void> _syncRemoveItemInBackground(int cartItemId, PosCartItem itemToRemove) async {
     try {
       final client = Provider.of<Client>(context, listen: false);
       await client.pos.removeFromCart(cartItemId);
-      // ⚡ OPTIMIZED CART UPDATE: Non-blocking reload
-      _loadCartItems();
+      
+      debugPrint('🔄 Artikel erfolgreich im Backend entfernt: ${itemToRemove.itemName}');
     } catch (e) {
+      // ⚠️ Rollback bei Fehler: Füge Item wieder hinzu
+      setState(() {
+        _cartItems.add(itemToRemove);
+        // Update auch im CartSession-Cache
+        if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+          final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+            items: List.from(_cartItems),
+          );
+          _activeCarts[_currentCartIndex] = updatedCart;
+        }
+      });
+
+      debugPrint('❌ Artikel-Entfernen fehlgeschlagen, Rollback: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Fehler beim Entfernen: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fehler beim Entfernen: ${itemToRemove.itemName}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -1214,6 +1451,173 @@ class _PosSystemPageState extends State<PosSystemPage> {
       }
     }
   }
+
+  /// **🚀 PERFORMANCE-OPTIMIERT: Schnelle intelligente Ticketauswahl mit optimistischem UI**
+  Future<void> _addIntelligentTicketToCart(TicketType selectedTicket) async {
+    if (_currentSession == null) return;
+
+    // 🚀 PERFORMANCE: Sofortiger optimistischer UI-Update
+    double finalPrice = selectedTicket.defaultPrice;
+    TicketType finalTicket = selectedTicket;
+    
+    // Sofortiges optimistisches Item erstellen
+    final optimisticItem = PosCartItem(
+      sessionId: _currentSession!.id!,
+      itemType: 'ticket',
+      itemId: selectedTicket.id!,
+      itemName: selectedTicket.name,
+      unitPrice: finalPrice,
+      quantity: 1,
+      totalPrice: finalPrice,
+      addedAt: DateTime.now(),
+    );
+
+    // Sofortiger UI-Update
+    setState(() {
+      _cartItems.add(optimisticItem);
+      // Update auch im CartSession-Cache
+      if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+        final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+          items: List.from(_cartItems),
+        );
+        _activeCarts[_currentCartIndex] = updatedCart;
+      }
+    });
+
+    // 🚀 PERFORMANCE: Intelligente Berechnung und Backend-Sync im Hintergrund
+    _syncIntelligentTicketInBackground(selectedTicket, optimisticItem);
+
+    debugPrint('🚀 Schnelles Ticket-Hinzufügen: ${selectedTicket.name}');
+  }
+
+  /// **🔄 HINTERGRUND-SYNC: Intelligente Ticketauswahl ohne UI-Blockierung**
+  Future<void> _syncIntelligentTicketInBackground(
+    TicketType selectedTicket,
+    PosCartItem optimisticItem,
+  ) async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+
+      // 🧠 INTELLIGENTE PREISBERECHNUNG basierend auf Kundenstatus
+      double finalPrice = selectedTicket.defaultPrice;
+      TicketType finalTicket = selectedTicket;
+
+      // Nur wenn Kunde vorhanden, intelligente Berechnung verwenden
+      if (_selectedCustomer != null) {
+        try {
+          final optimalPrice = await client.ticket
+              .calculateOptimalPriceForCustomer(
+                selectedTicket.id!,
+                _selectedCustomer!.id!,
+              );
+
+          // 🎯 INTELLIGENTE TICKETAUSWAHL basierend auf Alter & Status
+          final recommendedTicket = await client.ticket
+              .getRecommendedTicketTypeForCustomer(
+                'single', // Kategorie für Einzeltickets
+                _selectedCustomer!.id!,
+              );
+
+          // Verwende empfohlenes Ticket falls vorhanden, sonst das ausgewählte
+          finalTicket = recommendedTicket ?? selectedTicket;
+          finalPrice = optimalPrice;
+        } catch (e) {
+          debugPrint('⚠️ Kunde-spezifische Preisberechnung fehlgeschlagen: $e');
+          // Fallback zu Standard-Preis
+        }
+      }
+
+      // Berechne Ersparnis für UI-Feedback
+      final savings = selectedTicket.defaultPrice - finalPrice;
+      final hasSavings = savings > 0.01;
+
+      // Zum Warenkorb hinzufügen mit optimalem Preis
+      final realItem = await client.pos.addToCart(
+        _currentSession!.id!,
+        'ticket',
+        finalTicket.id!,
+        finalTicket.name,
+        finalPrice,
+        1, // quantity
+      );
+
+      // Ersetze optimistisches Item durch echtes Backend-Item
+      setState(() {
+        final index = _cartItems.indexWhere((item) =>
+          item.itemId == optimisticItem.itemId &&
+          item.addedAt == optimisticItem.addedAt);
+
+        if (index >= 0) {
+          _cartItems[index] = realItem;
+          // Update auch im CartSession-Cache
+          if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+            final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+              items: List.from(_cartItems),
+            );
+            _activeCarts[_currentCartIndex] = updatedCart;
+          }
+        }
+      });
+
+      // ✅ SUCCESS FEEDBACK mit Ersparnis-Info (nur bei Preisoptimierung)
+      if (mounted && hasSavings) {
+        final message = '💰 Ersparnis: ${savings.toStringAsFixed(2)}€ für ${finalTicket.name}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      debugPrint('🔄 Intelligentes Ticket im Hintergrund synchronisiert: ${finalTicket.name}');
+      if (hasSavings && _selectedCustomer != null) {
+        debugPrint('🎉 Ersparnis für ${_selectedCustomer!.firstName}: ${savings.toStringAsFixed(2)}€');
+      }
+      if (hasSavings && _selectedCustomer != null) {
+        debugPrint(
+          '🎉 Ersparnis für ${_selectedCustomer!.firstName}: ${savings.toStringAsFixed(2)}€',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler bei intelligenter Ticketauswahl: $e');
+
+      // Fallback: Verwende Standard-Preis
+      try {
+        await _addItemToCart(
+          'ticket',
+          selectedTicket.id!,
+          selectedTicket.name,
+          selectedTicket.defaultPrice,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '⚠️ Ticket hinzugefügt (Standard-Preis): ${selectedTicket.defaultPrice}€',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (fallbackError) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Fehler beim Hinzufügen: $fallbackError'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // 🗑️ ENTFERNT: Doppelte Methodendefinitionen (bereits weiter oben im Code definiert)
 
   // ==================== SEARCH FUNCTIONALITY ====================
 
@@ -1823,6 +2227,342 @@ class _PosSystemPageState extends State<PosSystemPage> {
     return _cartItems.fold<double>(0.0, (sum, item) => sum + item.totalPrice);
   }
 
+  // ==================== LIVE-FILTER METHODS ====================
+
+  /// **🔍 LIVE-FILTER: Hauptmethode für Echtzeit-Suche**
+  void _performLiveSearch(String query) {
+    // Debounce Timer zurücksetzen
+    if (_searchDebounceTimer?.isActive ?? false) {
+      _searchDebounceTimer!.cancel();
+    }
+
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+
+      final cleanQuery = query.toLowerCase().trim();
+      debugPrint('🔍 Live-Suche: "$cleanQuery"');
+
+      setState(() {
+        _liveSearchQuery = cleanQuery;
+        _isLiveSearchActive = cleanQuery.isNotEmpty;
+
+        if (_isLiveSearchActive) {
+          // Filtere Produkte und Kategorien
+          _filteredProducts = _filterProducts(cleanQuery);
+          _filteredCategories = _filterCategories(cleanQuery);
+          _categoryArticleCounts = _calculateCategoryCounts();
+          
+          debugPrint('🎯 Gefunden: ${_filteredProducts.length} Produkte, ${_filteredCategories.length} Kategorien');
+        } else {
+          // Reset bei leerer Suche
+          _filteredProducts = [];
+          _filteredCategories = [];
+          _categoryArticleCounts = {};
+        }
+      });
+    });
+  }
+
+  /// **🎯 FILTER-ALGORITHMUS: Filtert Produkte basierend auf Suchbegriff**
+  List<Product> _filterProducts(String query) {
+    if (query.isEmpty) return _allProducts;
+
+    final results = <Product>[];
+    final exactMatches = <Product>[];
+    final partialMatches = <Product>[];
+    final categoryMatches = <Product>[];
+
+    for (final product in _allProducts) {
+      final productName = product.name.toLowerCase();
+      final category = _getCategoryForProduct(product);
+      final categoryName = category?.name.toLowerCase() ?? '';
+
+      // 1. Exakte Treffer (Produktname beginnt mit Suchbegriff)
+      if (productName.startsWith(query)) {
+        exactMatches.add(product);
+      }
+      // 2. Teilstring-Treffer (Suchbegriff im Produktnamen)
+      else if (productName.contains(query)) {
+        partialMatches.add(product);
+      }
+      // 3. Kategorie-Treffer (Suchbegriff in Kategorie-Name)
+      else if (categoryName.contains(query)) {
+        categoryMatches.add(product);
+      }
+    }
+
+    // Sortierung nach Relevanz
+    exactMatches.sort((a, b) => a.name.compareTo(b.name));
+    partialMatches.sort((a, b) => _calculateRelevanceScore(b, query).compareTo(_calculateRelevanceScore(a, query)));
+    categoryMatches.sort((a, b) => a.name.compareTo(b.name));
+
+    // Zusammenführen in Relevanz-Reihenfolge
+    results.addAll(exactMatches);
+    results.addAll(partialMatches);
+    results.addAll(categoryMatches);
+
+    return results;
+  }
+
+  /// **📂 KATEGORIE-FILTER: Filtert Kategorien basierend auf Suchbegriff**
+  List<ProductCategory> _filterCategories(String query) {
+    if (query.isEmpty) return _allCategories;
+
+    return _allCategories.where((category) {
+      final categoryName = category.name.toLowerCase();
+      return categoryName.contains(query);
+    }).toList();
+  }
+
+  /// **🔢 ARTIKEL-ZÄHLUNG: Berechnet Artikel-Anzahl pro Kategorie**
+  Map<String, int> _calculateCategoryCounts() {
+    final counts = <String, int>{};
+
+    // Zähle gefilterte Produkte pro Kategorie
+    for (final product in _filteredProducts) {
+      final category = _getCategoryForProduct(product);
+      if (category != null) {
+        final topLevelGroup = _getTopLevelGroupForCategory(category);
+        counts[topLevelGroup] = (counts[topLevelGroup] ?? 0) + 1;
+      }
+    }
+
+    return counts;
+  }
+
+  /// **⭐ RELEVANZ-SCORE: Berechnet Relevanz-Score für Sortierung**
+  int _calculateRelevanceScore(Product product, String query) {
+    final productName = product.name.toLowerCase();
+    int score = 0;
+
+    // Exakter Treffer am Anfang = höchste Relevanz
+    if (productName.startsWith(query)) {
+      score += 100;
+    }
+
+    // Anzahl der Übereinstimmungen
+    final matches = query.split(' ').where((word) => productName.contains(word)).length;
+    score += matches * 10;
+
+    // Kürzere Namen = höhere Relevanz
+    score += (100 - productName.length.clamp(0, 100));
+
+    return score;
+  }
+
+  /// **🔗 HILFSMETHODE: Findet Kategorie für Produkt**
+  ProductCategory? _getCategoryForProduct(Product product) {
+    return _allCategories.firstWhere(
+      (category) => category.id == product.categoryId,
+      orElse: () => ProductCategory(
+        name: 'Unbekannt',
+        colorHex: '#607D8B',
+        iconName: 'category',
+        isActive: true,
+        displayOrder: 999,
+      ),
+    );
+  }
+
+  /// **🎯 LIVE-FILTER CALLBACK: Wird von PosSearchSection aufgerufen**
+  void _onLiveFilterChanged(String query) {
+    _performLiveSearch(query);
+  }
+
+  /// **🧹 LIVE-FILTER RESET: Setzt Live-Filter zurück**
+  void _resetLiveFilter() {
+    setState(() {
+      _liveSearchQuery = '';
+      _isLiveSearchActive = false;
+      _filteredProducts = [];
+      _filteredCategories = [];
+      _categoryArticleCounts = {};
+    });
+    debugPrint('🧹 Live-Filter zurückgesetzt');
+  }
+
+  /// **🔍 LIVE-FILTER ERGEBNISSE: Zeigt gefilterte Artikel an**
+  Widget _buildLiveFilterResults() {
+    if (_filteredProducts.isEmpty) {
+      return Expanded(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Keine Artikel gefunden für "$_liveSearchQuery"',
+                style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _resetLiveFilter,
+                icon: const Icon(Icons.clear),
+                label: const Text('Filter zurücksetzen'),
+                style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // LIVE-FILTER HEADER
+            _buildLiveFilterHeader(),
+            
+            const SizedBox(height: 16),
+
+            // GEFILTERTE ARTIKEL-GRID
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                  childAspectRatio: 0.9,
+                ),
+                itemCount: _filteredProducts.length,
+                itemBuilder: (context, index) {
+                  final product = _filteredProducts[index];
+                  return _buildProductCard(product);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// **📊 LIVE-FILTER HEADER: Zeigt Statistiken und Filter-Info**
+  Widget _buildLiveFilterHeader() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.filter_list,
+                color: Colors.orange.shade700,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Live-Filter Ergebnisse',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade700,
+                  ),
+                ),
+              ),
+              // Reset-Button
+              IconButton(
+                onPressed: _resetLiveFilter,
+                icon: Icon(
+                  Icons.clear,
+                  color: Colors.orange.shade600,
+                ),
+                tooltip: 'Filter zurücksetzen',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          
+          // Statistiken
+          Row(
+            children: [
+              Expanded(
+                child: _buildFilterStat(
+                  'Artikel gefunden',
+                  '${_filteredProducts.length}',
+                  Icons.shopping_bag,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildFilterStat(
+                  'Suchbegriff',
+                  '"$_liveSearchQuery"',
+                  Icons.search,
+                  Colors.blue,
+                ),
+              ),
+              if (_categoryArticleCounts.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildFilterStat(
+                    'Kategorien',
+                    '${_categoryArticleCounts.length}',
+                    Icons.category,
+                    Colors.purple,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// **📈 FILTER-STATISTIK: Einzelne Statistik-Karte**
+  Widget _buildFilterStat(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color,
+              fontSize: 12,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 10,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
   // ==================== UI COMPONENTS ====================
 
   Widget _buildCustomerSearchSection() {
@@ -1842,6 +2582,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
         // 🧹 WARENKORB-RESET: Bei Kunde entfernen
         await _handleCustomerRemoval();
       },
+      // 🔍 LIVE-FILTER INTEGRATION
+      onLiveFilterChanged: _onLiveFilterChanged,
+      liveFilterQuery: _liveSearchQuery,
+      isLiveFilterActive: _isLiveSearchActive,
+      onLiveFilterReset: _resetLiveFilter,
     );
   }
 
@@ -2358,13 +3103,19 @@ class _PosSystemPageState extends State<PosSystemPage> {
   }
 
   Widget _buildProductGrid() {
-    // 🆕 HIERARCHISCHE ITEM-AUSWAHL
+    // 🔍 LIVE-FILTER: Prüfe ob Live-Filter aktiv ist
+    if (_isLiveSearchActive && _filteredProducts.isNotEmpty) {
+      return _buildLiveFilterResults();
+    }
+
+    // 🆕 HIERARCHISCHE ITEM-AUSWAHL (Standard-Verhalten)
     List<dynamic> items = [];
 
     debugPrint('🛒 UI-DEBUG: _buildProductGrid()');
     debugPrint('   📂 _showingSubCategories: $_showingSubCategories');
     debugPrint('   📂 _currentTopLevelCategory: $_currentTopLevelCategory');
     debugPrint('   📂 _selectedCategory: $_selectedCategory');
+    debugPrint('   🔍 _isLiveSearchActive: $_isLiveSearchActive');
 
     if (_showingSubCategories && _currentTopLevelCategory != null) {
       // Sub-Kategorie-Items anzeigen
@@ -3224,19 +3975,42 @@ class _PosSystemPageState extends State<PosSystemPage> {
   }
 
   /// **🛒 NEUE METHODE: Aktuellen Warenkorb leeren**
-  void _clearCurrentCart() {
+  /// **🔧 BUG-FIX: Leert sowohl lokalen State als auch Backend-Session**
+  Future<void> _clearCurrentCart() async {
     if (_activeCarts.isEmpty ||
         _currentCartIndex < 0 ||
         _currentCartIndex >= _activeCarts.length)
       return;
 
+    final currentCart = _activeCarts[_currentCartIndex];
+    
+    // 🚀 PERFORMANCE: Sofortiger optimistischer UI-Update
     setState(() {
-      _activeCarts[_currentCartIndex].items.clear();
+      _cartItems.clear();
+      _activeCarts[_currentCartIndex] = currentCart.copyWith(items: []);
     });
 
-    debugPrint(
-      '🛒 Warenkorb geleert: ${_activeCarts[_currentCartIndex].displayName}',
-    );
+    // ✅ Sofortiges visuelles Feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.clear_all, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('Warenkorb geleert: ${currentCart.displayName}'),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // 🔄 Backend-Sync im Hintergrund
+    _syncClearCartInBackground(currentCart);
+
+    debugPrint('🛒 Warenkorb geleert: ${currentCart.displayName}');
   }
 
   /// **🗑️ NEUE METHODE: Item aus aktuellem Warenkorb entfernen**
@@ -3278,6 +4052,34 @@ class _PosSystemPageState extends State<PosSystemPage> {
     debugPrint(
       '🔢 Artikel-Menge geändert in Warenkorb: ${_activeCarts[_currentCartIndex].displayName}',
     );
+  }
+
+  /// **🔄 HINTERGRUND-SYNC: Warenkorb-Leerung ohne UI-Blockierung**
+  Future<void> _syncClearCartInBackground(CartSession cartToClean) async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      
+      // Backend-Session komplett leeren
+      if (cartToClean.posSession != null) {
+        await client.pos.clearCart(cartToClean.posSession!.id!);
+        debugPrint('🔄 Backend-Session geleert: ${cartToClean.posSession!.id}');
+      }
+      
+      debugPrint('✅ Warenkorb erfolgreich im Backend geleert: ${cartToClean.displayName}');
+    } catch (e) {
+      debugPrint('❌ Fehler beim Leeren des Backend-Warenkorbs: $e');
+      
+      // Bei Fehler: Benutzer informieren, aber nicht rollback (da UI bereits geleert)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Warenkorb lokal geleert, Backend-Sync fehlgeschlagen: $e'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   // ==================== ARTIKEL-MANAGEMENT ====================
@@ -3465,33 +4267,38 @@ class _PosSystemPageState extends State<PosSystemPage> {
       }
 
       if (existingItem != null) {
-        // 📈 MENGE ERHÖHEN: Produkt bereits vorhanden → Menge +1
-        debugPrint(
-          '📈 Produkt bereits vorhanden, erhöhe Menge: ${existingItem.quantity} → ${existingItem.quantity + 1}',
-        );
+        // 🚀 PERFORMANCE: Sofortiger UI-Update für Mengenänderung
+        final nonNullItem = existingItem; // Null-Safety: Lokale non-null Variable
+        setState(() {
+          final index = _cartItems.indexOf(nonNullItem);
+          if (index >= 0) {
+            _cartItems[index] = nonNullItem.copyWith(
+              quantity: nonNullItem.quantity + 1,
+              totalPrice: nonNullItem.unitPrice * (nonNullItem.quantity + 1),
+            );
+            // Update auch im CartSession-Cache
+            if (_currentCartIndex >= 0 && _currentCartIndex < _activeCarts.length) {
+              final updatedCart = _activeCarts[_currentCartIndex].copyWith(
+                items: List.from(_cartItems),
+              );
+              _activeCarts[_currentCartIndex] = updatedCart;
+            }
+          }
+        });
 
-        await client.pos.updateCartItem(
-          existingItem.id!,
-          existingItem.quantity + 1,
-        );
+        // 🔄 Backend-Sync im Hintergrund
+        client.pos.updateCartItem(nonNullItem.id!, nonNullItem.quantity + 1).catchError((e) {
+          debugPrint('⚠️ Hintergrund-Update fehlgeschlagen: $e');
+        });
+
+        debugPrint('🚀 Schnelle Mengenänderung: ${product.name} (${nonNullItem.quantity + 1})');
       } else {
-        // 🆕 NEU HINZUFÜGEN: Produkt nicht vorhanden → Neu hinzufügen
-        debugPrint('🆕 Neues Produkt hinzufügen');
-
-        await client.pos.addToCart(
-          _currentSession!.id!,
-          'product', // itemType
-          product.id!, // itemId
-          product.name, // itemName
-          product.price, // price
-          1, // quantity
-        );
+        // 🚀 PERFORMANCE: Verwende optimierte _addItemToCart Methode
+        await _addItemToCart('product', product.id!, product.name, product.price);
+        debugPrint('🚀 Schnelles Produkt-Hinzufügen über Suche: ${product.name}');
       }
 
-      // 🔄 Warenkorb neu laden
-      await _loadCartItems();
-
-      // ✅ Feedback für User
+      // ✅ Sofortiges Feedback für User
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -3503,7 +4310,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
               ],
             ),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
