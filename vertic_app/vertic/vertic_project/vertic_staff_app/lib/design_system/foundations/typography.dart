@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/responsive_utils.dart';
 
 /// **📝 VERTIC DESIGN SYSTEM - TYPOGRAFIE**
 /// 
@@ -89,173 +90,62 @@ class AppTypographyTheme extends ThemeExtension<AppTypographyTheme> {
   // ═══════════════════════════════════════════════════════════════
   
   factory AppTypographyTheme.main(double screenWidth) {
-    // Responsive Skalierungsfaktor basierend auf Bildschirmbreite
-    final double scale = _getScaleFactor(screenWidth);
-    
+    // Helper für die Erstellung von responsiven TextStyles
+    TextStyle createStyle({
+      required double defaultSize,
+      required double minSize,
+      double? maxSize,
+      FontWeight weight = FontWeight.w400,
+      double letterSpacing = 0,
+      double height = 1.2,
+      String family = 'Roboto',
+    }) {
+      return TextStyle(
+        fontFamily: family,
+        fontSize: responsiveValue(
+          screenWidth,
+          defaultValue: defaultSize,
+          minValue: minSize,
+          maxValue: maxSize,
+        ),
+        fontWeight: weight,
+        letterSpacing: letterSpacing,
+        height: height,
+      );
+    }
+
     return AppTypographyTheme._internal(
       // Display Styles
-      displayLarge: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 57.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: -0.25,
-        height: 1.12,
-      ),
-      displayMedium: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 45.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.16,
-      ),
-      displaySmall: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 36.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.22,
-      ),
+      displayLarge: createStyle(defaultSize: 57, minSize: 48, weight: FontWeight.w400, letterSpacing: -0.25, height: 1.12),
+      displayMedium: createStyle(defaultSize: 45, minSize: 38, weight: FontWeight.w400, height: 1.15),
+      displaySmall: createStyle(defaultSize: 36, minSize: 30, weight: FontWeight.w400, height: 1.22),
       
       // Headline Styles
-      headlineLarge: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 32.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.25,
-      ),
-      headlineMedium: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 28.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.29,
-      ),
-      headlineSmall: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 24.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.33,
-      ),
+      headlineLarge: createStyle(defaultSize: 32, minSize: 28, weight: FontWeight.w400, height: 1.25),
+      headlineMedium: createStyle(defaultSize: 28, minSize: 24, weight: FontWeight.w400, height: 1.28),
+      headlineSmall: createStyle(defaultSize: 24, minSize: 21, weight: FontWeight.w400, height: 1.33),
       
       // Title Styles
-      titleLarge: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 22.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.27,
-      ),
-      titleMedium: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 16.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.15,
-        height: 1.5,
-      ),
-      titleSmall: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 14.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.1,
-        height: 1.43,
-      ),
+      titleLarge: createStyle(defaultSize: 22, minSize: 19, weight: FontWeight.w500, letterSpacing: 0.15, height: 1.27),
+      titleMedium: createStyle(defaultSize: 16, minSize: 15, weight: FontWeight.w500, letterSpacing: 0.15, height: 1.5),
+      titleSmall: createStyle(defaultSize: 14, minSize: 13, weight: FontWeight.w500, letterSpacing: 0.1, height: 1.42),
       
       // Body Styles
-      bodyLarge: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 16.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.5,
-        height: 1.5,
-      ),
-      bodyMedium: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 14.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.25,
-        height: 1.43,
-      ),
-      bodySmall: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 12.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.4,
-        height: 1.33,
-      ),
+      bodyLarge: createStyle(defaultSize: 16, minSize: 15, letterSpacing: 0.5, height: 1.5),
+      bodyMedium: createStyle(defaultSize: 14, minSize: 13, letterSpacing: 0.25, height: 1.42),
+      bodySmall: createStyle(defaultSize: 12, minSize: 11, letterSpacing: 0.4, height: 1.33),
       
       // Label Styles
-      labelLarge: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 14.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.1,
-        height: 1.43,
-      ),
-      labelMedium: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 12.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.5,
-        height: 1.33,
-      ),
-      labelSmall: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 11.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.5,
-        height: 1.45,
-      ),
-      
+      labelLarge: createStyle(defaultSize: 14, minSize: 13, weight: FontWeight.w500, letterSpacing: 0.1, height: 1.42),
+      labelMedium: createStyle(defaultSize: 12, minSize: 11, weight: FontWeight.w500, letterSpacing: 0.5, height: 1.33),
+      labelSmall: createStyle(defaultSize: 11, minSize: 10, weight: FontWeight.w500, letterSpacing: 0.5, height: 1.45),
+
       // Custom Vertic Styles
-      buttonText: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 14.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.1,
-        height: 1.43,
-      ),
-      captionText: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 12.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.4,
-        height: 1.33,
-      ),
-      overlineText: TextStyle(
-        fontFamily: 'Roboto',
-        fontSize: 10.0 * scale,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 1.5,
-        height: 1.6,
-      ),
-      codeText: TextStyle(
-        fontFamily: 'RobotoMono',
-        fontSize: 14.0 * scale,
-        fontWeight: FontWeight.w400,
-        letterSpacing: 0.0,
-        height: 1.43,
-      ),
+      buttonText: createStyle(defaultSize: 14, minSize: 13, weight: FontWeight.w500, letterSpacing: 0.1, height: 1.42),
+      captionText: createStyle(defaultSize: 12, minSize: 11, letterSpacing: 0.4, height: 1.33),
+      overlineText: createStyle(defaultSize: 10, minSize: 9, letterSpacing: 1.5, height: 1.6),
+      codeText: createStyle(defaultSize: 13, minSize: 12, family: 'Fira Code', height: 1.5),
     );
-  }
-  
-  // ═══════════════════════════════════════════════════════════════
-  // 📐 RESPONSIVE HELPER METHODS
-  // ═══════════════════════════════════════════════════════════════
-  
-  /// Berechnet den Skalierungsfaktor basierend auf der Bildschirmbreite
-  static double _getScaleFactor(double screenWidth) {
-    if (screenWidth < 600) {
-      // Small screens (Smartphones)
-      return 0.9;
-    } else if (screenWidth < 840) {
-      // Medium screens (Tablets)
-      return 1.0;
-    } else {
-      // Large screens (Desktop)
-      return 1.1;
-    }
   }
   
   // ═══════════════════════════════════════════════════════════════

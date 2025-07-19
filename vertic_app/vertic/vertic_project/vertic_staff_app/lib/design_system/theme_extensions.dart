@@ -4,6 +4,7 @@ import 'foundations/typography.dart';
 import 'foundations/spacing.dart';
 import 'foundations/shadows.dart';
 import 'foundations/animations.dart';
+import 'foundations/icons.dart';
 
 /// **🎨 VERTIC DESIGN SYSTEM - THEME EXTENSIONS**
 /// 
@@ -70,6 +71,19 @@ extension VerticThemeExtensions on ThemeData {
     }
     return theme;
   }
+
+  /// Zugriff auf das Icon-Theme
+  AppIconTheme get appIcons {
+    final theme = extension<AppIconTheme>();
+    if (theme == null) {
+      throw Exception(
+        'AppIconTheme nicht gefunden! '
+        'Stelle sicher, dass das Design System korrekt initialisiert wurde.',
+      );
+    }
+    return theme;
+  }
+
 }
 
 /// **📱 CONTEXT EXTENSIONS für noch einfacheren Zugriff**
@@ -89,6 +103,9 @@ extension VerticContextExtensions on BuildContext {
   
   /// Direkter Zugriff auf Animationen: context.animations.fast
   AppAnimationsTheme get animations => Theme.of(this).appAnimations;
+
+  /// Zugriff auf responsive Icon-Größen
+  AppIconTheme get icons => Theme.of(this).appIcons;
   
   /// Bildschirmbreite für responsive Entscheidungen
   double get screenWidth => MediaQuery.of(this).size.width;
