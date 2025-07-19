@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
 import 'package:intl/intl.dart';
+import '../widgets/customer_management_section.dart';
 
 /// Aktivitäts-Log-Eintrag für die Historie
 class ActivityLogEntry {
@@ -53,7 +54,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
   List<Gym> _availableGyms = [];
   Gym? _currentUserGym;
 
-  // Search & Filter
+  // Search & Filter - Vereinfacht durch universelle Suche
+  // 🗑️ DEPRECATED: Nur noch für Kompatibilität - neue Suche verwendet CustomerManagementSection
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
   String _selectedSearchType = 'all';
@@ -75,8 +77,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
 
   @override
   void dispose() {
-    _searchController.dispose();
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -88,11 +90,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     });
 
     try {
-      await Future.wait([
-        _loadUsers(),
-        _loadGyms(),
-        _loadStatusTypes(),
-      ]);
+      await Future.wait([_loadUsers(), _loadGyms(), _loadStatusTypes()]);
     } catch (e) {
       setState(() {
         _errorMessage = 'Fehler beim Laden der Daten: $e';
@@ -156,7 +154,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       debugPrint('✅ ${gyms.length} Gyms geladen');
       if (_currentUserGym != null) {
         debugPrint(
-            '✅ Aktuelles Gym: ${_currentUserGym!.name} (${_currentUserGym!.city})');
+          '✅ Aktuelles Gym: ${_currentUserGym!.name} (${_currentUserGym!.city})',
+        );
       }
     } catch (e) {
       debugPrint('❌ Fehler beim Laden der Gyms: $e');
@@ -180,21 +179,24 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
         // SuperUser sehen alle Status-Typen
         filteredStatusTypes = allStatusTypes;
         debugPrint(
-            '✅ SuperUser: Alle ${allStatusTypes.length} Status-Typen geladen');
+          '✅ SuperUser: Alle ${allStatusTypes.length} Status-Typen geladen',
+        );
       } else if (widget.hallId != null) {
         // Hall-Admin sieht nur eigene Halle + Vertic Universal
         filteredStatusTypes = allStatusTypes.where((status) {
           return status.gymId == widget.hallId || status.isVerticUniversal;
         }).toList();
         debugPrint(
-            '✅ Hall-Admin (Halle ${widget.hallId}): ${filteredStatusTypes.length} von ${allStatusTypes.length} Status-Typen geladen');
+          '✅ Hall-Admin (Halle ${widget.hallId}): ${filteredStatusTypes.length} von ${allStatusTypes.length} Status-Typen geladen',
+        );
       } else {
         // Fallback: Nur Vertic Universal Status
         filteredStatusTypes = allStatusTypes.where((status) {
           return status.isVerticUniversal;
         }).toList();
         debugPrint(
-            '✅ Standard: ${filteredStatusTypes.length} Vertic Universal Status-Typen geladen');
+          '✅ Standard: ${filteredStatusTypes.length} Vertic Universal Status-Typen geladen',
+        );
       }
 
       setState(() {
@@ -202,7 +204,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       });
 
       debugPrint(
-          '✅ ${filteredStatusTypes.length} Status-Typen für Anzeige verfügbar');
+        '✅ ${filteredStatusTypes.length} Status-Typen für Anzeige verfügbar',
+      );
     } catch (e) {
       debugPrint('❌ Fehler beim Laden der Status-Typen: $e');
       setState(() {
@@ -226,7 +229,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
 
       // Debug-Print: User-ID und E-Mail
       debugPrint(
-          'Staff-App: Lade Details für User-ID: \\${user.id}, Email: \\${user.email}');
+        'Staff-App: Lade Details für User-ID: \\${user.id}, Email: \\${user.email}',
+      );
 
       // Parallel laden für bessere Performance
       final results = await Future.wait([
@@ -244,7 +248,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
 
       // Debug-Print: Anzahl Tickets
       debugPrint(
-          'Staff-App: Für User-ID: \\${user.id}, Email: \\${user.email} wurden \\${_userTickets.length} Tickets geladen');
+        'Staff-App: Für User-ID: \\${user.id}, Email: \\${user.email} wurden \\${_userTickets.length} Tickets geladen',
+      );
     } catch (e) {
       debugPrint('❌ Fehler beim Laden der User Details: $e');
       setState(() {
@@ -253,56 +258,10 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     }
   }
 
-  /// Intelligente Suchfunktion
+  /// 🗑️ DEPRECATED: Kundensuche erfolgt jetzt über CustomerManagementSection Widget
+  @deprecated
   void _performSearch(String searchText) {
-    setState(() {
-      _searchText = searchText;
-
-      if (searchText.isEmpty) {
-        _filteredUsers = _allUsers;
-        return;
-      }
-
-      final query = searchText.toLowerCase().trim();
-
-      _filteredUsers = _allUsers.where((user) {
-        switch (_selectedSearchType) {
-          case 'name':
-            return user.firstName.toLowerCase().contains(query) ||
-                user.lastName.toLowerCase().contains(query) ||
-                '${user.firstName} ${user.lastName}'
-                    .toLowerCase()
-                    .contains(query);
-
-          case 'email':
-            return (user.email?.toLowerCase().contains(query) ?? false) ||
-                (user.parentEmail?.toLowerCase().contains(query) ?? false);
-
-          case 'id':
-            return user.id.toString().contains(query);
-
-          case 'phone':
-            return user.phoneNumber?.toLowerCase().contains(query) ?? false;
-
-          case 'address':
-            return (user.address?.toLowerCase().contains(query) ?? false) ||
-                (user.city?.toLowerCase().contains(query) ?? false) ||
-                (user.postalCode?.toLowerCase().contains(query) ?? false);
-
-          case 'all':
-          default:
-            return user.firstName.toLowerCase().contains(query) ||
-                user.lastName.toLowerCase().contains(query) ||
-                '${user.firstName} ${user.lastName}'
-                    .toLowerCase()
-                    .contains(query) ||
-                (user.email?.toLowerCase().contains(query) ?? false) ||
-                (user.parentEmail?.toLowerCase().contains(query) ?? false) ||
-                user.id.toString().contains(query) ||
-                (user.phoneNumber?.toLowerCase().contains(query) ?? false);
-        }
-      }).toList();
-    });
+    // Leere Implementierung - neue Suche verwendet UniversalSearchEndpoint
   }
 
   /// Formatiert Datum für Anzeige
@@ -406,7 +365,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               Text(
                 '${_currentUserGym!.name} - ${_currentUserGym!.city}',
                 style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.normal),
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
           ],
         ),
@@ -437,9 +398,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     return Container(
       width: 400,
       decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Colors.grey.shade300),
-        ),
+        border: Border(right: BorderSide(color: Colors.grey.shade300)),
       ),
       child: Column(
         children: [
@@ -453,25 +412,16 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.search_off,
-                            size: 64, color: Colors.grey[400]),
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
                         const SizedBox(height: 16),
                         Text(
-                          _searchText.isEmpty
-                              ? 'Keine Kunden verfügbar'
-                              : 'Keine Kunden gefunden',
+                          'Wählen Sie einen Kunden aus der Suche aus',
                           style: TextStyle(color: Colors.grey[600]),
                         ),
-                        if (_searchText.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              _performSearch('');
-                            },
-                            child: const Text('Suche zurücksetzen'),
-                          ),
-                        ],
                       ],
                     ),
                   )
@@ -488,74 +438,15 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     );
   }
 
-  /// Erstellt den Suchbereich
+  /// Erstellt den Suchbereich - NEUE UNIVERSELLE SUCHE
   Widget _buildSearchSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.grey[50],
-      child: Column(
-        children: [
-          // Suchfeld
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              labelText: 'Kunde suchen',
-              hintText: 'Name, E-Mail, ID, Telefon...',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchText.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        _performSearch('');
-                      },
-                    )
-                  : null,
-            ),
-            onChanged: _performSearch,
-          ),
-
-          const SizedBox(height: 12),
-
-          // Suchtyp-Dropdown
-          DropdownButtonFormField<String>(
-            value: _selectedSearchType,
-            decoration: const InputDecoration(
-              labelText: 'Suchbereich',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'all', child: Text('🔍 Alle Felder')),
-              DropdownMenuItem(value: 'name', child: Text('👤 Name')),
-              DropdownMenuItem(value: 'email', child: Text('📧 E-Mail')),
-              DropdownMenuItem(value: 'id', child: Text('🔢 Kunden-ID')),
-              DropdownMenuItem(value: 'phone', child: Text('📞 Telefon')),
-              DropdownMenuItem(value: 'address', child: Text('🏠 Adresse')),
-            ],
-            onChanged: (value) {
-              setState(() {
-                _selectedSearchType = value!;
-              });
-              _performSearch(_searchText);
-            },
-          ),
-
-          // Suchergebnisse Anzeige
-          if (_searchText.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${_filteredUsers.length} von ${_allUsers.length} Kunden gefunden',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ],
-      ),
+    return CustomerManagementSection(
+      onCustomerSelected: (customer) {
+        setState(() {
+          _selectedUser = customer;
+        });
+        _loadUserDetails(customer);
+      },
     );
   }
 
@@ -571,8 +462,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           : null,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor:
-              isSelected ? Theme.of(context).primaryColor : Colors.grey[400],
+          backgroundColor: isSelected
+              ? Theme.of(context).primaryColor
+              : Colors.grey[400],
           radius: 20,
           child: Text(
             '${user.firstName[0]}${user.lastName[0]}',
@@ -706,9 +598,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade300),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
       ),
       child: Row(
         children: [
@@ -743,10 +633,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                 const SizedBox(height: 4),
                 Text(
                   user.email ?? user.parentEmail ?? 'Keine E-Mail',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -831,13 +718,17 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
             _buildProfileItem('Vorname', user.firstName),
             _buildProfileItem('Nachname', user.lastName),
             _buildProfileItem(
-                'Geburtsdatum',
-                user.birthDate != null
-                    ? DateFormat('dd.MM.yyyy').format(DateTime(
+              'Geburtsdatum',
+              user.birthDate != null
+                  ? DateFormat('dd.MM.yyyy').format(
+                      DateTime(
                         user.birthDate!.year,
                         user.birthDate!.month,
-                        user.birthDate!.day))
-                    : 'Nicht angegeben'),
+                        user.birthDate!.day,
+                      ),
+                    )
+                  : 'Nicht angegeben',
+            ),
             _buildProfileItem('Alter', _formatAge(user.birthDate)),
           ]),
           const SizedBox(height: 24),
@@ -864,10 +755,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _userNote!,
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    Text(_userNote!, style: const TextStyle(fontSize: 16)),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -913,11 +801,17 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           _buildProfileSection([
             _buildProfileItem('Registriert', _formatDate(user.createdAt)),
             _buildProfileItem(
-                'Letzte Aktualisierung', _formatDate(user.updatedAt)),
-            _buildProfileItem('E-Mail verifiziert',
-                user.isEmailVerified == true ? 'Ja' : 'Nein'),
-            _buildProfileItem('Account Status',
-                user.isBlocked == true ? 'Gesperrt' : 'Aktiv'),
+              'Letzte Aktualisierung',
+              _formatDate(user.updatedAt),
+            ),
+            _buildProfileItem(
+              'E-Mail verifiziert',
+              user.isEmailVerified == true ? 'Ja' : 'Nein',
+            ),
+            _buildProfileItem(
+              'Account Status',
+              user.isBlocked == true ? 'Gesperrt' : 'Aktiv',
+            ),
             if (user.blockedReason != null)
               _buildProfileItem('Sperrgrund', user.blockedReason!),
           ]),
@@ -936,7 +830,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           Row(
             children: [
               _buildSectionHeader(
-                  'Gekaufte Tickets', Icons.confirmation_number),
+                'Gekaufte Tickets',
+                Icons.confirmation_number,
+              ),
               const Spacer(),
               Text(
                 '${_userTickets.length} Tickets',
@@ -953,8 +849,11 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               child: Column(
                 children: [
                   const SizedBox(height: 48),
-                  Icon(Icons.confirmation_number_outlined,
-                      size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.confirmation_number_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Keine Tickets vorhanden',
@@ -984,11 +883,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           children: [
             Row(
               children: [
-                Icon(
-                  _getTicketIcon(ticket),
-                  color: statusColor,
-                  size: 24,
-                ),
+                Icon(_getTicketIcon(ticket), color: statusColor, size: 24),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1004,17 +899,16 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                       const SizedBox(height: 4),
                       Text(
                         'Ticket-Typ ID: ${ticket.ticketTypeId}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -1035,27 +929,37 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               children: [
                 Expanded(
                   child: _buildTicketInfo(
-                      'Preis', '${ticket.price.toStringAsFixed(2)} €'),
+                    'Preis',
+                    '${ticket.price.toStringAsFixed(2)} €',
+                  ),
                 ),
                 Expanded(
-                  child: _buildTicketInfo('Gekauft',
-                      DateFormat('dd.MM.yyyy').format(ticket.purchaseDate)),
+                  child: _buildTicketInfo(
+                    'Gekauft',
+                    DateFormat('dd.MM.yyyy').format(ticket.purchaseDate),
+                  ),
                 ),
                 Expanded(
-                  child: _buildTicketInfo('Gültig bis',
-                      DateFormat('dd.MM.yyyy').format(ticket.expiryDate)),
+                  child: _buildTicketInfo(
+                    'Gültig bis',
+                    DateFormat('dd.MM.yyyy').format(ticket.expiryDate),
+                  ),
                 ),
               ],
             ),
             if (ticket.remainingPoints != null) ...[
               const SizedBox(height: 8),
-              _buildTicketInfo('Verbleibende Punkte',
-                  '${ticket.remainingPoints}/${ticket.initialPoints ?? 'N/A'}'),
+              _buildTicketInfo(
+                'Verbleibende Punkte',
+                '${ticket.remainingPoints}/${ticket.initialPoints ?? 'N/A'}',
+              ),
             ],
             if (ticket.activatedDate != null) ...[
               const SizedBox(height: 8),
-              _buildTicketInfo('Aktiviert',
-                  DateFormat('dd.MM.yyyy HH:mm').format(ticket.activatedDate!)),
+              _buildTicketInfo(
+                'Aktiviert',
+                DateFormat('dd.MM.yyyy HH:mm').format(ticket.activatedDate!),
+              ),
             ],
           ],
         ),
@@ -1090,8 +994,11 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               child: Column(
                 children: [
                   const SizedBox(height: 48),
-                  Icon(Icons.verified_user_outlined,
-                      size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.verified_user_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Keine Status-Einträge vorhanden',
@@ -1144,10 +1051,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                       const SizedBox(height: 4),
                       Text(
                         'Status ID: ${status.statusTypeId}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -1176,22 +1080,26 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
             Row(
               children: [
                 Expanded(
-                  child: _buildStatusInfo('Beantragt',
-                      DateFormat('dd.MM.yyyy').format(status.createdAt)),
+                  child: _buildStatusInfo(
+                    'Beantragt',
+                    DateFormat('dd.MM.yyyy').format(status.createdAt),
+                  ),
                 ),
                 Expanded(
                   child: _buildStatusInfo(
-                      'Gültig bis',
-                      status.expiryDate != null
-                          ? DateFormat('dd.MM.yyyy').format(status.expiryDate!)
-                          : 'Nicht verfügbar'),
+                    'Gültig bis',
+                    status.expiryDate != null
+                        ? DateFormat('dd.MM.yyyy').format(status.expiryDate!)
+                        : 'Nicht verfügbar',
+                  ),
                 ),
                 Expanded(
                   child: _buildStatusInfo(
-                      'Status',
-                      status.isVerified
-                          ? (isActive ? 'Aktiv' : 'Abgelaufen')
-                          : 'Ungeprüft'),
+                    'Status',
+                    status.isVerified
+                        ? (isActive ? 'Aktiv' : 'Abgelaufen')
+                        : 'Ungeprüft',
+                  ),
                 ),
               ],
             ),
@@ -1210,10 +1118,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     Expanded(
                       child: Text(
                         status.notes!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[700],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                       ),
                     ),
                   ],
@@ -1271,8 +1176,10 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                         const SizedBox(height: 16),
                         Text(
                           'Keine Aktivitäten gefunden',
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.grey[600]),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
                         ),
                       ],
                     ),
@@ -1313,9 +1220,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: children,
-        ),
+        child: Column(children: children),
       ),
     );
   }
@@ -1336,12 +1241,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               ),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
         ],
       ),
     );
@@ -1360,10 +1260,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 14),
-        ),
+        Text(value, style: const TextStyle(fontSize: 14)),
       ],
     );
   }
@@ -1381,10 +1278,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 14),
-        ),
+        Text(value, style: const TextStyle(fontSize: 14)),
       ],
     );
   }
@@ -1438,15 +1332,19 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     final phoneController = TextEditingController(text: user.phoneNumber ?? '');
     final addressController = TextEditingController(text: user.address ?? '');
     final cityController = TextEditingController(text: user.city ?? '');
-    final postalCodeController =
-        TextEditingController(text: user.postalCode ?? '');
+    final postalCodeController = TextEditingController(
+      text: user.postalCode ?? '',
+    );
     final notesController = TextEditingController();
 
     // Verwende lokales Datum ohne UTC conversion um Zeitzone-Probleme zu vermeiden
     // Das verhindert das "einen Tag verschieben" Problem
     DateTime? selectedBirthDate = user.birthDate != null
         ? DateTime(
-            user.birthDate!.year, user.birthDate!.month, user.birthDate!.day)
+            user.birthDate!.year,
+            user.birthDate!.month,
+            user.birthDate!.day,
+          )
         : null;
 
     showDialog(
@@ -1471,9 +1369,13 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Persönliche Daten
-                    const Text('Persönliche Daten',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Persönliche Daten',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -1509,17 +1411,24 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                       onTap: () async {
                         final date = await showDatePicker(
                           context: context,
-                          initialDate: selectedBirthDate ??
-                              DateTime.now()
-                                  .subtract(const Duration(days: 18 * 365)),
+                          initialDate:
+                              selectedBirthDate ??
+                              DateTime.now().subtract(
+                                const Duration(days: 18 * 365),
+                              ),
                           firstDate: DateTime(1900),
                           lastDate: DateTime.now(),
                         );
                         if (date != null) {
                           // Verwende das lokale Datum ohne Zeitzone-Conversion
                           // um das "einen Tag verschieben" Problem zu vermeiden
-                          setDialogState(() => selectedBirthDate =
-                              DateTime(date.year, date.month, date.day));
+                          setDialogState(
+                            () => selectedBirthDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                            ),
+                          );
                         }
                       },
                       child: InputDecorator(
@@ -1530,8 +1439,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                         ),
                         child: Text(
                           selectedBirthDate != null
-                              ? DateFormat('dd.MM.yyyy')
-                                  .format(selectedBirthDate!)
+                              ? DateFormat(
+                                  'dd.MM.yyyy',
+                                ).format(selectedBirthDate!)
                               : 'Nicht ausgewählt',
                         ),
                       ),
@@ -1539,9 +1449,13 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     const SizedBox(height: 24),
 
                     // Kontaktdaten
-                    const Text('Kontaktdaten',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Kontaktdaten',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: emailController,
@@ -1552,8 +1466,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                       ),
                       validator: (value) {
                         if (value?.isNotEmpty == true &&
-                            !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                .hasMatch(value!)) {
+                            !RegExp(
+                              r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                            ).hasMatch(value!)) {
                           return 'Ungültige E-Mail-Adresse';
                         }
                         return null;
@@ -1571,9 +1486,13 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     const SizedBox(height: 24),
 
                     // Adresse
-                    const Text('Adresse',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Adresse',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: addressController,
@@ -1612,9 +1531,13 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     const SizedBox(height: 24),
 
                     // Notizen
-                    const Text('Interne Notizen',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Interne Notizen',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: notesController,
@@ -1684,7 +1607,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               child: Text(
                 '${user.firstName[0]}${user.lastName[0]}',
                 style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1693,8 +1618,10 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${user.firstName} ${user.lastName}'),
-                  Text('ID: ${user.id}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(
+                    'ID: ${user.id}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
                 ],
               ),
             ),
@@ -1711,12 +1638,16 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                   user.isBlocked == true ? Icons.lock_open : Icons.lock,
                   color: user.isBlocked == true ? Colors.green : Colors.red,
                 ),
-                title: Text(user.isBlocked == true
-                    ? 'Account entsperren'
-                    : 'Account sperren'),
-                subtitle: Text(user.isBlocked == true
-                    ? 'Zugang wiederherstellen'
-                    : 'Zugang blockieren'),
+                title: Text(
+                  user.isBlocked == true
+                      ? 'Account entsperren'
+                      : 'Account sperren',
+                ),
+                subtitle: Text(
+                  user.isBlocked == true
+                      ? 'Zugang wiederherstellen'
+                      : 'Zugang blockieren',
+                ),
                 onTap: () {
                   Navigator.of(context).pop();
                   _showBlockUserDialog(user);
@@ -1775,7 +1706,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-              'Keine Status-Typen verfügbar. Bitte laden Sie zuerst die Status-Typen.'),
+            'Keine Status-Typen verfügbar. Bitte laden Sie zuerst die Status-Typen.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -1869,8 +1801,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                         // Automatisches Ablaufdatum basierend auf Gültigkeitsdauer
                         if (value?.validityPeriod != null &&
                             value!.validityPeriod > 0) {
-                          expiryDate = DateTime.now()
-                              .add(Duration(days: value.validityPeriod));
+                          expiryDate = DateTime.now().add(
+                            Duration(days: value.validityPeriod),
+                          );
                         }
                       });
                     },
@@ -1884,11 +1817,13 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     onTap: () async {
                       final date = await showDatePicker(
                         context: context,
-                        initialDate: expiryDate ??
+                        initialDate:
+                            expiryDate ??
                             DateTime.now().add(const Duration(days: 365)),
                         firstDate: DateTime.now(),
-                        lastDate:
-                            DateTime.now().add(const Duration(days: 365 * 5)),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 5),
+                        ),
                       );
                       if (date != null) {
                         setDialogState(() => expiryDate = date);
@@ -2013,8 +1948,10 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Aktueller Sperrgrund:',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Aktueller Sperrgrund:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 4),
                       Text(user.blockedReason ?? 'Kein Grund angegeben'),
                     ],
@@ -2022,12 +1959,15 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                    'Der Account wird sofort entsperrt und der Kunde kann sich wieder anmelden.'),
+                  'Der Account wird sofort entsperrt und der Kunde kann sich wieder anmelden.',
+                ),
               ] else ...[
                 const Text(
                   'ACHTUNG: Der Account wird sofort gesperrt und der Kunde kann sich nicht mehr anmelden.',
-                  style:
-                      TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -2102,7 +2042,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               children: [
                 Text('An: ${user.firstName} ${user.lastName}'),
                 Text(
-                    'E-Mail: ${user.email ?? user.parentEmail ?? 'Keine E-Mail verfügbar'}'),
+                  'E-Mail: ${user.email ?? user.parentEmail ?? 'Keine E-Mail verfügbar'}',
+                ),
                 const SizedBox(height: 16),
 
                 // E-Mail-Typ
@@ -2114,15 +2055,25 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                   ),
                   items: const [
                     DropdownMenuItem(
-                        value: 'info', child: Text('ℹ️ Information')),
+                      value: 'info',
+                      child: Text('ℹ️ Information'),
+                    ),
                     DropdownMenuItem(
-                        value: 'reminder', child: Text('⏰ Erinnerung')),
+                      value: 'reminder',
+                      child: Text('⏰ Erinnerung'),
+                    ),
                     DropdownMenuItem(
-                        value: 'warning', child: Text('⚠️ Warnung')),
+                      value: 'warning',
+                      child: Text('⚠️ Warnung'),
+                    ),
                     DropdownMenuItem(
-                        value: 'welcome', child: Text('👋 Willkommen')),
+                      value: 'welcome',
+                      child: Text('👋 Willkommen'),
+                    ),
                     DropdownMenuItem(
-                        value: 'custom', child: Text('✏️ Benutzerdefiniert')),
+                      value: 'custom',
+                      child: Text('✏️ Benutzerdefiniert'),
+                    ),
                   ],
                   onChanged: (value) {
                     setDialogState(() {
@@ -2186,8 +2137,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     messageController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content:
-                            Text('Betreff und Nachricht sind erforderlich')),
+                      content: Text('Betreff und Nachricht sind erforderlich'),
+                    ),
                   );
                   return;
                 }
@@ -2245,17 +2196,29 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     ),
                     items: const [
                       DropdownMenuItem(
-                          value: 'general', child: Text('📝 Allgemein')),
+                        value: 'general',
+                        child: Text('📝 Allgemein'),
+                      ),
                       DropdownMenuItem(
-                          value: 'important', child: Text('⚠️ Wichtig')),
+                        value: 'important',
+                        child: Text('⚠️ Wichtig'),
+                      ),
                       DropdownMenuItem(
-                          value: 'warning', child: Text('🚨 Warnung')),
+                        value: 'warning',
+                        child: Text('🚨 Warnung'),
+                      ),
                       DropdownMenuItem(
-                          value: 'positive', child: Text('✅ Positiv')),
+                        value: 'positive',
+                        child: Text('✅ Positiv'),
+                      ),
                       DropdownMenuItem(
-                          value: 'complaint', child: Text('😠 Beschwerde')),
+                        value: 'complaint',
+                        child: Text('😠 Beschwerde'),
+                      ),
                       DropdownMenuItem(
-                          value: 'system', child: Text('🔧 System')),
+                        value: 'system',
+                        child: Text('🔧 System'),
+                      ),
                     ],
                     onChanged: (value) {
                       setDialogState(() => noteType = value!);
@@ -2273,10 +2236,14 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('🟢 Niedrig')),
                       DropdownMenuItem(
-                          value: 'normal', child: Text('🔵 Normal')),
+                        value: 'normal',
+                        child: Text('🔵 Normal'),
+                      ),
                       DropdownMenuItem(value: 'high', child: Text('🟠 Hoch')),
                       DropdownMenuItem(
-                          value: 'urgent', child: Text('🔴 Dringend')),
+                        value: 'urgent',
+                        child: Text('🔴 Dringend'),
+                      ),
                     ],
                     onChanged: (value) {
                       setDialogState(() => priority = value!);
@@ -2325,7 +2292,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                 if (noteController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('Notiz-Inhalt ist erforderlich')),
+                      content: Text('Notiz-Inhalt ist erforderlich'),
+                    ),
                   );
                   return;
                 }
@@ -2387,7 +2355,9 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
                     Text(
                       '⚠️ ACHTUNG: IRREVERSIBLE AKTION!',
                       style: TextStyle(
-                          color: Colors.red, fontWeight: FontWeight.bold),
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     SizedBox(height: 8),
                     Text(
@@ -2399,7 +2369,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               ),
               const SizedBox(height: 16),
               Text(
-                  'Account: ${user.firstName} ${user.lastName} (ID: ${user.id})'),
+                'Account: ${user.firstName} ${user.lastName} (ID: ${user.id})',
+              ),
               const SizedBox(height: 16),
               const Text('Was wird gelöscht:'),
               const Text('• Alle persönlichen Daten'),
@@ -2429,7 +2400,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               if (confirmController.text.trim() != confirmText) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Bestätigung stimmt nicht überein')),
+                    content: Text('Bestätigung stimmt nicht überein'),
+                  ),
                 );
                 return;
               }
@@ -2520,7 +2492,10 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
   }
 
   Future<void> _toggleUserBlockStatus(
-      AppUser user, bool blocked, String? reason) async {
+    AppUser user,
+    bool blocked,
+    String? reason,
+  ) async {
     try {
       final client = Provider.of<Client>(context, listen: false);
 
@@ -2528,11 +2503,12 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
 
       // Notiz hinzufügen
       await _addUserNote(
-          user,
-          blocked
-              ? 'Account gesperrt: ${reason ?? 'Kein Grund angegeben'}'
-              : 'Account entsperrt',
-          blocked ? 'warning' : 'positive');
+        user,
+        blocked
+            ? 'Account gesperrt: ${reason ?? 'Kein Grund angegeben'}'
+            : 'Account entsperrt',
+        blocked ? 'warning' : 'positive',
+      );
 
       // Reload data
       await _loadUsers();
@@ -2549,16 +2525,17 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     } catch (e) {
       debugPrint('❌ Fehler beim Sperren/Entsperren: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
   Future<void> _sendEmailToUser(
-      AppUser user, String subject, String message, String emailType) async {
+    AppUser user,
+    String subject,
+    String message,
+    String emailType,
+  ) async {
     try {
       // TODO: Implementiere E-Mail-Versand Endpoint
       // final client = Provider.of<Client>(context, listen: false);
@@ -2584,8 +2561,13 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     }
   }
 
-  Future<void> _addUserNote(AppUser user, String note, String noteType,
-      {String priority = 'normal', String? tags}) async {
+  Future<void> _addUserNote(
+    AppUser user,
+    String note,
+    String noteType, {
+    String priority = 'normal',
+    String? tags,
+  }) async {
     try {
       // Temporär deaktiviert - createNote Methode wird überarbeitet
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2617,8 +2599,12 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
     }
   }
 
-  Future<void> _addUserStatus(AppUser user, UserStatusType statusType,
-      DateTime? expiryDate, String? notes) async {
+  Future<void> _addUserStatus(
+    AppUser user,
+    UserStatusType statusType,
+    DateTime? expiryDate,
+    String? notes,
+  ) async {
     try {
       final client = Provider.of<Client>(context, listen: false);
 
@@ -2635,7 +2621,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       // 1. Status-Anfrage erstellen
       final createdStatus = await client.userStatus.requestStatus(userStatus);
       debugPrint(
-          '✅ Status-Anfrage erstellt: ID ${createdStatus?.id}, isVerified: ${createdStatus?.isVerified}');
+        '✅ Status-Anfrage erstellt: ID ${createdStatus?.id}, isVerified: ${createdStatus?.isVerified}',
+      );
 
       if (createdStatus != null) {
         // 2. Status sofort verifizieren (da Staff-Mitglied)
@@ -2646,22 +2633,25 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
           expiryDate?.toUtc(),
         );
         debugPrint(
-            '✅ Status verifiziert: ID ${verifiedStatus?.id}, isVerified: ${verifiedStatus?.isVerified}');
+          '✅ Status verifiziert: ID ${verifiedStatus?.id}, isVerified: ${verifiedStatus?.isVerified}',
+        );
 
         if (verifiedStatus != null) {
           // Zusätzlich eine Notiz hinzufügen für die Historie
           await _addUserNote(
-              user,
-              'Status "${statusType.name}" hinzugefügt${notes != null ? ': $notes' : ''}',
-              'important');
+            user,
+            'Status "${statusType.name}" hinzugefügt${notes != null ? ': $notes' : ''}',
+            'important',
+          );
 
           // User Details neu laden um die neue Status-Liste zu zeigen
           await _loadUserDetails(user);
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content:
-                  Text('Status "${statusType.name}" erfolgreich hinzugefügt'),
+              content: Text(
+                'Status "${statusType.name}" erfolgreich hinzugefügt',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -2699,7 +2689,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Benutzer ${user.firstName} ${user.lastName} wurde gelöscht'),
+            'Benutzer ${user.firstName} ${user.lastName} wurde gelöscht',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -2754,28 +2745,32 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       // 1. Tickets laden
       final tickets = await client.ticket.getUserTickets(userId);
       for (final ticket in tickets) {
-        historyEntries.add(ActivityLogEntry(
-          type: 'ticket',
-          title: 'Ticket gekauft',
-          description:
-              'Ticket-ID: ${ticket.id} für ${ticket.price.toStringAsFixed(2)}€',
-          timestamp: ticket.purchaseDate,
-          icon: Icons.confirmation_number,
-          color: Colors.blue,
-          metadata: {'ticketId': ticket.id, 'price': ticket.price},
-        ));
+        historyEntries.add(
+          ActivityLogEntry(
+            type: 'ticket',
+            title: 'Ticket gekauft',
+            description:
+                'Ticket-ID: ${ticket.id} für ${ticket.price.toStringAsFixed(2)}€',
+            timestamp: ticket.purchaseDate,
+            icon: Icons.confirmation_number,
+            color: Colors.blue,
+            metadata: {'ticketId': ticket.id, 'price': ticket.price},
+          ),
+        );
 
         if (ticket.activatedDate != null) {
-          historyEntries.add(ActivityLogEntry(
-            type: 'ticket',
-            title: 'Ticket aktiviert',
-            description:
-                'Ticket-ID: ${ticket.id} aktiviert${ticket.activatedForDate != null ? ' für ${DateFormat('dd.MM.yyyy').format(ticket.activatedForDate!)}' : ''}',
-            timestamp: ticket.activatedDate!,
-            icon: Icons.verified,
-            color: Colors.green,
-            metadata: {'ticketId': ticket.id},
-          ));
+          historyEntries.add(
+            ActivityLogEntry(
+              type: 'ticket',
+              title: 'Ticket aktiviert',
+              description:
+                  'Ticket-ID: ${ticket.id} aktiviert${ticket.activatedForDate != null ? ' für ${DateFormat('dd.MM.yyyy').format(ticket.activatedForDate!)}' : ''}',
+              timestamp: ticket.activatedDate!,
+              icon: Icons.verified,
+              color: Colors.green,
+              metadata: {'ticketId': ticket.id},
+            ),
+          );
         }
       }
 
@@ -2784,14 +2779,16 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
 
       // 4. Account-Erstellung (falls verfügbar)
       if (_selectedUser != null) {
-        historyEntries.add(ActivityLogEntry(
-          type: 'system',
-          title: 'Account erstellt',
-          description: 'Benutzeraccount wurde registriert',
-          timestamp: _selectedUser!.createdAt,
-          icon: Icons.person_add,
-          color: Colors.purple,
-        ));
+        historyEntries.add(
+          ActivityLogEntry(
+            type: 'system',
+            title: 'Account erstellt',
+            description: 'Benutzeraccount wurde registriert',
+            timestamp: _selectedUser!.createdAt,
+            icon: Icons.person_add,
+            color: Colors.purple,
+          ),
+        );
       }
 
       // Nach Datum sortieren (neueste zuerst)
@@ -2812,57 +2809,33 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: entry.color.withValues(alpha: 0.2),
-          child: Icon(
-            entry.icon,
-            color: entry.color,
-            size: 18,
-          ),
+          child: Icon(entry.icon, color: entry.color, size: 18),
         ),
         title: Text(
           entry.title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(
-              entry.description,
-              style: const TextStyle(fontSize: 13),
-            ),
+            Text(entry.description, style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(
-                  Icons.access_time,
-                  size: 12,
-                  color: Colors.grey[600],
-                ),
+                Icon(Icons.access_time, size: 12, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
                   DateFormat('dd.MM.yyyy HH:mm').format(entry.timestamp),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                 ),
                 if (entry.staffName != null) ...[
                   const SizedBox(width: 12),
-                  Icon(
-                    Icons.person,
-                    size: 12,
-                    color: Colors.grey[600],
-                  ),
+                  Icon(Icons.person, size: 12, color: Colors.grey[600]),
                   const SizedBox(width: 4),
                   Text(
                     entry.staffName!,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                   ),
                 ],
               ],
@@ -2898,14 +2871,16 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
 
   /// Zeigt Dialog zum Bearbeiten der Notiz
   void _showEditNoteDialog() {
-    final TextEditingController noteController =
-        TextEditingController(text: _userNote ?? '');
+    final TextEditingController noteController = TextEditingController(
+      text: _userNote ?? '',
+    );
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title:
-            Text(_userNote != null ? 'Notiz bearbeiten' : 'Notiz hinzufügen'),
+        title: Text(
+          _userNote != null ? 'Notiz bearbeiten' : 'Notiz hinzufügen',
+        ),
         content: SizedBox(
           width: 400,
           child: TextField(

@@ -1,0 +1,9 @@
+class: SearchRequest
+fields:
+  query: String                   # Suchbegriff
+  entityTypes: List<String>?      # Nur bestimmte Entitäten suchen
+  limit: int, default=20          # Max. Anzahl Ergebnisse
+  offset: int, default=0          # Für Pagination
+  minRelevance: double, default=0.1  # Minimum Relevanz-Score
+  includeHighlights: bool, default=true # Highlights einschließen
+  searchHistory: bool, default=true    # In Suchhistorie speichern 

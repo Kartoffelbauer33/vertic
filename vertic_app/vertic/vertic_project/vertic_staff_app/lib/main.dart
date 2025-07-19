@@ -12,6 +12,7 @@ import 'pages/customer_management_page.dart';
 import 'pages/pos_system_page.dart';
 import 'pages/product_management_page.dart';
 import 'pages/statistics_page.dart';
+import 'pages/search_test_page.dart';
 import 'auth/permission_wrapper.dart';
 import 'config/environment.dart';
 import 'services/background_scanner_service.dart';
@@ -28,7 +29,8 @@ class ThemeProvider extends ChangeNotifier {
 
   bool get isDarkMode {
     if (_themeMode == ThemeMode.system) {
-      return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+      return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+          Brightness.dark;
     }
     return _themeMode == ThemeMode.dark;
   }
@@ -139,16 +141,16 @@ class _MyAppState extends State<MyApp> {
       builder: (context, staffAuth, child) {
         return Consumer<ThemeProvider>(
           builder: (context, themeProvider, child) {
-        return MaterialApp(
-          title: 'Vertic Staff',
+            return MaterialApp(
+              title: 'Vertic Staff',
               theme: VerticTheme.light(context),
               darkTheme: VerticTheme.dark(context),
               themeMode: themeProvider.themeMode,
-          // 🎯 Routing basiert auf Staff-Auth-Status
-          home: staffAuth.isAuthenticated
-              ? const StaffHomePage()
-              : const LoginPage(),
-          debugShowCheckedModeBanner: false,
+              // 🎯 Routing basiert auf Staff-Auth-Status
+              home: staffAuth.isAuthenticated
+                  ? const StaffHomePage()
+                  : const LoginPage(),
+              debugShowCheckedModeBanner: false,
             );
           },
         );
@@ -319,6 +321,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
         child: const ProductManagementPage(),
       ),
       const StatisticsPage(),
+      const SearchTestPage(), // 🔍 Neue universelle Suchfunktion
       CustomerManagementPage(isSuperUser: isSuperUser),
       PermissionWrapper(
         requiredPermission: 'can_access_admin_dashboard',
@@ -389,6 +392,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
         icon: Icon(Icons.insert_chart),
         label: 'Statistik',
       ),
+      const BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Suche'),
       const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Kunden'),
     ]);
 

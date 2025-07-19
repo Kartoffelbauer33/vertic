@@ -4,6 +4,7 @@ import 'package:test_server_client/test_server_client.dart';
 import '../services/background_scanner_service.dart';
 import '../services/device_id_service.dart';
 import '../auth/permission_provider.dart';
+import '../widgets/pos_search_section.dart';
 
 /// **🛒 CART SESSION MODEL für Multi-Cart-System**
 class CartSession {
@@ -60,15 +61,17 @@ class PosSystemPage extends StatefulWidget {
 }
 
 class _PosSystemPageState extends State<PosSystemPage> {
-  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _manualCodeController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
 
-  // State Management
-  List<AppUser> _allUsers = []; // Vollständige Kundenliste
-  List<AppUser> _filteredUsers = []; // Gefilterte Suchergebnisse
-  String _searchText = '';
+  // State Management - Kundensuche vereinfacht
   AppUser? _selectedCustomer;
+
+  // 🗑️ DEPRECATED: Nur noch für Kompatibilität - neue Suche verwendet CustomerSearchSection
+  List<AppUser> _allUsers = [];
+  List<AppUser> _filteredUsers = [];
+  String _searchText = '';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   List<PosCartItem> _cartItems = [];
   bool _isLoading = false;
   String _scannerMode = 'POS'; // Express, POS, Hybrid
@@ -166,8 +169,8 @@ class _PosSystemPageState extends State<PosSystemPage> {
       }
     });
 
-    _searchController.dispose();
     _manualCodeController.dispose();
+    _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
@@ -217,15 +220,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
       // 🛒 MULTI-CART: Ersten Warenkorb erstellen oder bestehenden laden
       await _initializeCartFromExistingSession();
 
-      // 🎯 AUTO-FOKUS: Scanner-Input geht automatisch ins Suchfeld
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _searchFocusNode.canRequestFocus) {
-          _searchFocusNode.requestFocus();
-          debugPrint(
-            '🎯 Auto-Fokus auf Suchfeld gesetzt für Scanner-Integration',
-          );
-        }
-      });
+      // 🎯 AUTO-FOKUS: Handled by CustomerSearchSection Widget
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -494,6 +489,8 @@ class _PosSystemPageState extends State<PosSystemPage> {
     );
   }
 
+  /// **🔍 KUNDENDATEN FÜR SESSION-WIEDERHERSTELLUNG**
+  /// Notwendig für _findUserById() bei Session-Wiederherstellung
   Future<void> _loadAllCustomers() async {
     try {
       final client = Provider.of<Client>(context, listen: false);
@@ -502,7 +499,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
         _allUsers = users;
         _filteredUsers = users;
       });
+      debugPrint(
+        '✅ ${users.length} Kunden für Session-Wiederherstellung geladen',
+      );
     } catch (e) {
+      debugPrint('❌ Fehler beim Laden der Kunden: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Laden der Kunden: $e')),
@@ -518,9 +519,16 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
     try {
       final client = Provider.of<Client>(context, listen: false);
-      final session = await client.pos.createSession(_selectedCustomer?.id);
+      // 🖥️ KRITISCH: Gerätespezifische Session verwenden
+      final deviceId = await _getDeviceId();
+      final session = await client.pos.createDeviceSession(
+        deviceId,
+        _selectedCustomer?.id,
+      );
       setState(() => _currentSession = session);
+      debugPrint('🖥️ Gerätespezifische Session erstellt: ${session.id}');
     } catch (e) {
+      debugPrint('❌ Fehler beim Erstellen der Session: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Erstellen der Session: $e')),
@@ -584,12 +592,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // 🎯 FOCUS-FIX: Nach Dialog-Schließung Suchfeld fokussieren
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && _searchFocusNode.canRequestFocus) {
-                  _searchFocusNode.requestFocus();
-                }
-              });
+              // 🎯 FOCUS-FIX: Handled by CustomerSearchSection Widget
             },
             child: const Text('Verstanden'),
           ),
@@ -597,11 +600,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
             onPressed: () {
               Navigator.of(context).pop();
               // 🎯 FOCUS-FIX: Nach Dialog-Schließung Suchfeld fokussieren für Kundenzuordnung
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && _searchFocusNode.canRequestFocus) {
-                  _searchFocusNode.requestFocus();
-                }
-              });
+              // Auto-focus wird jetzt vom CustomerSearchSection Widget gehandhabt
             },
             child: const Text('Kunde zuordnen'),
           ),
@@ -790,27 +789,70 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
-  /// **🧹 NEUE METHODE: Behandelt Kundenwechsel mit Multi-Cart-System**
+  /// **🧹 INTELLIGENTE KUNDENAUSWAHL: Behandelt Kundenwechsel mit Multi-Cart-System**
   Future<void> _handleCustomerChange(AppUser newCustomer) async {
     try {
-      // 1. Aktuellen Warenkorb mit Kunde verknüpfen
-      if (_activeCarts.isNotEmpty && _cartItems.isNotEmpty) {
-        final client = Provider.of<Client>(context, listen: false);
-        final currentCart = _activeCarts[_currentCartIndex];
-        final oldSession = currentCart.posSession;
+      // 🎯 SMARTE LOGIK: Prüfe aktuellen Warenkorb-Status
+      final currentCart = _activeCarts.isNotEmpty
+          ? _activeCarts[_currentCartIndex]
+          : null;
+      final hasItems = _cartItems.isNotEmpty;
+      final hasCurrentCustomer = _selectedCustomer != null;
+      final isDifferentCustomer =
+          hasCurrentCustomer && _selectedCustomer!.id != newCustomer.id;
 
-        // 🖥️ KRITISCH: Gerätespezifische Session mit Kunde erstellen
+      debugPrint('🔍 Warenkorb-Status:');
+      debugPrint('  • Hat Artikel: $hasItems');
+      debugPrint('  • Hat Kunde: $hasCurrentCustomer');
+      debugPrint('  • Anderer Kunde: $isDifferentCustomer');
+
+      // 1. SZENARIO: Leerer Warenkorb oder gleicher Kunde → Einfach zuordnen
+      if (!hasItems || (!hasCurrentCustomer || !isDifferentCustomer)) {
+        debugPrint('✅ Kunde zu aktuellem Warenkorb zuordnen');
+
+        // 🖥️ KRITISCH: Gerätespezifische Session mit Kunde erstellen/aktualisieren
+        final client = Provider.of<Client>(context, listen: false);
         final deviceId = await _getDeviceId();
         final newSession = await client.pos.createDeviceSession(
           deviceId,
           newCustomer.id,
         );
+
         debugPrint(
-          '🖥️ Gerätespezifische Session für Kundenwechsel erstellt: ${newSession.id}',
+          '🖥️ Gerätespezifische Session für Kunde erstellt: ${newSession.id}',
+        );
+
+        setState(() {
+          _selectedCustomer = newCustomer;
+          _currentSession = newSession;
+          if (currentCart != null) {
+            _activeCarts[_currentCartIndex] = currentCart.copyWith(
+              customer: newCustomer,
+              posSession: newSession,
+            );
+          }
+        });
+      }
+      // 2. SZENARIO: Warenkorb mit anderem Kunden → Neuen Warenkorb erstellen
+      else if (hasItems && isDifferentCustomer) {
+        debugPrint('🆕 Neuen Warenkorb für anderen Kunden erstellen');
+        await _createNewCart(customer: newCustomer);
+      }
+      // 3. FALLBACK: Warenkorb mit Items aber ohne Kunde → Session-Update nötig
+      else {
+        debugPrint('🔄 Kunde zu Warenkorb mit Items zuordnen - Session-Update');
+
+        // 🖥️ KRITISCH: Neue Session für Kunde erstellen und Items übertragen
+        final client = Provider.of<Client>(context, listen: false);
+        final deviceId = await _getDeviceId();
+        final oldSession = currentCart?.posSession;
+        final newSession = await client.pos.createDeviceSession(
+          deviceId,
+          newCustomer.id,
         );
 
         // 🔄 WICHTIG: Alle Items aus alter Session in neue Session übertragen
-        if (oldSession != null) {
+        if (oldSession != null && _cartItems.isNotEmpty) {
           try {
             for (final item in _cartItems) {
               await client.pos.addToCart(
@@ -834,30 +876,19 @@ class _PosSystemPageState extends State<PosSystemPage> {
           }
         }
 
-        final updatedCart = currentCart.copyWith(
-          customer: newCustomer,
-          posSession: newSession,
-        );
-
         setState(() {
-          _activeCarts[_currentCartIndex] = updatedCart;
           _selectedCustomer = newCustomer;
           _currentSession = newSession;
-          _searchText = '';
-          _searchController.clear();
-          _filteredUsers = _allUsers;
+          if (currentCart != null) {
+            _activeCarts[_currentCartIndex] = currentCart.copyWith(
+              customer: newCustomer,
+              posSession: newSession,
+            );
+          }
         });
 
-        // Cart-Items neu laden
+        // Cart-Items neu laden nach Session-Transfer
         await _loadCartItems();
-      } else {
-        // 2. Neuen Warenkorb für Kunde erstellen
-        setState(() {
-          _searchText = '';
-          _searchController.clear();
-          _filteredUsers = _allUsers;
-        });
-        await _createNewCart(customer: newCustomer);
       }
 
       // 3. Artikel-Katalog für neuen Kunden aktualisieren
@@ -1186,8 +1217,8 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
   // ==================== SEARCH FUNCTIONALITY ====================
 
-  /// **🔍 ENHANCED SEARCH FIELD INPUT HANDLER**
-  /// **🎯 VEREINFACHTE SCANNER-INTEGRATION: Auto-Fokus macht globale Listener überflüssig**
+  /// 🗑️ DEPRECATED: Search Input wird jetzt vom CustomerSearchSection Widget gehandhabt
+  @deprecated
   void _handleSimplifiedSearchInput(String input) {
     final trimmedInput = input.trim();
 
@@ -1256,15 +1287,14 @@ class _PosSystemPageState extends State<PosSystemPage> {
     });
   }
 
-  /// **🎯 HILFSMETHODE: Scanner-Fokus wiederherstellen**
+  /// 🗑️ DEPRECATED: Scanner-Fokus wird jetzt vom CustomerSearchSection Widget gehandhabt
+  @deprecated
   void _restoreScannerFocus() {
-    if (mounted && _searchFocusNode.canRequestFocus) {
-      _searchFocusNode.requestFocus();
-      debugPrint('🎯 Scanner-Fokus wiederhergestellt');
-    }
+    // Auto-focus wird jetzt vom CustomerSearchSection Widget gehandhabt
   }
 
-  /// **📝 ALTE KOMPLEXE METHODE (kann entfernt werden)**
+  /// 🗑️ DEPRECATED: Search Field wird jetzt vom CustomerSearchSection Widget gehandhabt
+  @deprecated
   void _handleSearchFieldInput(String input) {
     final trimmedInput = input.trim();
 
@@ -1330,28 +1360,10 @@ class _PosSystemPageState extends State<PosSystemPage> {
     );
   }
 
+  /// 🗑️ DEPRECATED: Kundensuche erfolgt jetzt über CustomerSearchSection Widget
+  @deprecated
   void _performCustomerSearch(String query) {
-    setState(() {
-      _searchText = query;
-
-      if (query.isEmpty) {
-        _filteredUsers = _allUsers;
-        return;
-      }
-
-      final searchLower = query.toLowerCase().trim();
-
-      _filteredUsers = _allUsers.where((user) {
-        return user.firstName.toLowerCase().contains(searchLower) ||
-            user.lastName.toLowerCase().contains(searchLower) ||
-            '${user.firstName} ${user.lastName}'.toLowerCase().contains(
-              searchLower,
-            ) ||
-            (user.email?.toLowerCase().contains(searchLower) ?? false) ||
-            (user.phoneNumber?.toLowerCase().contains(searchLower) ?? false) ||
-            user.id.toString().contains(searchLower);
-      }).toList();
-    });
+    // Leere Implementierung - neue Suche verwendet UniversalSearchEndpoint
   }
 
   // ==================== UI HELPERS ====================
@@ -1814,211 +1826,22 @@ class _PosSystemPageState extends State<PosSystemPage> {
   // ==================== UI COMPONENTS ====================
 
   Widget _buildCustomerSearchSection() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.person_search, color: Colors.blue[600], size: 24),
-              const SizedBox(width: 8),
-              Text(
-                'Kundensuche',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Suchfeld mit Auto-Fokus für Scanner-Integration
-          TextField(
-            controller: _searchController,
-            focusNode: _searchFocusNode,
-            decoration: InputDecoration(
-              hintText:
-                  'Name, E-Mail, ID oder Telefon eingeben (Auto-Scanner bereit)...',
-              prefixIcon: Icon(
-                Icons.search,
-                color: _searchFocusNode.hasFocus ? Colors.green : null,
-              ),
-              suffixIcon: _searchText.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        _performCustomerSearch('');
-                        // Fokus wieder setzen nach Clear
-                        _searchFocusNode.requestFocus();
-                      },
-                    )
-                  : _searchFocusNode.hasFocus
-                  ? Icon(Icons.qr_code_scanner, color: Colors.green)
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: _searchFocusNode.hasFocus ? Colors.green : Colors.grey,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.green, width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-            ),
-            onChanged: _handleSimplifiedSearchInput,
-          ),
-
-          // Suchergebnisse
-          if (_searchText.isNotEmpty && _filteredUsers.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ListView.builder(
-                itemCount: _filteredUsers.take(10).length,
-                itemBuilder: (context, index) {
-                  final customer = _filteredUsers[index];
-                  return ListTile(
-                    dense: true,
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue[100],
-                      child: Text(
-                        '${customer.firstName[0]}${customer.lastName[0]}',
-                        style: TextStyle(
-                          color: Colors.blue[700],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    title: Text('${customer.firstName} ${customer.lastName}'),
-                    subtitle: Text(customer.email ?? 'Keine E-Mail'),
-                    trailing: Icon(Icons.add_circle, color: Colors.green[600]),
-                    onTap: () async {
-                      // 🧹 WARENKORB-SYNCHRONISATION: Bei Personenwechsel alles zurücksetzen
-                      await _handleCustomerChange(customer);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-
-          // Suchergebnis-Anzeige
-          if (_searchText.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${_filteredUsers.length} von ${_allUsers.length} Kunden gefunden',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-
-          // 🎯 Scanner-Status-Anzeige
-          if (_searchFocusNode.hasFocus) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.qr_code_scanner, size: 16, color: Colors.green),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Scanner bereit',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.green[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // Ausgewählter Kunde
-          if (_selectedCustomer != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.green,
-                    child: const Icon(Icons.person, color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${_selectedCustomer!.firstName} ${_selectedCustomer!.lastName}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        if (_selectedCustomer!.email != null)
-                          Text(
-                            _selectedCustomer!.email!,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.red),
-                    onPressed: () async {
-                      // 🧹 WARENKORB-RESET: Bei Kunde entfernen
-                      await _handleCustomerRemoval();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+    return PosSearchSection(
+      selectedCustomer: _selectedCustomer,
+      autofocus: true,
+      hintText: 'Kunde oder Produkt suchen (Scanner bereit)...',
+      onCustomerSelected: (customer) async {
+        // 🧹 WARENKORB-SYNCHRONISATION: Bei Personenwechsel alles zurücksetzen
+        await _handleCustomerChange(customer);
+      },
+      onProductSelected: (product) async {
+        // 🛒 PRODUKT-DIREKTAUSWAHL: Produkt direkt zum aktuellen Warenkorb hinzufügen
+        await _handleProductSelection(product);
+      },
+      onCustomerRemoved: () async {
+        // 🧹 WARENKORB-RESET: Bei Kunde entfernen
+        await _handleCustomerRemoval();
+      },
     );
   }
 
@@ -3481,13 +3304,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : GestureDetector(
-              // 🎯 QUICK-FOCUS: Tippen ins Leere setzt Fokus zurück auf Suchfeld
+              // 🎯 QUICK-FOCUS: Handled by CustomerSearchSection Widget
               onTap: () {
-                if (!_searchFocusNode.hasFocus &&
-                    _searchFocusNode.canRequestFocus) {
-                  _searchFocusNode.requestFocus();
-                  debugPrint('🎯 Quick-Focus: Suchfeld wieder fokussiert');
-                }
+                // Auto-focus wird jetzt vom CustomerSearchSection Widget gehandhabt
               },
               child: Row(
                 children: [
@@ -3613,6 +3432,86 @@ class _PosSystemPageState extends State<PosSystemPage> {
             content: Text('❌ Fehler beim Laden der Statistiken: $e'),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  // ==================== SEARCH FUNCTIONALITY ====================
+
+  /// 🔄 **INTELLIGENTE PRODUKTAUSWAHL ÜBER SUCHE**
+  /// Fügt Produkt hinzu oder erhöht Menge bei bereits vorhandenem Produkt
+  Future<void> _handleProductSelection(Product product) async {
+    debugPrint(
+      '🛒 Produkt über Suche ausgewählt: ${product.name} (€${product.price})',
+    );
+
+    try {
+      // 🎯 Falls kein aktiver Warenkorb vorhanden, erstelle einen neuen
+      if (_currentSession == null) {
+        await _createPosSession();
+      }
+
+      final client = Provider.of<Client>(context, listen: false);
+
+      // 🔍 SMART-LOGIC: Prüfe ob Produkt bereits im Warenkorb vorhanden
+      PosCartItem? existingItem;
+      try {
+        existingItem = _cartItems.firstWhere(
+          (item) => item.itemType == 'product' && item.itemId == product.id!,
+        );
+      } catch (e) {
+        existingItem = null; // Produkt nicht gefunden
+      }
+
+      if (existingItem != null) {
+        // 📈 MENGE ERHÖHEN: Produkt bereits vorhanden → Menge +1
+        debugPrint(
+          '📈 Produkt bereits vorhanden, erhöhe Menge: ${existingItem.quantity} → ${existingItem.quantity + 1}',
+        );
+
+        await client.pos.updateCartItem(
+          existingItem.id!,
+          existingItem.quantity + 1,
+        );
+      } else {
+        // 🆕 NEU HINZUFÜGEN: Produkt nicht vorhanden → Neu hinzufügen
+        debugPrint('🆕 Neues Produkt hinzufügen');
+
+        await client.pos.addToCart(
+          _currentSession!.id!,
+          'product', // itemType
+          product.id!, // itemId
+          product.name, // itemName
+          product.price, // price
+          1, // quantity
+        );
+      }
+
+      // 🔄 Warenkorb neu laden
+      await _loadCartItems();
+
+      // ✅ Feedback für User
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.search, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('${product.name} über Suche hinzugefügt'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Fehler beim Hinzufügen des Produkts über Suche: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Fehler: $e'), backgroundColor: Colors.red),
         );
       }
     }

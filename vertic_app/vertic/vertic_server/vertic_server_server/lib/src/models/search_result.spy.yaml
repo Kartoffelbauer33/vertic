@@ -1,0 +1,20 @@
+class: SearchResult
+fields:
+  # Grundlegende Metadaten
+  entityType: String              # 'customer', 'product', 'category'
+  entityId: int                   # ID des gefundenen Objekts
+  title: String                   # Haupttitel (Name, etc.)
+  subtitle: String?               # Untertitel (Email, Beschreibung, etc.)
+  description: String?            # Längere Beschreibung falls vorhanden
+  
+  # Relevanz und Ranking
+  relevanceScore: double          # PostgreSQL ts_rank Score
+  matchedFields: List<String>     # Welche Felder gematcht haben
+  highlightedText: String?        # Text mit Highlight-Markup
+  
+  # Zusätzliche Metadaten
+  imageUrl: String?               # Avatar, Produktbild, etc.
+  category: String?               # Kategorie des Ergebnisses
+  tags: List<String>?             # Zusätzliche Tags
+  createdAt: DateTime?            # Wann wurde es erstellt
+  lastModified: DateTime?         # Letzte Änderung 

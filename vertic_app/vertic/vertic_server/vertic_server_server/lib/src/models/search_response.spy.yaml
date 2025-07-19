@@ -1,0 +1,7 @@
+class: SearchResponse  
+fields:
+  results: List<SearchResult>     # Gefundene Ergebnisse
+  totalCount: int                 # Gesamtanzahl verfügbarer Ergebnisse
+  queryTime: double               # Zeit für die Suche in ms
+  suggestions: List<String>?      # Suchvorschläge
+  correctedQuery: String?         # Korrigierte Suchanfrage falls nötig 

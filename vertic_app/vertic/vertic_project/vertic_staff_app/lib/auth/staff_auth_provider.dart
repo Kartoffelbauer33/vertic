@@ -27,7 +27,18 @@ class StaffAuthProvider extends ChangeNotifier {
   String? _lastError;
 
   StaffAuthProvider(this._client) {
-    _initializeFromStorage();
+    // 🔧 TEMPORÄRER DEBUG-FIX: Session zurücksetzen wegen Authentication-Problemen
+    _resetSessionOnStart();
+  }
+
+  /// **🔧 TEMPORÄRER FIX: Session beim App-Start zurücksetzen**
+  Future<void> _resetSessionOnStart() async {
+    debugPrint(
+      '🔧 TEMP-FIX: Setze Session beim App-Start zurück (wegen Auth-Problemen)',
+    );
+    await resetSessionForDebug();
+    // Nach dem Reset normale Initialisierung
+    // await _initializeFromStorage(); // Deaktiviert bis Auth-Problem gelöst ist
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -201,6 +212,75 @@ class StaffAuthProvider extends ChangeNotifier {
     return _currentStaffUser?.staffLevel == level;
   }
 
+  /// **🔐 NEUE METHODE: Automatische Session-Validierung**
+  ///
+  /// Prüft bei kritischen API-Calls, ob die Session noch gültig ist
+  /// Falls nicht, wird automatisch ein Logout durchgeführt
+  Future<bool> validateSession() async {
+    if (!_isAuthenticated || _authToken == null) {
+      return false;
+    }
+
+    try {
+      // Test-API-Call um Session-Gültigkeit zu prüfen
+      final permissions = await _client.permissionManagement
+          .getCurrentUserPermissions();
+
+      if (permissions.isEmpty) {
+        debugPrint('⚠️ Session-Validation fehlgeschlagen: Keine Permissions');
+        await _forceLogout();
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('❌ Session-Validation fehlgeschlagen: $e');
+      await _forceLogout();
+      return false;
+    }
+  }
+
+  /// **🔓 HILFSMETHODE: Erzwungener Logout bei Session-Problemen**
+  Future<void> _forceLogout() async {
+    debugPrint('🔄 Erzwinge Logout wegen Session-Validation-Fehler');
+
+    _isAuthenticated = false;
+    _currentStaffUser = null;
+    _authToken = null;
+
+    await _clearStorage();
+
+    if (_client.authenticationKeyManager != null) {
+      await _client.authenticationKeyManager!.remove();
+    }
+
+    notifyListeners();
+  }
+
+  /// **🔧 DEBUG-METHODE: Session komplett zurücksetzen (für Entwicklung)**
+  ///
+  /// Setzt alle Session-Daten zurück und erzwingt den Login-Screen
+  /// Sollte nur für Debugging und Entwicklung verwendet werden
+  Future<void> resetSessionForDebug() async {
+    debugPrint('🔧 DEBUG: Session wird komplett zurückgesetzt');
+
+    _isAuthenticated = false;
+    _currentStaffUser = null;
+    _authToken = null;
+    _lastError = null;
+
+    await _clearStorage();
+
+    if (_client.authenticationKeyManager != null) {
+      await _client.authenticationKeyManager!.remove();
+    }
+
+    notifyListeners();
+    debugPrint(
+      '✅ DEBUG: Session zurückgesetzt - Login-Screen sollte erscheinen',
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // 💾 PERSISTENCE METHODS
   // ═══════════════════════════════════════════════════════════════
@@ -286,8 +366,16 @@ class StaffAuthProvider extends ChangeNotifier {
         } catch (e) {
           // Bei Server-Fehler: Session als ungültig betrachten
           debugPrint('❌ Server-Check fehlgeschlagen: $e');
+          debugPrint('🔄 Erzwinge Logout wegen Authentication-Fehler');
           _isAuthenticated = false;
+          _currentStaffUser = null;
+          _authToken = null;
           await _clearStorage();
+
+          // 🔐 KRITISCH: Auth-Token auch vom Client entfernen
+          if (_client.authenticationKeyManager != null) {
+            await _client.authenticationKeyManager!.remove();
+          }
         }
 
         notifyListeners();
