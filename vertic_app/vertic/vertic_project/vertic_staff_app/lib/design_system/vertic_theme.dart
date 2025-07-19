@@ -4,6 +4,7 @@ import 'foundations/typography.dart';
 import 'foundations/spacing.dart';
 import 'foundations/shadows.dart';
 import 'foundations/animations.dart';
+import 'foundations/icons.dart';
 
 /// **🎨 VERTIC DESIGN SYSTEM - HAUPTTHEME**
 /// 
@@ -28,6 +29,7 @@ class VerticTheme {
     final spacing = AppSpacingTheme.main(screenWidth);
     final shadows = AppShadowsTheme.light();
     final animations = AppAnimationsTheme.main(reducedMotion: reduceMotion);
+    final icons = AppIconTheme.main(screenWidth);
     
     // Material Design 3 ColorScheme aus unserem Farbsystem
     final colorScheme = ColorScheme.light(
@@ -238,13 +240,14 @@ class VerticTheme {
         space: spacing.md,
       ),
       
-      // Custom Extensions hinzufügen
-      extensions: [
+      // Theme Extensions für einfachen Zugriff via context.colors, context.typography etc.
+      extensions: <ThemeExtension<dynamic>>[
         colors,
         typography,
         spacing,
         shadows,
         animations,
+        icons,
       ],
     );
   }
@@ -263,6 +266,7 @@ class VerticTheme {
     final spacing = AppSpacingTheme.main(screenWidth);
     final shadows = AppShadowsTheme.dark();
     final animations = AppAnimationsTheme.main(reducedMotion: reduceMotion);
+    final icons = AppIconTheme.main(screenWidth);
     
     // Material Design 3 ColorScheme aus unserem Farbsystem
     final colorScheme = ColorScheme.dark(
@@ -473,14 +477,15 @@ class VerticTheme {
         space: spacing.md,
       ),
       
-      // Custom Extensions hinzufügen
-      extensions: [
+      // Theme Extensions für einfachen Zugriff via context.colors, context.typography etc.
+      extensions: <ThemeExtension<dynamic>>[
         colors,
         typography,
         spacing,
         shadows,
         animations,
+        icons,
       ],
     );
   }
-} 
+}

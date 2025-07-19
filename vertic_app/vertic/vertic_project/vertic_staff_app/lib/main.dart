@@ -1,22 +1,22 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
-
 import 'package:test_server_client/test_server_client.dart';
+
 import 'auth/permission_provider.dart';
 import 'auth/staff_auth_provider.dart';
-import 'pages/login_page.dart';
+import 'config/environment.dart';
+import 'design_system/design_system.dart';
 import 'pages/admin/admin_dashboard_page.dart';
 import 'pages/customer_management_page.dart';
+import 'pages/login_page.dart';
 import 'pages/pos_system_page.dart';
 import 'pages/product_management_page.dart';
 import 'pages/statistics_page.dart';
-import 'pages/search_test_page.dart';
-import 'auth/permission_wrapper.dart';
-import 'config/environment.dart';
 import 'services/background_scanner_service.dart';
-import 'design_system/design_system.dart';
+import 'widgets/navigation/collapsible_nav_rail.dart';
 
 // Globale Client-Instanz (SessionManager entfernt!)
 late Client client;
@@ -109,7 +109,7 @@ class _MyAppState extends State<MyApp> {
       );
 
       // **PERFORMANCE-FIX:** Permissions nur bei Auth-Status-Änderung laden
-      void _handleAuthChange() {
+      void handleAuthChange() {
         if (staffAuth.isAuthenticated &&
             staffAuth.currentStaffUser != null &&
             !permissionProvider.isInitialized) {
@@ -128,10 +128,10 @@ class _MyAppState extends State<MyApp> {
       }
 
       // Initial check für bereits eingeloggte User
-      _handleAuthChange();
+      handleAuthChange();
 
       // Listener für zukünftige Auth-Änderungen
-      staffAuth.addListener(_handleAuthChange);
+      staffAuth.addListener(handleAuthChange);
     });
   }
 
@@ -166,8 +166,22 @@ class StaffHomePage extends StatefulWidget {
   State<StaffHomePage> createState() => _StaffHomePageState();
 }
 
+class _AppPage {
+  final String route;
+  final Widget page;
+  final String? requiredPermission;
+
+  const _AppPage({
+    required this.route,
+    required this.page,
+    this.requiredPermission,
+  });
+}
+
 class _StaffHomePageState extends State<StaffHomePage> {
   int _selectedIndex = 0;
+  bool _isNavExpanded = false;
+  String _selectedRoute = '/pos';
 
   @override
   void initState() {
@@ -184,39 +198,164 @@ class _StaffHomePageState extends State<StaffHomePage> {
 
       // ⚠️ COM-PORT STARTUP WARNING
       _checkComPortConnectionAndWarn(backgroundScanner);
-
-      // 🔐 PERMISSION-CACHE: Bei Permission-Änderung Navigation-Cache leeren
-      final permissionProvider = Provider.of<PermissionProvider>(
-        context,
-        listen: false,
-      );
-      permissionProvider.addListener(_onPermissionsChanged);
     });
-  }
-
-  /// **Callback bei Permission-Änderungen**
-  void _onPermissionsChanged() {
-    if (mounted) {
-      setState(() {
-        // Navigation-Cache leeren für Neu-Berechnung
-        _cachedNavigationItems = null;
-        _lastKnownPermissions = null;
-      });
-    }
   }
 
   @override
   void dispose() {
-    // Listener wieder entfernen
+    super.dispose();
+  }
+
+  void _handleNavigation(String route) {
+    final visiblePages = _getVisiblePages(context);
+    final newIndex = visiblePages.indexWhere((p) => p.route == route);
+
+    if (newIndex != -1) {
+      setState(() {
+        _selectedRoute = route;
+        _selectedIndex = newIndex;
+        if (!_isNavExpanded) {
+          _isNavExpanded = true;
+        }
+      });
+    }
+  }
+
+  List<_AppPage> _getVisiblePages(BuildContext context) {
     final permissionProvider = Provider.of<PermissionProvider>(
       context,
       listen: false,
     );
-    permissionProvider.removeListener(_onPermissionsChanged);
-    super.dispose();
+    final staffAuth = Provider.of<StaffAuthProvider>(context, listen: false);
+    final isSuperUser =
+        staffAuth.currentStaffUser?.staffLevel == StaffUserType.superUser;
+
+    final allPages = <_AppPage>[
+      const _AppPage(route: '/pos', page: PosSystemPage()),
+      const _AppPage(
+        route: '/products',
+        page: ProductManagementPage(),
+        requiredPermission: 'can_create_products',
+      ),
+      const _AppPage(route: '/statistics', page: StatisticsPage()),
+      _AppPage(
+        route: '/customers',
+        page: CustomerManagementPage(isSuperUser: isSuperUser),
+      ),
+      const _AppPage(
+        route: '/admin',
+        page: AdminDashboardPage(),
+        requiredPermission: 'can_access_admin_dashboard',
+      ),
+      if (kDebugMode)
+        const _AppPage(route: '/design', page: DesignSystemShowcasePage()),
+      _AppPage(route: '/settings', page: _buildSettingsPage(context)),
+    ];
+
+    return allPages.where((page) {
+      if (page.requiredPermission == null) return true;
+      return permissionProvider.hasPermission(page.requiredPermission!);
+    }).toList();
   }
 
-  /// **⚠️ COM-PORT STARTUP WARNING**
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<PermissionProvider>(
+      builder: (context, permissionProvider, child) {
+        final visiblePages = _getVisiblePages(context);
+        if (_selectedIndex >= visiblePages.length) {
+          _selectedIndex = 0;
+          _selectedRoute = visiblePages.isNotEmpty
+              ? visiblePages[0].route
+              : '/';
+        }
+
+        return Scaffold(
+          body: Listener(
+            onPointerDown: (event) {
+              // Close menu when clicking outside of it
+              if (_isNavExpanded) {
+                final RenderBox? navRailBox = context.findRenderObject() as RenderBox?;
+                if (navRailBox != null) {
+                  final navRailBounds = Offset.zero & Size(300, navRailBox.size.height);
+                  final clickPosition = event.localPosition;
+                  
+                  // If click is outside the nav rail area, close the menu
+                  if (!navRailBounds.contains(clickPosition)) {
+                    setState(() {
+                      _isNavExpanded = false;
+                    });
+                  }
+                }
+              }
+            },
+            child: Row(
+              children: [
+                CollapsibleNavRail(
+                  isExpanded: _isNavExpanded,
+                  selectedRoute: _selectedRoute,
+                  onRouteSelected: _handleNavigation,
+                  onExpansionChanged: () {
+                    setState(() {
+                      _isNavExpanded = !_isNavExpanded;
+                    });
+                  },
+                ),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(
+                  child: IndexedStack(
+                    index: _selectedIndex,
+                    children: visiblePages.map((p) => p.page).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          bottomNavigationBar: BottomNavigationBar(
+            items: const <BottomNavigationBarItem>[
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.shoppingCart),
+                label: 'POS',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.package),
+                label: 'Produkte',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.chartLine),
+                label: 'Statistik',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.users),
+                label: 'Kunden',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.archive),
+                label: 'Admin',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.paintBucket),
+                label: 'Design',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(LucideIcons.settings),
+                label: 'Settings',
+              ),
+            ],
+            currentIndex: _selectedIndex,
+            onTap: (index) {
+              if (index < visiblePages.length) {
+                final route = visiblePages[index].route;
+                _handleNavigation(route);
+              }
+            },
+            type: BottomNavigationBarType.fixed,
+          ),
+        );
+      },
+    );
+  }
+
   void _checkComPortConnectionAndWarn(BackgroundScannerService scanner) {
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
@@ -261,17 +400,13 @@ class _StaffHomePageState extends State<StaffHomePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('Später'),
             ),
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
-                // Navigiere zu Scanner-Einstellungen im Admin-Tab
-                setState(() => _selectedIndex = 3); // Admin Tab
-                // TODO: Automatisch Scanner-Einstellungen öffnen
+                _handleNavigation('/admin'); // Navigiert zum Admin-Bereich
               },
               icon: const Icon(Icons.settings),
               label: const Text('Scanner-Einstellungen'),
@@ -284,154 +419,6 @@ class _StaffHomePageState extends State<StaffHomePage> {
         );
       },
     );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<PermissionProvider>(
-      builder: (context, permissionProvider, _) {
-        return Scaffold(
-          body: IndexedStack(
-            index: _selectedIndex,
-            children: _buildPages(context),
-          ),
-          bottomNavigationBar: BottomNavigationBar(
-            items: _buildNavigationItems(context),
-            currentIndex: _selectedIndex,
-            onTap: (index) => setState(() => _selectedIndex = index),
-            type: BottomNavigationBarType.fixed,
-            selectedItemColor: Theme.of(context).primaryColor,
-            unselectedItemColor: Colors.grey,
-          ),
-        );
-      },
-    );
-  }
-
-  List<Widget> _buildPages(BuildContext context) {
-    // Dynamisch prüfen ob aktueller User SuperUser ist
-    final staffAuth = Provider.of<StaffAuthProvider>(context, listen: false);
-    final isSuperUser =
-        staffAuth.currentStaffUser?.staffLevel == StaffUserType.superUser;
-
-    final pages = <Widget>[
-      const PosSystemPage(),
-      PermissionWrapper(
-        requiredPermission: 'can_create_products',
-        child: const ProductManagementPage(),
-      ),
-      const StatisticsPage(),
-      const SearchTestPage(), // 🔍 Neue universelle Suchfunktion
-      CustomerManagementPage(isSuperUser: isSuperUser),
-      PermissionWrapper(
-        requiredPermission: 'can_access_admin_dashboard',
-        child: AdminDashboardPage(isSuperUser: isSuperUser),
-      ),
-      _buildSettingsPage(context),
-    ];
-
-    // Design System Showcase nur in Debug-Modus hinzufügen
-    if (kDebugMode) {
-      pages.insert(pages.length - 1, const DesignSystemShowcasePage());
-    }
-
-    return pages.where((widget) {
-      if (widget is PermissionWrapper) {
-        final permissionProvider = Provider.of<PermissionProvider>(
-          context,
-          listen: false,
-        );
-        return permissionProvider.hasPermission(widget.requiredPermission);
-      }
-      return true;
-    }).toList();
-  }
-
-  /// **🔐 OPTIMIZED NAVIGATION ITEMS mit Permission-Cache**
-  /// Cached Navigation-Items basierend auf Permissions
-  List<BottomNavigationBarItem>? _cachedNavigationItems;
-  Set<String>? _lastKnownPermissions;
-
-  List<BottomNavigationBarItem> _buildNavigationItems(BuildContext context) {
-    final permissionProvider = Provider.of<PermissionProvider>(
-      context,
-      listen: false,
-    );
-
-    // **PERFORMANCE-OPTIMIERUNG:** Nur bei Permission-Änderung neu berechnen
-    if (_cachedNavigationItems != null &&
-        _lastKnownPermissions != null &&
-        _lastKnownPermissions == permissionProvider.permissions) {
-      return _cachedNavigationItems!;
-    }
-
-    // Navigation Items neu berechnen
-    final items = <BottomNavigationBarItem>[
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.point_of_sale),
-        label: 'Verkauf',
-      ),
-    ];
-
-    // 🔐 RBAC: Artikelverwaltung nur mit Permission anzeigen
-    final hasProductPermission = permissionProvider.hasPermission(
-      'can_create_products',
-    );
-
-    if (hasProductPermission) {
-      items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.inventory_2),
-          label: 'Artikel',
-        ),
-      );
-    }
-
-    items.addAll([
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.insert_chart),
-        label: 'Statistik',
-      ),
-      const BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Suche'),
-      const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Kunden'),
-    ]);
-
-    // 🔐 RBAC: Admin-Dashboard nur mit Permission anzeigen
-    final hasAdminPermission = permissionProvider.hasPermission(
-      'can_access_admin_dashboard',
-    );
-
-    if (hasAdminPermission) {
-      items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.admin_panel_settings),
-          label: 'Admin',
-        ),
-      );
-    }
-
-    // Design System Showcase (nur in Debug-Modus)
-    if (kDebugMode) {
-      items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.palette),
-          label: 'Design',
-        ),
-      );
-    }
-
-    items.add(
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.settings),
-        label: 'Einstellungen',
-      ),
-    );
-
-    // Cache aktualisieren
-    _cachedNavigationItems = items;
-    _lastKnownPermissions = Set.from(permissionProvider.permissions);
-
-    return items;
   }
 
   Widget _buildSettingsPage(BuildContext context) {
