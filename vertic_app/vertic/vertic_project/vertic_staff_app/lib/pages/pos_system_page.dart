@@ -5,7 +5,19 @@ import 'package:test_server_client/test_server_client.dart';
 import '../services/background_scanner_service.dart';
 import '../services/device_id_service.dart';
 import '../auth/permission_provider.dart';
-import '../widgets/pos_search_section.dart';
+
+import '../widgets/pos_cart_widget.dart';
+import '../widgets/pos_multi_cart_tabs_widget.dart';
+import '../widgets/pos_category_navigation_widget.dart';
+import '../widgets/pos_product_grid_widget.dart';
+import '../widgets/pos_live_filter_results_widget.dart';
+import '../widgets/pos_product_card_widget.dart';
+import '../widgets/pos_ticket_card_widget.dart';
+import '../widgets/pos_session_stats_dialog_widget.dart';
+import '../widgets/pos_remove_cart_dialog_widget.dart';
+import '../widgets/pos_device_info_dialog_widget.dart';
+import '../widgets/pos_cart_validation_dialog_widget.dart';
+import '../widgets/pos_customer_info_display_widget.dart';
 
 /// **🛒 CART SESSION MODEL für Multi-Cart-System**
 class CartSession {
@@ -356,70 +368,9 @@ class _PosSystemPageState extends State<PosSystemPage> {
     return deviceId;
   }
 
-  /// **🔍 DEBUG: Geräte-Informationen anzeigen**
+  /// **🔍 DEBUG: Geräte-Informationen anzeigen - Verwendet eigenständiges Widget**
   Future<void> _showDeviceInfo() async {
-    try {
-      final deviceInfo = await DeviceIdService.instance.getDeviceInfo();
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('🖥️ Geräte-Information'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Geräte-ID: ${deviceInfo['deviceId']}'),
-                  const SizedBox(height: 8),
-                  Text('Plattform: ${deviceInfo['platform']}'),
-                  const SizedBox(height: 8),
-                  Text('Erstellt: ${deviceInfo['timestamp']}'),
-                  if (deviceInfo['hostName'] != null) ...[
-                    const SizedBox(height: 8),
-                    Text('Host: ${deviceInfo['hostName']}'),
-                  ],
-                  if (deviceInfo['computerName'] != null) ...[
-                    const SizedBox(height: 8),
-                    Text('Computer: ${deviceInfo['computerName']}'),
-                  ],
-                  if (deviceInfo['userName'] != null) ...[
-                    const SizedBox(height: 8),
-                    Text('User: ${deviceInfo['userName']}'),
-                  ],
-                  if (deviceInfo['osName'] != null) ...[
-                    const SizedBox(height: 8),
-                    Text('OS: ${deviceInfo['osName']}'),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await DeviceIdService.instance.resetDeviceId();
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('🔄 Geräte-ID zurückgesetzt'),
-                      backgroundColor: Colors.blue,
-                    ),
-                  );
-                },
-                child: const Text('Reset'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Fehler beim Anzeigen der Geräte-Info: $e');
-    }
+    await PosDeviceInfoDialogWidget.show(context);
   }
 
   /// **🔍 HILFSMETHODE: User nach ID finden**
@@ -576,54 +527,15 @@ class _PosSystemPageState extends State<PosSystemPage> {
     return false;
   }
 
-  /// **⚠️ VALIDIERUNGS-DIALOG: Warnt bei unbezahltem Warenkorb ohne Kunde**
+  /// **⚠️ VALIDIERUNGS-DIALOG: Warnt bei unbezahltem Warenkorb ohne Kunde - Verwendet eigenständiges Widget**
   void _showCartValidationDialog() {
-    showDialog(
+    PosCartValidationDialogWidget.show(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange, size: 28),
-            const SizedBox(width: 12),
-            const Text('Warenkorb nicht abgeschlossen'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Der aktuelle Warenkorb enthält ${_cartItems.length} unbezahlte Artikel im Wert von ${_calculateCartTotal().toStringAsFixed(2)}€.',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Um einen neuen Warenkorb zu erstellen, müssen Sie:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text('• Den Warenkorb bezahlen ODER'),
-            const Text('• Einen Kunden zuordnen (für Zurückstellung)'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // 🎯 FOCUS-FIX: Handled by CustomerSearchSection Widget
-            },
-            child: const Text('Verstanden'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // 🎯 FOCUS-FIX: Nach Dialog-Schließung Suchfeld fokussieren für Kundenzuordnung
-              // Auto-focus wird jetzt vom CustomerSearchSection Widget gehandhabt
-            },
-            child: const Text('Kunde zuordnen'),
-          ),
-        ],
-      ),
+      cartItems: _cartItems,
+      cartTotal: _calculateCartTotal(),
+      onCustomerAssignRequested: () {
+        // 🎯 FOCUS-FIX: Auto-focus wird vom CustomerSearchSection Widget gehandhabt
+      },
     );
   }
 
@@ -1792,13 +1704,31 @@ Future<void> _syncRemoveCartInBackground(
         );
       }
 
-      // 🆕 2. BACKEND-KATEGORIEN LADEN
-      final categories = await client.productManagement.getProductCategories(
-        onlyActive: true,
-      );
-      final products = await client.productManagement.getProducts(
-        onlyActive: true,
-      );
+      // 🆕 2. BACKEND-KATEGORIEN LADEN - MIT ROBUSTER FEHLERBEHANDLUNG
+      List<ProductCategory> categories = [];
+      List<Product> products = [];
+      
+      try {
+        categories = await client.productManagement.getProductCategories(
+          onlyActive: true,
+        );
+        debugPrint('✅ Kategorien erfolgreich geladen: ${categories.length}');
+      } catch (categoryError) {
+        debugPrint('⚠️ Fehler beim Laden der Kategorien: $categoryError');
+        debugPrint('🔄 Verwende Fallback: Leere Kategorie-Liste');
+        categories = []; // Fallback: Leere Liste
+      }
+      
+      try {
+        products = await client.productManagement.getProducts(
+          onlyActive: true,
+        );
+        debugPrint('✅ Produkte erfolgreich geladen: ${products.length}');
+      } catch (productError) {
+        debugPrint('⚠️ Fehler beim Laden der Produkte: $productError');
+        debugPrint('🔄 Verwende Fallback: Leere Produkt-Liste');
+        products = []; // Fallback: Leere Liste
+      }
 
       debugPrint('🏪 Backend-Daten geladen:');
       debugPrint('  • Kategorien: ${categories.length}');
@@ -2254,10 +2184,11 @@ Future<void> _syncRemoveCartInBackground(
           
           debugPrint('🎯 Gefunden: ${_filteredProducts.length} Produkte, ${_filteredCategories.length} Kategorien');
         } else {
-          // Reset bei leerer Suche
+          // 🧹 UX-FIX: Vollständiger Reset bei leerer Suche
           _filteredProducts = [];
           _filteredCategories = [];
           _categoryArticleCounts = {};
+          debugPrint('🧹 Live-Filter automatisch zurückgesetzt (Suchfeld leer)');
         }
       });
     });
@@ -2381,192 +2312,13 @@ Future<void> _syncRemoveCartInBackground(
     debugPrint('🧹 Live-Filter zurückgesetzt');
   }
 
-  /// **🔍 LIVE-FILTER ERGEBNISSE: Zeigt gefilterte Artikel an**
-  Widget _buildLiveFilterResults() {
-    if (_filteredProducts.isEmpty) {
-      return Expanded(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.search_off,
-                size: 64,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Keine Artikel gefunden für "$_liveSearchQuery"',
-                style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: _resetLiveFilter,
-                icon: const Icon(Icons.clear),
-                label: const Text('Filter zurücksetzen'),
-                style: TextButton.styleFrom(foregroundColor: Colors.orange),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // LIVE-FILTER HEADER
-            _buildLiveFilterHeader(),
-            
-            const SizedBox(height: 16),
-
-            // GEFILTERTE ARTIKEL-GRID
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 6,
-                  crossAxisSpacing: 6,
-                  mainAxisSpacing: 6,
-                  childAspectRatio: 0.9,
-                ),
-                itemCount: _filteredProducts.length,
-                itemBuilder: (context, index) {
-                  final product = _filteredProducts[index];
-                  return _buildProductCard(product);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// **📊 LIVE-FILTER HEADER: Zeigt Statistiken und Filter-Info**
-  Widget _buildLiveFilterHeader() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.filter_list,
-                color: Colors.orange.shade700,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Live-Filter Ergebnisse',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange.shade700,
-                  ),
-                ),
-              ),
-              // Reset-Button
-              IconButton(
-                onPressed: _resetLiveFilter,
-                icon: Icon(
-                  Icons.clear,
-                  color: Colors.orange.shade600,
-                ),
-                tooltip: 'Filter zurücksetzen',
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          
-          // Statistiken
-          Row(
-            children: [
-              Expanded(
-                child: _buildFilterStat(
-                  'Artikel gefunden',
-                  '${_filteredProducts.length}',
-                  Icons.shopping_bag,
-                  Colors.green,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildFilterStat(
-                  'Suchbegriff',
-                  '"$_liveSearchQuery"',
-                  Icons.search,
-                  Colors.blue,
-                ),
-              ),
-              if (_categoryArticleCounts.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildFilterStat(
-                    'Kategorien',
-                    '${_categoryArticleCounts.length}',
-                    Icons.category,
-                    Colors.purple,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// **📈 FILTER-STATISTIK: Einzelne Statistik-Karte**
-  Widget _buildFilterStat(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: color,
-              fontSize: 12,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 10,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
 
   // ==================== UI COMPONENTS ====================
 
+  /// **👤 KUNDEN-INFORMATIONS-ANZEIGE - Verwendet eigenständiges Widget**
   Widget _buildCustomerSearchSection() {
-    return PosSearchSection(
+    return PosCustomerInfoDisplayWidget(
       selectedCustomer: _selectedCustomer,
       autofocus: true,
       hintText: 'Kunde oder Produkt suchen (Scanner bereit)...',
@@ -2590,418 +2342,15 @@ Future<void> _syncRemoveCartInBackground(
     );
   }
 
-  Widget _buildCategoryTabs() {
-    return Consumer<PermissionProvider>(
-      builder: (context, permissionProvider, _) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 🆕 BREADCRUMB-NAVIGATION
-              if (_categoryBreadcrumb.isNotEmpty) _buildBreadcrumbNavigation(),
-
-              // Titel mit hierarchie-Info
-              Row(
-                children: [
-                  Text(
-                    _showingSubCategories
-                        ? 'Unterkategorien'
-                        : 'Artikel-Katalog',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_showingSubCategories &&
-                      _currentTopLevelCategory != null) ...[
-                    TextButton.icon(
-                      onPressed: _navigateToTopLevel,
-                      icon: const Icon(Icons.arrow_upward, size: 16),
-                      label: const Text('Zurück zur Übersicht'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.blue),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // 🆕 HIERARCHISCHE KATEGORIE-ANZEIGE
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Immer zuerst Top-Level anzeigen
-                  _buildTopLevelCategoryTabs(),
-
-                  // Dann Sub-Kategorien wenn verfügbar
-                  if (_showingSubCategories) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.subdirectory_arrow_right,
-                            size: 16,
-                            color: Colors.blue,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Unterkategorien:',
-                            style: TextStyle(
-                              color: Colors.blue[700],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    _buildSubCategoryTabs(),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// **🍞 BREADCRUMB-NAVIGATION**
-  Widget _buildBreadcrumbNavigation() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.navigation, size: 16, color: Colors.blue),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Wrap(
-              children: _categoryBreadcrumb.asMap().entries.map((entry) {
-                final index = entry.key;
-                final categoryName = entry.value;
-                final isLast = index == _categoryBreadcrumb.length - 1;
-
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (index > 0) ...[
-                      const Icon(
-                        Icons.chevron_right,
-                        size: 14,
-                        color: Colors.blue,
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    GestureDetector(
-                      onTap: isLast ? null : () => _navigateToBreadcrumb(index),
-                      child: Text(
-                        categoryName.length > 20
-                            ? '${categoryName.substring(0, 20)}...'
-                            : categoryName,
-                        style: TextStyle(
-                          color: isLast ? Colors.blue[800] : Colors.blue[600],
-                          fontWeight: isLast
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          decoration: isLast ? null : TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-          // Hierarchie-Level anzeigen
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'Level ${_categoryBreadcrumb.length - 1}',
-              style: const TextStyle(fontSize: 10, color: Colors.blue),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// **🏗️ TOP-LEVEL-KATEGORIEN ANZEIGEN**
-  Widget _buildTopLevelCategoryTabs() {
-    final visibleCategories = _categorizedItems.keys.toList();
-
-    debugPrint('🎨 UI-DEBUG: _buildTopLevelCategoryTabs()');
-    debugPrint(
-      '   📂 _categorizedItems.keys: ${_categorizedItems.keys.toList()}',
-    );
-    debugPrint(
-      '   📂 _categoryHierarchy.keys: ${_categoryHierarchy.keys.toList()}',
-    );
-    debugPrint('   📂 visibleCategories: $visibleCategories');
-    debugPrint('   🎯 _selectedCategory: $_selectedCategory');
-    debugPrint('   🎯 _currentTopLevelCategory: $_currentTopLevelCategory');
-
-    if (visibleCategories.isEmpty) {
-      debugPrint('❌ UI-DEBUG: Keine Kategorien verfügbar!');
-      return const Center(child: Text('Keine Kategorien verfügbar'));
-    }
-
-    return Container(
-      height: 60, // Reduziert von 85 auf 60 (ca. 30% kleiner)
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: visibleCategories.length,
-        itemBuilder: (context, index) {
-          final category = visibleCategories[index];
-          final hierarchyData = _categoryHierarchy[category];
-          final isSelected = _selectedCategory == category;
-          final hasSubCategories =
-              hierarchyData?['subCategories']?.isNotEmpty ?? false;
-
-          final itemCount = _categorizedItems[category]?.length ?? 0;
-          final subCategoryCount = hierarchyData?['subCategories']?.length ?? 0;
-
-          return Container(
-            margin: const EdgeInsets.only(right: 8), // Reduziert von 12 auf 8
-            child: Material(
-              elevation: isSelected ? 6 : 2,
-              borderRadius: BorderRadius.circular(
-                12,
-              ), // Reduziert von 16 auf 12
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _selectTopLevelCategory(category),
-                child: Container(
-                  width: 80, // Reduziert von 120 auf 80 (33% kleiner)
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6, // Reduziert von 8 auf 6
-                    vertical: 8, // Reduziert von 10 auf 8
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: isSelected
-                        ? (hierarchyData?['color'] ?? Colors.blue)
-                        : Colors.white,
-                    border: Border.all(
-                      color: hierarchyData?['color'] ?? Colors.blue,
-                      width: 1.5, // Reduziert von 2 auf 1.5
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Icon mit Hierarchie-Indikator
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Icon(
-                            hierarchyData?['icon'] ?? Icons.category,
-                            color: isSelected
-                                ? Colors.white
-                                : (hierarchyData?['color'] ?? Colors.blue),
-                            size: 16, // Weitere Reduktion von 18 auf 16
-                          ),
-                          if (hasSubCategories)
-                            Positioned(
-                              right: -2,
-                              bottom: -2,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 0.5,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.expand_more,
-                                  size: 4,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 1),
-                      // Kategorie-Name
-                      Flexible(
-                        child: Text(
-                          category.replaceAll(
-                            RegExp(r'^[^\s]+ '),
-                            '',
-                          ), // Emoji entfernen
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey[700],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 7, // Weitere Reduktion von 8 auf 7
-                            height: 1.0,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      // Kompakte Artikel-Anzahl mit Unterkategorie-Info
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '$itemCount',
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white70
-                                  : Colors.grey[500],
-                              fontSize: 6,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (hasSubCategories) ...[
-                            Text(
-                              '+$subCategoryCount',
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white70
-                                    : Colors.orange,
-                                fontSize: 5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// **📁 SUB-KATEGORIEN ANZEIGEN**
-  Widget _buildSubCategoryTabs() {
-    if (_currentTopLevelCategory == null) return const SizedBox();
-
-    final hierarchyData = _categoryHierarchy[_currentTopLevelCategory!];
-    final subCategories =
-        hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
-
-    return Container(
-      height: 60, // Reduziert von 85 auf 60
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: subCategories.length,
-        itemBuilder: (context, index) {
-          final subCategoryName = subCategories.keys.elementAt(index);
-          final subCategoryItems = subCategories[subCategoryName]!;
-          final isSelected = _selectedCategory == subCategoryName;
-
-          // Farbe vom Parent übernehmen
-          final parentColor = hierarchyData?['color'] ?? Colors.blue;
-
-          return Container(
-            margin: const EdgeInsets.only(right: 8), // Reduziert von 12 auf 8
-            child: Material(
-              elevation: isSelected ? 6 : 2,
-              borderRadius: BorderRadius.circular(
-                12,
-              ), // Reduziert von 16 auf 12
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _selectSubCategory(subCategoryName),
-                child: Container(
-                  width: 70, // Reduziert von 100 auf 70 (30% kleiner)
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6, // Reduziert von 8 auf 6
-                    vertical: 8, // Reduziert von 10 auf 8
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: isSelected ? parentColor : Colors.white,
-                    border: Border.all(
-                      color: parentColor.withOpacity(0.7),
-                      width: 1.5, // Reduziert von 2 auf 1.5
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Sub-Kategorie Icon
-                      Icon(
-                        Icons.subdirectory_arrow_right,
-                        color: isSelected ? Colors.white : parentColor,
-                        size: 16, // Reduziert von 20 auf 16 (20% kleiner)
-                      ),
-                      const SizedBox(height: 3), // Reduziert von 4 auf 3
-                      // Sub-Kategorie Name
-                      Flexible(
-                        child: Text(
-                          subCategoryName.replaceAll(RegExp(r'^[^\s]+ '), ''),
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey[700],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 8, // Reduziert von 10 auf 8
-                            height: 1.1,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      // Artikel-Anzahl
-                      const SizedBox(height: 1),
-                      Text(
-                        '${subCategoryItems.length}',
-                        style: TextStyle(
-                          color: isSelected ? Colors.white70 : Colors.grey[500],
-                          fontSize: 7, // Reduziert von 9 auf 7
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   /// **🎯 NAVIGATION: Top-Level-Kategorie auswählen**
   void _selectTopLevelCategory(String categoryName) {
     debugPrint('🎯 Top-Level-Kategorie ausgewählt: $categoryName');
+
+    // 🧹 UX-FIX: Live-Filter zurücksetzen bei Kategorie-Navigation
+    if (_isLiveSearchActive) {
+      _resetLiveFilter();
+      debugPrint('🧹 Live-Filter automatisch zurückgesetzt bei Kategorie-Wechsel');
+    }
 
     // Prüfe ob diese Kategorie Unterkategorien hat
     final hierarchyData = _categoryHierarchy[categoryName];
@@ -3044,6 +2393,12 @@ Future<void> _syncRemoveCartInBackground(
       '🔍 DEBUG: _navigateToSubCategories aufgerufen für: $topLevelCategory',
     );
 
+    // 🧹 UX-FIX: Live-Filter zurücksetzen bei Kategorie-Navigation
+    if (_isLiveSearchActive) {
+      _resetLiveFilter();
+      debugPrint('🧹 Live-Filter automatisch zurückgesetzt bei Sub-Kategorie-Navigation');
+    }
+
     final hierarchyData = _categoryHierarchy[topLevelCategory];
     debugPrint('🔍 DEBUG: hierarchyData gefunden: ${hierarchyData != null}');
 
@@ -3070,6 +2425,12 @@ Future<void> _syncRemoveCartInBackground(
 
   /// **📁 NAVIGATION: Sub-Kategorie auswählen**
   void _selectSubCategory(String subCategoryName) {
+    // 🧹 UX-FIX: Live-Filter zurücksetzen bei Kategorie-Navigation
+    if (_isLiveSearchActive) {
+      _resetLiveFilter();
+      debugPrint('🧹 Live-Filter automatisch zurückgesetzt bei Sub-Kategorie-Auswahl');
+    }
+
     setState(() {
       _selectedCategory = subCategoryName;
       if (_categoryBreadcrumb.length >= 2) {
@@ -3083,6 +2444,12 @@ Future<void> _syncRemoveCartInBackground(
 
   /// **🏠 NAVIGATION: Zurück zu Top-Level**
   void _navigateToTopLevel() {
+    // 🧹 UX-FIX: Live-Filter zurücksetzen bei Kategorie-Navigation
+    if (_isLiveSearchActive) {
+      _resetLiveFilter();
+      debugPrint('🧹 Live-Filter automatisch zurückgesetzt bei Top-Level-Navigation');
+    }
+
     setState(() {
       _showingSubCategories = false;
       _selectedCategory = _currentTopLevelCategory;
@@ -3102,875 +2469,55 @@ Future<void> _syncRemoveCartInBackground(
     }
   }
 
-  Widget _buildProductGrid() {
-    // 🔍 LIVE-FILTER: Prüfe ob Live-Filter aktiv ist
-    if (_isLiveSearchActive && _filteredProducts.isNotEmpty) {
-      return _buildLiveFilterResults();
-    }
 
-    // 🆕 HIERARCHISCHE ITEM-AUSWAHL (Standard-Verhalten)
-    List<dynamic> items = [];
 
-    debugPrint('🛒 UI-DEBUG: _buildProductGrid()');
-    debugPrint('   📂 _showingSubCategories: $_showingSubCategories');
-    debugPrint('   📂 _currentTopLevelCategory: $_currentTopLevelCategory');
-    debugPrint('   📂 _selectedCategory: $_selectedCategory');
-    debugPrint('   🔍 _isLiveSearchActive: $_isLiveSearchActive');
-
-    if (_showingSubCategories && _currentTopLevelCategory != null) {
-      // Sub-Kategorie-Items anzeigen
-      final hierarchyData = _categoryHierarchy[_currentTopLevelCategory!];
-      final subCategories =
-          hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
-      items = subCategories[_selectedCategory] ?? [];
-      debugPrint('   📦 Sub-Kategorie-Items: ${items.length}');
-    } else {
-      // Top-Level-Items anzeigen
-      items = _categorizedItems[_selectedCategory] ?? [];
-      debugPrint('   📦 Top-Level-Items: ${items.length}');
-    }
-
-    debugPrint('   🛒 Finale Items zum Anzeigen: ${items.length}');
-
-    if (items.isEmpty) {
-      return Expanded(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                _showingSubCategories
-                    ? Icons.subdirectory_arrow_right
-                    : Icons.category,
-                size: 64,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _showingSubCategories
-                    ? 'Keine Artikel in dieser Unterkategorie verfügbar'
-                    : 'Keine Artikel in $_selectedCategory verfügbar',
-                style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              if (_showingSubCategories) ...[
-                TextButton.icon(
-                  onPressed: _navigateToTopLevel,
-                  icon: const Icon(Icons.arrow_upward),
-                  label: const Text('Zurück zur Übersicht'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.blue),
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 🆕 HIERARCHIE-INFO-HEADER
-            if (_showingSubCategories) _buildSubCategoryHeader(),
-
-            // ARTIKEL-GRID
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 6, // Erhöht von 4 auf 6 für kleinere Buttons
-                  crossAxisSpacing: 6, // Reduziert von 8 auf 6
-                  mainAxisSpacing: 6, // Reduziert von 8 auf 6
-                  childAspectRatio: 0.9, // Leicht angepasst von 1.0 auf 0.9
-                ),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  if (item is TicketType) {
-                    return _buildTicketCard(item);
-                  } else if (item is Product) {
-                    return _buildProductCard(item);
-                  }
-                  return const SizedBox();
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// **📁 SUB-KATEGORIE HEADER mit Statistiken**
-  Widget _buildSubCategoryHeader() {
-    if (_currentTopLevelCategory == null || _selectedCategory == null) {
-      return const SizedBox();
-    }
-
-    final hierarchyData = _categoryHierarchy[_currentTopLevelCategory!];
-    final subCategories =
-        hierarchyData?['subCategories'] as Map<String, List<dynamic>>? ?? {};
-    final currentItems = subCategories[_selectedCategory] ?? [];
-    final parentColor = hierarchyData?['color'] ?? Colors.blue;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: parentColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: parentColor.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.subdirectory_arrow_right, color: parentColor, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _selectedCategory!.replaceAll(RegExp(r'^[^\s]+ '), ''),
-                  style: TextStyle(
-                    color: parentColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  '${currentItems.length} Artikel in dieser Unterkategorie',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          // Schnell-Navigation zu anderen Sub-Kategorien
-          if (subCategories.length > 1) ...[
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_horiz, color: parentColor),
-              tooltip: 'Andere Unterkategorien',
-              onSelected: (subCategory) => _selectSubCategory(subCategory),
-              itemBuilder: (context) {
-                return subCategories.keys
-                    .where((key) => key != _selectedCategory)
-                    .map((subCategory) {
-                      final itemCount = subCategories[subCategory]?.length ?? 0;
-                      return PopupMenuItem<String>(
-                        value: subCategory,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.subdirectory_arrow_right,
-                              size: 16,
-                              color: parentColor,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                subCategory.replaceAll(RegExp(r'^[^\s]+ '), ''),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: parentColor.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '$itemCount',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: parentColor,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    })
-                    .toList();
-              },
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
+  /// **🎫 TICKET CARD BUILDER: Verwendet eigenständiges Widget**
   Widget _buildTicketCard(TicketType ticketType) {
     // Null-Safety: Fallback wenn keine Kategorie ausgewählt
     final selectedCat =
         _selectedCategory ?? _currentTopLevelCategory ?? 'Vertic Universal';
     final categoryData = _getCategoryDataByName(selectedCat);
 
-    return Material(
-      elevation: 2, // Reduziert von 3 auf 2
-      borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {
-          _addIntelligentTicketToCart(ticketType);
-        },
-        child: Container(
-          padding: const EdgeInsets.all(6), // Reduziert von 8 auf 6
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                categoryData['color'].withOpacity(0.1),
-                categoryData['color'].withOpacity(0.05),
-              ],
-            ),
-            border: Border.all(color: categoryData['color'].withOpacity(0.3)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                categoryData['icon'],
-                color: categoryData['color'],
-                size: 18, // Reduziert von 24 auf 18 (25% kleiner)
-              ),
-              const SizedBox(height: 3), // Reduziert von 4 auf 3
-              Text(
-                ticketType.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 9, // Reduziert von 11 auf 9 (ca. 20% kleiner)
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${ticketType.defaultPrice.toStringAsFixed(2)} €',
-                style: TextStyle(
-                  color: categoryData['color'],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10, // Reduziert von 13 auf 10 (ca. 25% kleiner)
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return PosTicketCardWidget(
+      ticketType: ticketType,
+      categoryData: categoryData,
+      onTap: () {
+        _addIntelligentTicketToCart(ticketType);
+      },
     );
   }
 
+  /// **🛒 PRODUCT CARD BUILDER: Verwendet eigenständiges Widget**
   Widget _buildProductCard(Product product) {
     // Null-Safety: Fallback wenn keine Kategorie ausgewählt
     final selectedCat =
         _selectedCategory ?? _currentTopLevelCategory ?? 'Vertic Universal';
     final categoryData = _getCategoryDataByName(selectedCat);
 
-    return Material(
-      elevation: 2, // Reduziert von 3 auf 2
-      borderRadius: BorderRadius.circular(8), // Reduziert von 12 auf 8
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {
-          _addItemToCart('product', product.id!, product.name, product.price);
-        },
-        child: Container(
-          padding: const EdgeInsets.all(6), // Reduziert von 8 auf 6
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                categoryData['color'].withOpacity(0.1),
-                categoryData['color'].withOpacity(0.05),
-              ],
-            ),
-            border: Border.all(color: categoryData['color'].withOpacity(0.3)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                categoryData['icon'],
-                color: categoryData['color'],
-                size: 18, // Reduziert von 24 auf 18 (25% kleiner)
-              ),
-              const SizedBox(height: 3), // Reduziert von 4 auf 3
-              Text(
-                product.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 9, // Reduziert von 11 auf 9 (ca. 20% kleiner)
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${product.price.toStringAsFixed(2)} €',
-                style: TextStyle(
-                  color: categoryData['color'],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10, // Reduziert von 13 auf 10 (ca. 25% kleiner)
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return PosProductCardWidget(
+      product: product,
+      categoryData: categoryData,
+      onTap: () {
+        _addItemToCart('product', product.id!, product.name, product.price);
+      },
     );
   }
 
-  Widget _buildShoppingCart() {
-    // 🛒 NEUE MULTI-CART-LOGIK: Verwende aktuellen Warenkorb
-    final currentCart =
-        _activeCarts.isNotEmpty &&
-            _currentCartIndex >= 0 &&
-            _currentCartIndex < _activeCarts.length
-        ? _activeCarts[_currentCartIndex]
-        : null;
 
-    final cartItems = currentCart?.items ?? [];
-    final total = currentCart?.total ?? 0.0;
-    final cartDisplayName = currentCart?.displayName ?? 'Kein Warenkorb';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header mit aktuellem Warenkorb-Namen
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.shopping_cart, color: Colors.grey[700]),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Warenkorb',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          cartDisplayName.length > 20
-                              ? '${cartDisplayName.substring(0, 20)}...'
-                              : cartDisplayName,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (cartItems.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () => _clearCurrentCart(),
-                    icon: const Icon(Icons.clear_all, size: 18),
-                    label: const Text('Leeren'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  ),
-              ],
-            ),
-          ),
 
-          // Cart Items
-          Expanded(
-            child: cartItems.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.shopping_cart_outlined,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Warenkorb ist leer',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Fügen Sie Artikel aus dem Katalog hinzu',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: cartItems.length,
-                    itemBuilder: (context, index) {
-                      final item = cartItems[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.itemName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () =>
-                                        _removeItemFromCurrentCart(item.id!),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${item.unitPrice.toStringAsFixed(2)} €',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.remove_circle),
-                                        onPressed: item.quantity > 1
-                                            ? () =>
-                                                  _updateCurrentCartItemQuantity(
-                                                    item.id!,
-                                                    item.quantity - 1,
-                                                  )
-                                            : null,
-                                        color: Colors.red,
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[100],
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '${item.quantity}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.add_circle),
-                                        onPressed: () =>
-                                            _updateCurrentCartItemQuantity(
-                                              item.id!,
-                                              item.quantity + 1,
-                                            ),
-                                        color: Colors.green,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'Gesamt: ${item.totalPrice.toStringAsFixed(2)} €',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
 
-          // Total and Checkout
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(12),
-              ),
-              border: Border(top: BorderSide(color: Colors.grey.shade300)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Gesamtsumme:',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '${total.toStringAsFixed(2)} €',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: cartItems.isNotEmpty ? _performCheckout : null,
-                    icon: const Icon(Icons.payment),
-                    label: const Text(
-                      'Checkout',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// **🎨 VERBESSERTE METHODE: Multi-Cart-Tabs mit besserer Sichtbarkeit**
-  Widget _buildTopCartTabs() {
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue[800]!, Colors.blue[600]!],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // 🛒 CART-TABS MIT HORIZONTALEM SCROLLING
-          Expanded(
-            child: _activeCarts.isEmpty
-                ? Container(
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'Noch keine Warenkörbe',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: _activeCarts.length,
-                    itemBuilder: (context, index) {
-                      final cart = _activeCarts[index];
-                      final isActive = index == _currentCartIndex;
-                      final isOnHold = cart.isOnHold;
-
-                      return GestureDetector(
-                        onTap: () => _switchToCart(index),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 3,
-                            vertical: 4,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          constraints: const BoxConstraints(
-                            maxWidth: 160,
-                            minHeight: 36,
-                            maxHeight: 40,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? Colors.white
-                                : isOnHold
-                                ? Colors.amber[600]
-                                : Colors.white.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isActive
-                                  ? Colors.blue[300]!
-                                  : isOnHold
-                                  ? Colors.amber[700]!
-                                  : Colors.white.withOpacity(0.5),
-                              width: 2,
-                            ),
-                            boxShadow: isActive
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.blue.withOpacity(0.3),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Status-Icon
-                              Icon(
-                                isOnHold
-                                    ? Icons.pause_circle_filled
-                                    : cart.customer != null
-                                    ? Icons.person
-                                    : Icons.shopping_cart,
-                                size: 16,
-                                color: isActive
-                                    ? Colors.blue[700]
-                                    : isOnHold
-                                    ? Colors.white
-                                    : Colors.grey[700],
-                              ),
-                              const SizedBox(width: 6),
-                              // Cart-Name & Info
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    cart.displayName.length > 12
-                                        ? '${cart.displayName.substring(0, 12)}...'
-                                        : cart.displayName,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: isActive
-                                          ? Colors.blue[800]
-                                          : isOnHold
-                                          ? Colors.white
-                                          : Colors.grey[800],
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                  if (cart.items.isNotEmpty)
-                                    Text(
-                                      '${cart.items.length} • ${cart.total.toStringAsFixed(2)}€',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: isActive
-                                            ? Colors.blue[600]
-                                            : isOnHold
-                                            ? Colors.white70
-                                            : Colors.grey[600],
-                                        height: 1.1,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              // 🔧 X-Button für ALLE Warenkörbe (auch aktive), aber nicht bei nur einem Warenkorb
-                              if (_activeCarts.length > 1) ...[
-                                const SizedBox(width: 4),
-                                GestureDetector(
-                                  onTap: () => _showRemoveCartDialog(index),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 14,
-                                    color: isActive
-                                        ? Colors.red[600]!
-                                        : isOnHold
-                                        ? Colors.white
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          // 🛒 AKTIONS-BUTTONS
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Neuer Warenkorb (mit Validierung)
-                SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: IconButton(
-                    icon: const Icon(Icons.add, color: Colors.white, size: 20),
-                    onPressed: () => _createNewCart(),
-                    tooltip: 'Neuer Warenkorb',
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// **🗑️ VERBESSERTE METHODE: Intelligente Warenkorb-Entfernung**
+  /// **🗑️ VERBESSERTE METHODE: Intelligente Warenkorb-Entfernung - Verwendet eigenständiges Widget**
   void _showRemoveCartDialog(int index) {
     if (index < 0 || index >= _activeCarts.length) return;
 
     final cart = _activeCarts[index];
 
-    // 🧹 INTELLIGENTE LOGIK: Leere Warenkörbe ohne Bestätigung entfernen
-    final hasItems = cart.items.isNotEmpty;
-    final hasCustomer = cart.customer != null;
-
-    // Wenn Warenkorb leer und kein Kunde zugeordnet → direkt entfernen
-    if (!hasItems && !hasCustomer) {
-      debugPrint(
-        '🧹 Leerer Warenkorb wird direkt entfernt: ${cart.displayName}',
-      );
-      _removeCart(index);
-      return;
-    }
-
-    // Andernfalls: Bestätigung anfordern bei Inhalt oder Kundenzuordnung
-    showDialog(
+    PosRemoveCartDialogWidget.show(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Warenkorb entfernen'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Möchten Sie den Warenkorb "${cart.displayName}" wirklich entfernen?',
-            ),
-            if (hasItems) ...[
-              const SizedBox(height: 8),
-              Text(
-                '⚠️ Warenkorb enthält ${cart.items.length} Artikel (${cart.total.toStringAsFixed(2)} €)',
-                style: TextStyle(
-                  color: Colors.orange[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-            if (hasCustomer) ...[
-              const SizedBox(height: 8),
-              Text(
-                '👤 Warenkorb ist ${cart.customer!.firstName} ${cart.customer!.lastName} zugeordnet',
-                style: TextStyle(
-                  color: Colors.blue[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Abbrechen'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _removeCart(index);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Entfernen'),
-          ),
-        ],
-      ),
+      cartIndex: index,
+      cart: cart,
+      onRemoveConfirmed: () => _removeCart(index),
     );
   }
 
@@ -4099,7 +2646,13 @@ Future<void> _syncRemoveCartInBackground(
         // 🛒 CART-TABS IN APPBAR BOTTOM
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
-          child: _buildTopCartTabs(),
+          child: PosMultiCartTabsWidget(
+            activeCarts: _activeCarts,
+            currentCartIndex: _currentCartIndex,
+            onSwitchToCart: _switchToCart,
+            onCreateNewCart: () => _createNewCart(),
+            onShowRemoveCartDialog: _showRemoveCartDialog,
+          ),
         ),
       ),
       backgroundColor: Colors.grey[100],
@@ -4140,7 +2693,40 @@ Future<void> _syncRemoveCartInBackground(
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: [_buildCategoryTabs(), _buildProductGrid()],
+                        children: [
+                          PosCategoryNavigationWidget(
+                            categoryBreadcrumb: _categoryBreadcrumb,
+                            showingSubCategories: _showingSubCategories,
+                            currentTopLevelCategory: _currentTopLevelCategory,
+                            selectedCategory: _selectedCategory,
+                            categoryHierarchy: _categoryHierarchy,
+                            onNavigateToTopLevel: _navigateToTopLevel,
+                            onNavigateToBreadcrumb: _navigateToBreadcrumb,
+                            onSelectTopLevelCategory: _selectTopLevelCategory,
+                            onNavigateToSubCategories: _navigateToSubCategories,
+                            onSelectSubCategory: _selectSubCategory,
+                          ),
+                          PosProductGridWidget(
+                            isLiveSearchActive: _isLiveSearchActive,
+                            filteredProducts: _filteredProducts,
+                            showingSubCategories: _showingSubCategories,
+                            currentTopLevelCategory: _currentTopLevelCategory,
+                            selectedCategory: _selectedCategory,
+                            categorizedItems: _categorizedItems,
+                            categoryHierarchy: _categoryHierarchy,
+                            onNavigateToTopLevel: _navigateToTopLevel,
+                            onSelectSubCategory: _selectSubCategory,
+                            buildLiveFilterResults: () => PosLiveFilterResultsWidget(
+                              filteredProducts: _filteredProducts.cast<Product>(),
+                              liveSearchQuery: _liveSearchQuery,
+                              categoryArticleCounts: _categoryArticleCounts,
+                              onResetLiveFilter: _resetLiveFilter,
+                              buildProductCard: _buildProductCard,
+                            ),
+                            buildTicketCard: _buildTicketCard,
+                            buildProductCard: _buildProductCard,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -4150,7 +2736,14 @@ Future<void> _syncRemoveCartInBackground(
                     flex: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(12.0),
-                      child: _buildShoppingCart(),
+                      child: PosCartWidget(
+                        cartItems: _cartItems,
+                        selectedCustomer: _selectedCustomer,
+                        onClearCart: _clearCurrentCart,
+                        onRemoveItem: _removeItemFromCurrentCart,
+                        onUpdateQuantity: _updateCurrentCartItemQuantity,
+                        onCheckout: _performCheckout,
+                      ),
                     ),
                   ),
                 ],
@@ -4159,84 +2752,9 @@ Future<void> _syncRemoveCartInBackground(
     );
   }
 
-  /// **📊 DEBUG: Session-Statistiken anzeigen**
+  /// **📊 DEBUG: Session-Statistiken anzeigen - Verwendet eigenständiges Widget**
   Future<void> _showSessionStats() async {
-    try {
-      final client = Provider.of<Client>(context, listen: false);
-      final stats = await client.pos.getSessionStats();
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('📊 Session-Statistiken'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('📋 Total Sessions: ${stats['total']}'),
-                  const SizedBox(height: 8),
-                  Text('✅ Aktive Sessions: ${stats['active']}'),
-                  Text('💰 Bezahlte Sessions: ${stats['completed']}'),
-                  Text('🗑️ Abandoned Sessions: ${stats['abandoned']}'),
-                  const SizedBox(height: 8),
-                  Text('👤 Mit Kunde: ${stats['with_customer']}'),
-                  Text('📦 Mit Artikeln: ${stats['with_items']}'),
-                  Text('🔄 Leer: ${stats['empty']}'),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Schließen'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.of(context).pop();
-                  // Backend-Bereinigung ausführen
-                  try {
-                    final cleanupStats = await client.pos
-                        .cleanupSessionsWithBusinessLogic();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '✅ Bereinigung: ${cleanupStats['deleted_from_db']} Sessions gelöscht',
-                          ),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('❌ Fehler: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('🧹 Bereinigen'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Fehler beim Laden der Statistiken: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    await PosSessionStatsDialogWidget.show(context);
   }
 
   // ==================== SEARCH FUNCTIONALITY ====================

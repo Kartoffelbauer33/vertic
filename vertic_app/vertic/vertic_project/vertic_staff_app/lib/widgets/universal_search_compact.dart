@@ -63,6 +63,8 @@ class _UniversalSearchCompactState extends State<UniversalSearchCompact> {
         _results = [];
         _showResults = false;
       });
+      // 🧹 UX-FIX: Callback auch bei leerer Suche aufrufen für Live-Filter-Reset
+      widget.onQueryChanged?.call(query.trim());
       return;
     }
 
