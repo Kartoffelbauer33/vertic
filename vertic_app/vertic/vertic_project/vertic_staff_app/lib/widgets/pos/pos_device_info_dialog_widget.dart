@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/device_id_service.dart';
+import '../../services/device_id_service.dart';
 
 /// **🖥️ POS DEVICE INFO DIALOG WIDGET**
 ///

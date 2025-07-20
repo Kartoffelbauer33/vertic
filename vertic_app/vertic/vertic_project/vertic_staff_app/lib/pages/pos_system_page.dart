@@ -6,18 +6,18 @@ import '../services/background_scanner_service.dart';
 import '../services/device_id_service.dart';
 import '../auth/permission_provider.dart';
 
-import '../widgets/pos_cart_widget.dart';
-import '../widgets/pos_multi_cart_tabs_widget.dart';
-import '../widgets/pos_category_navigation_widget.dart';
-import '../widgets/pos_product_grid_widget.dart';
-import '../widgets/pos_live_filter_results_widget.dart';
-import '../widgets/pos_product_card_widget.dart';
-import '../widgets/pos_ticket_card_widget.dart';
-import '../widgets/pos_session_stats_dialog_widget.dart';
-import '../widgets/pos_remove_cart_dialog_widget.dart';
-import '../widgets/pos_device_info_dialog_widget.dart';
-import '../widgets/pos_cart_validation_dialog_widget.dart';
-import '../widgets/pos_customer_info_display_widget.dart';
+import '../widgets/pos/pos_cart_widget.dart';
+import '../widgets/pos/pos_multi_cart_tabs_widget.dart';
+import '../widgets/pos/pos_category_navigation_widget.dart';
+import '../widgets/pos/pos_product_grid_widget.dart';
+import '../widgets/pos/pos_live_filter_results_widget.dart';
+import '../widgets/pos/pos_product_card_widget.dart';
+import '../widgets/pos/pos_ticket_card_widget.dart';
+import '../widgets/pos/pos_session_stats_dialog_widget.dart';
+import '../widgets/pos/pos_remove_cart_dialog_widget.dart';
+import '../widgets/pos/pos_device_info_dialog_widget.dart';
+import '../widgets/pos/pos_cart_validation_dialog_widget.dart';
+import '../widgets/pos/pos_customer_info_display_widget.dart';
 
 /// **🛒 CART SESSION MODEL für Multi-Cart-System**
 class CartSession {

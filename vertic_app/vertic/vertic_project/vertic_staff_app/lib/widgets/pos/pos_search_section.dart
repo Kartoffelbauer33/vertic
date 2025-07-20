@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:test_server_client/test_server_client.dart';
-import 'universal_search_compact.dart';
+import '../universal_search_compact.dart';
 
 /// **🏪 POS-SYSTEM SUCHSEKTION**
 ///

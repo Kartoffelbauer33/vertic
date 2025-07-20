@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../pages/pos_system_page.dart';
+import '../../pages/pos_system_page.dart';
 
 /// **🗑️ POS REMOVE CART DIALOG WIDGET**
 ///

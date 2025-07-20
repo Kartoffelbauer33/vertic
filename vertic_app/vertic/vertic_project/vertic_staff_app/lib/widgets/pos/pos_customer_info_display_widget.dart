@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:test_server_client/test_server_client.dart';
-import '../widgets/pos_search_section.dart';
+import 'pos_search_section.dart';
 
 /// **👤 POS CUSTOMER INFO DISPLAY WIDGET**
 ///

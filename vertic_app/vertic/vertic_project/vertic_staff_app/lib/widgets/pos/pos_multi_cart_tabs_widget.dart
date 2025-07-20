@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:test_server_client/test_server_client.dart';
-import '../pages/pos_system_page.dart' show CartSession;
+import '../../pages/pos_system_page.dart' show CartSession;
 
 /// **🎨 POS MULTI-CART-TABS WIDGET - Reine UI-Komponente für Warenkorb-Tabs**
 /// 
