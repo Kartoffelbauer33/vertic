@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../auth/staff_auth_provider.dart';
 import '../auth/permission_provider.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,12 +17,59 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
+  
+  // 🚀 Development Auto-Login Configuration
+  static const bool _enableAutoLogin = kDebugMode; // Nur in Debug-Mode aktiv
+  static const String _devUsername = 'superuser';
+  static const String _devPassword = 'super123';
+  bool _autoLoginTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // 🎯 Auto-Login für Entwicklung
+    if (_enableAutoLogin && !_autoLoginTriggered) {
+      _autoLoginTriggered = true;
+      // Kurze Verzögerung für UI-Aufbau, dann Auto-Fill und Login
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _performAutoLogin();
+      });
+    }
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  /// 🚀 Automatischer Login für Entwicklungszwecke
+  /// Simuliert echte Benutzereingabe und durchläuft komplette Auth-Logik
+  Future<void> _performAutoLogin() async {
+    if (!_enableAutoLogin || !mounted) return;
+    
+    // Kleine Verzögerung für bessere UX (sichtbare Auto-Fill)
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    if (!mounted) return;
+    
+    // Credentials in Controller setzen (simuliert Tastatureingabe)
+    _emailController.text = _devUsername;
+    _passwordController.text = _devPassword;
+    
+    // UI aktualisieren
+    setState(() {});
+    
+    // Weitere kurze Verzögerung, dann Login ausführen
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    if (!mounted) return;
+    
+    // Echten Login-Prozess starten (komplette Validierung & Auth)
+    debugPrint('🚀 Auto-Login wird ausgeführt (Dev-Mode)');
+    await _handleLogin();
   }
 
   Future<void> _handleLogin() async {
@@ -247,38 +295,57 @@ class _LoginPageState extends State<LoginPage> {
 
                             const SizedBox(height: 24),
 
-                            // 💡 Demo-Credentials Hint
+                            // 💡 Demo-Credentials Hint mit Auto-Login Status
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
+                                color: _enableAutoLogin 
+                                    ? Colors.green.withValues(alpha: 0.1)
+                                    : Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                    color: Colors.blue.withValues(alpha: 0.3)),
+                                    color: _enableAutoLogin 
+                                        ? Colors.green.withValues(alpha: 0.3)
+                                        : Colors.blue.withValues(alpha: 0.3)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Row(
+                                  Row(
                                     children: [
-                                      Icon(Icons.info,
-                                          color: Colors.blue, size: 16),
-                                      SizedBox(width: 8),
+                                      Icon(
+                                        _enableAutoLogin 
+                                            ? Icons.flash_auto 
+                                            : Icons.info,
+                                        color: _enableAutoLogin 
+                                            ? Colors.green 
+                                            : Colors.blue, 
+                                        size: 16
+                                      ),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        'Demo-Zugang:',
+                                        _enableAutoLogin 
+                                            ? 'Auto-Login (Dev-Mode):'
+                                            : 'Demo-Zugang:',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.blue,
+                                          color: _enableAutoLogin 
+                                              ? Colors.green 
+                                              : Colors.blue,
                                         ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Benutzername: superuser\nPasswort: super123',
+                                    _enableAutoLogin 
+                                        ? 'Automatische Anmeldung als: $_devUsername\nVollständige Auth-Logik wird durchlaufen'
+                                        : 'Benutzername: superuser\nPasswort: super123',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.blue[700],
+                                      color: _enableAutoLogin 
+                                          ? Colors.green[700]
+                                          : Colors.blue[700],
                                       fontFamily: 'monospace',
                                     ),
                                   ),
