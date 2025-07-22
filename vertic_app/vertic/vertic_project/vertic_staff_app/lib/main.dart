@@ -242,9 +242,12 @@ class _StaffHomePageState extends State<StaffHomePage> {
         route: '/customers',
         page: CustomerManagementPage(isSuperUser: isSuperUser),
       ),
-      const _AppPage(
+      _AppPage(
         route: '/admin',
-        page: AdminDashboardPage(),
+        page: AdminDashboardPage(
+          isSuperUser: isSuperUser,
+          hallId: staffAuth.currentStaffUser?.hallId,
+        ),
         requiredPermission: 'can_access_admin_dashboard',
       ),
       if (kDebugMode)
