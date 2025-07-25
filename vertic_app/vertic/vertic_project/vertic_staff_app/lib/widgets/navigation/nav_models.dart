@@ -1,3 +1,5 @@
+// vertic_staff_app/lib/widgets/navigation/nav_models.dart
+
 import 'package:flutter/material.dart';
 
 class NavItem {
