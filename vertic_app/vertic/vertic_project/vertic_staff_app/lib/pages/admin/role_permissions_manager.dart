@@ -45,6 +45,8 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
 
     try {
       final client = Provider.of<Client>(context, listen: false);
+      
+      // 🔍 ECHTE PERMISSIONS LADEN: Immer aus der Datenbank laden, niemals vortäuschen!
       final permissions =
           await client.permissionManagement.getRolePermissions(widget.role.id!);
 
@@ -52,6 +54,8 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
         _assignedPermissions = permissions;
         _isLoading = false;
       });
+      
+      debugPrint('✅ Permissions für Rolle ${widget.role.displayName} geladen: ${permissions.length} Permissions');
     } catch (e) {
       setState(() => _isLoading = false);
       debugPrint('❌ Error loading role permissions: $e');
@@ -99,6 +103,17 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
   }
 
   Future<void> _togglePermission(Permission permission) async {
+    // 🔒 SYSTEM-ROLLEN-SCHUTZ: Superuser-Rolle ist nicht bearbeitbar
+    if (widget.role.isSystemRole) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ System-Rollen können nicht bearbeitet werden!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final isAssigned = _isPermissionAssigned(permission);
 
     try {
@@ -251,19 +266,27 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _isBulkOperation ? null : _bulkAssignCategory,
+                      // 🔒 SYSTEM-ROLLEN-SCHUTZ: Buttons für System-Rollen deaktivieren
+                      onPressed: (widget.role.isSystemRole || _isBulkOperation) ? null : _bulkAssignCategory,
                       icon: _isBulkOperation
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.add, size: 16),
-                      label: Text(_selectedCategory == 'all'
-                          ? 'Alle zuweisen'
-                          : 'Kategorie zuweisen'),
+                          : Icon(
+                              widget.role.isSystemRole ? Icons.lock : Icons.add, 
+                              size: 16
+                            ),
+                      label: Text(
+                        widget.role.isSystemRole 
+                          ? 'System-Rolle (geschützt)'
+                          : (_selectedCategory == 'all'
+                              ? 'Alle zuweisen'
+                              : 'Kategorie zuweisen')
+                      ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: widget.role.isSystemRole ? Colors.grey : Colors.green,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -271,19 +294,27 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _isBulkOperation ? null : _bulkRemoveCategory,
+                      // 🔒 SYSTEM-ROLLEN-SCHUTZ: Buttons für System-Rollen deaktivieren
+                      onPressed: (widget.role.isSystemRole || _isBulkOperation) ? null : _bulkRemoveCategory,
                       icon: _isBulkOperation
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.remove, size: 16),
-                      label: Text(_selectedCategory == 'all'
-                          ? 'Alle entfernen'
-                          : 'Kategorie entfernen'),
+                          : Icon(
+                              widget.role.isSystemRole ? Icons.lock : Icons.remove, 
+                              size: 16
+                            ),
+                      label: Text(
+                        widget.role.isSystemRole 
+                          ? 'System-Rolle (geschützt)'
+                          : (_selectedCategory == 'all'
+                              ? 'Alle entfernen'
+                              : 'Kategorie entfernen')
+                      ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                        backgroundColor: widget.role.isSystemRole ? Colors.grey : Colors.red,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -354,12 +385,24 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
           color: isAssigned ? Colors.indigo[50] : Colors.white,
           child: CheckboxListTile(
             value: isAssigned,
-            onChanged: (value) => _togglePermission(permission),
-            title: Text(
-              permission.displayName,
-              style: TextStyle(
-                fontWeight: isAssigned ? FontWeight.bold : FontWeight.normal,
-              ),
+            // 🔒 SYSTEM-ROLLEN-SCHUTZ: Checkboxes für System-Rollen deaktivieren
+            onChanged: widget.role.isSystemRole ? null : (value) => _togglePermission(permission),
+            title: Row(
+              children: [
+                if (widget.role.isSystemRole)
+                  const Icon(Icons.lock, size: 16, color: Colors.grey),
+                if (widget.role.isSystemRole)
+                  const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    permission.displayName,
+                    style: TextStyle(
+                      fontWeight: isAssigned ? FontWeight.bold : FontWeight.normal,
+                      color: widget.role.isSystemRole ? Colors.grey : null,
+                    ),
+                  ),
+                ),
+              ],
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,29 +454,74 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
   }
 
   void _bulkAssignCategory() async {
+    // 🔒 SYSTEM-ROLLEN-SCHUTZ: Superuser-Rolle ist nicht bearbeitbar
+    if (widget.role.isSystemRole) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ System-Rollen können nicht bearbeitet werden!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isBulkOperation = true);
 
     final categoryPermissions = _selectedCategory == 'all'
         ? widget.allPermissions
         : _permissionsByCategory[_selectedCategory] ?? [];
 
+    // 🚀 PERFORMANCE-OPTIMIERUNG: Sammle alle Permissions die zugewiesen werden müssen
+    final permissionsToAssign = categoryPermissions
+        .where((permission) => !_isPermissionAssigned(permission))
+        .toList();
+
+    if (permissionsToAssign.isEmpty) {
+      setState(() => _isBulkOperation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alle Permissions sind bereits zugewiesen'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      return;
+    }
+
     int successCount = 0;
-    for (final permission in categoryPermissions) {
-      if (!_isPermissionAssigned(permission)) {
+    final client = Provider.of<Client>(context, listen: false);
+    
+    // 🚀 BATCH-VERARBEITUNG: Verarbeite in kleineren Batches für bessere Performance
+    const batchSize = 5;
+    for (int i = 0; i < permissionsToAssign.length; i += batchSize) {
+      final batch = permissionsToAssign.skip(i).take(batchSize).toList();
+      
+      // Parallel processing für bessere Performance
+      final futures = batch.map((permission) async {
         try {
-          final client = Provider.of<Client>(context, listen: false);
           final success = await client.permissionManagement
               .assignPermissionToRole(widget.role.id!, permission.id!);
-
-          if (success) {
-            setState(() {
-              _assignedPermissions.add(permission);
-            });
+          return success ? permission : null;
+        } catch (e) {
+          debugPrint('❌ Bulk assign error for ${permission.name}: $e');
+          return null;
+        }
+      });
+      
+      final results = await Future.wait(futures);
+      
+      // Update UI nach jedem Batch
+      setState(() {
+        for (final permission in results) {
+          if (permission != null) {
+            _assignedPermissions.add(permission);
             successCount++;
           }
-        } catch (e) {
-          debugPrint('❌ Bulk assign error: $e');
         }
+      });
+      
+      // Kurze Pause zwischen Batches um UI responsive zu halten
+      if (i + batchSize < permissionsToAssign.length) {
+        await Future.delayed(const Duration(milliseconds: 50));
       }
     }
 
@@ -443,7 +531,7 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$successCount Permissions zugewiesen'),
+          content: Text('✅ $successCount von ${permissionsToAssign.length} Permissions zugewiesen'),
           backgroundColor: Colors.green,
         ),
       );
@@ -451,29 +539,74 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
   }
 
   void _bulkRemoveCategory() async {
+    // 🔒 SYSTEM-ROLLEN-SCHUTZ: Superuser-Rolle ist nicht bearbeitbar
+    if (widget.role.isSystemRole) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ System-Rollen können nicht bearbeitet werden!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isBulkOperation = true);
 
     final categoryPermissions = _selectedCategory == 'all'
         ? widget.allPermissions
         : _permissionsByCategory[_selectedCategory] ?? [];
 
+    // 🚀 PERFORMANCE-OPTIMIERUNG: Sammle alle Permissions die entfernt werden müssen
+    final permissionsToRemove = categoryPermissions
+        .where((permission) => _isPermissionAssigned(permission))
+        .toList();
+
+    if (permissionsToRemove.isEmpty) {
+      setState(() => _isBulkOperation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Keine Permissions zum Entfernen vorhanden'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      return;
+    }
+
     int successCount = 0;
-    for (final permission in categoryPermissions) {
-      if (_isPermissionAssigned(permission)) {
+    final client = Provider.of<Client>(context, listen: false);
+    
+    // 🚀 BATCH-VERARBEITUNG: Verarbeite in kleineren Batches für bessere Performance
+    const batchSize = 5;
+    for (int i = 0; i < permissionsToRemove.length; i += batchSize) {
+      final batch = permissionsToRemove.skip(i).take(batchSize).toList();
+      
+      // Parallel processing für bessere Performance
+      final futures = batch.map((permission) async {
         try {
-          final client = Provider.of<Client>(context, listen: false);
           final success = await client.permissionManagement
               .removePermissionFromRole(widget.role.id!, permission.id!);
-
-          if (success) {
-            setState(() {
-              _assignedPermissions.removeWhere((p) => p.id == permission.id);
-            });
+          return success ? permission : null;
+        } catch (e) {
+          debugPrint('❌ Bulk remove error for ${permission.name}: $e');
+          return null;
+        }
+      });
+      
+      final results = await Future.wait(futures);
+      
+      // Update UI nach jedem Batch
+      setState(() {
+        for (final permission in results) {
+          if (permission != null) {
+            _assignedPermissions.removeWhere((p) => p.id == permission.id);
             successCount++;
           }
-        } catch (e) {
-          debugPrint('❌ Bulk remove error: $e');
         }
+      });
+      
+      // Kurze Pause zwischen Batches um UI responsive zu halten
+      if (i + batchSize < permissionsToRemove.length) {
+        await Future.delayed(const Duration(milliseconds: 50));
       }
     }
 
@@ -483,7 +616,7 @@ class _RolePermissionsManagerState extends State<RolePermissionsManager> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$successCount Permissions entfernt'),
+          content: Text('✅ $successCount von ${permissionsToRemove.length} Permissions entfernt'),
           backgroundColor: Colors.green,
         ),
       );

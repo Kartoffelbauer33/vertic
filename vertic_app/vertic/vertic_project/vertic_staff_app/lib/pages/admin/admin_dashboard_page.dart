@@ -34,6 +34,34 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
   String? _currentPage; // null = Dashboard, sonst Page-Name
   bool _hasUnsavedChanges = false; // Track für ungespeicherte Änderungen
   String? _unsavedContext; // Kontext für die Warnung
+  
+  // Dynamic facility data from backend
+  List<Facility> _facilities = [];
+  bool _facilitiesLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFacilities();
+  }
+
+  /// **🏢 Lädt Facilities dynamisch vom Backend**
+  Future<void> _loadFacilities() async {
+    try {
+      final client = Provider.of<Client>(context, listen: false);
+      final facilities = await client.facility.getAllFacilities();
+      
+      setState(() {
+        _facilities = facilities;
+        _facilitiesLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('❌ Fehler beim Laden der Facilities: $e');
+      setState(() {
+        _facilitiesLoaded = true; // Auch bei Fehler als geladen markieren
+      });
+    }
+  }
 
   // Methode um das Dashboard von außen zurückzusetzen
   void resetToMainPage() {
@@ -111,14 +139,23 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
+  /// **🏢 Dynamische Hall-Namen aus Backend-Daten**
+  /// Ersetzt hardcodierte Hall-Namen durch echte Facility-Daten
   String _getHallName(int? hallId) {
-    switch (hallId) {
-      case 1:
-        return 'Greifbar Bregenz';
-      case 2:
-        return 'Greifbar Friedrichshafen';
-      default:
-        return 'Alle Hallen';
+    if (!_facilitiesLoaded) {
+      return 'Laden...';
+    }
+    
+    if (hallId == null) {
+      return 'Alle Hallen';
+    }
+    
+    try {
+      final facility = _facilities.firstWhere((f) => f.id == hallId);
+      return facility.name;
+    } catch (e) {
+      debugPrint('⚠️ Facility mit ID $hallId nicht gefunden: $e');
+      return 'Unbekannte Halle (ID: $hallId)';
     }
   }
 
@@ -126,8 +163,8 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
     switch (_currentPage) {
       case 'rbac_management':
         return RbacManagementPage(
-          onBack: () => setState(() => _currentPage = null),
-          onUnsavedChanges: _setUnsavedChanges,
+          isSuperUser: widget.isSuperUser,
+          hallId: widget.hallId,
         );
 
       case 'unified_tickets':

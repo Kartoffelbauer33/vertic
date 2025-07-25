@@ -113,6 +113,56 @@ class PermissionManagementEndpoint extends Endpoint {
     }
   }
 
+  /// **🧽 BEREINIGUNG: Entfernt alle alten Systemrollen außer Superuser**
+  ///
+  /// Diese Methode:
+  /// 1. Löscht alle Systemrollen außer 'super_admin'
+  /// 2. Stellt sicher, dass Superuser ALLE Permissions hat
+  /// 3. Behebt das Problem mit fehlenden CRUD-Buttons
+  Future<bool> cleanupOldSystemRoles(Session session) async {
+    try {
+      session.log('🧽 Starting cleanup of old system roles...');
+
+      // 1. Finde alle Systemrollen außer super_admin
+      final oldSystemRoles = await Role.db.find(
+        session,
+        where: (t) =>
+            t.isSystemRole.equals(true) & t.name.notEquals('super_admin'),
+      );
+
+      session
+          .log('🔍 Found ${oldSystemRoles.length} old system roles to remove');
+
+      // 2. Lösche alte Systemrollen und ihre Permissions
+      for (final role in oldSystemRoles) {
+        // Erst alle RolePermissions löschen
+        await RolePermission.db.deleteWhere(
+          session,
+          where: (t) => t.roleId.equals(role.id!),
+        );
+
+        // Dann alle StaffUserRoles löschen
+        await StaffUserRole.db.deleteWhere(
+          session,
+          where: (t) => t.roleId.equals(role.id!),
+        );
+
+        // Schließlich die Rolle selbst löschen
+        await Role.db.deleteRow(session, role);
+        session.log('❌ Removed old system role: ${role.displayName}');
+      }
+
+      // 4. Finale Statistik
+      final remainingRoles = await Role.db.count(session);
+      session.log('✅ Cleanup completed! Remaining roles: $remainingRoles');
+
+      return true;
+    } catch (e) {
+      session.log('❌ cleanupOldSystemRoles Error: $e', level: LogLevel.error);
+      return false;
+    }
+  }
+
   /// **Holt Permissions nach Kategorie**
   Future<List<Permission>> getPermissionsByCategory(
     Session session,
@@ -235,7 +285,7 @@ class PermissionManagementEndpoint extends Endpoint {
       session.log('✅ Permission deleted: ID $permissionId');
       return true;
     } catch (e) {
-      session.log('❌ deletePermission Error: $e', level: LogLevel.error);
+      session.log('❌ cleanupOldSystemRoles Error: $e', level: LogLevel.error);
       return false;
     }
   }

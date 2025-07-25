@@ -7,42 +7,39 @@
 BEGIN;
 
 -- ========================================
--- 1. TEMPORÄRER SYSTEM-USER FÜR FOREIGN KEYS
+-- 1. SUPERUSER STAFF-USER (ID 1) SICHERSTELLEN
 -- ========================================
 
--- Erstelle temporären System-User für Foreign Key Constraints
-INSERT INTO staff_users 
-(
-    "firstName", 
-    "lastName", 
-    email, 
-    "staffLevel", 
-    "employmentStatus", 
-    "createdAt"
-) 
-VALUES 
-(
-    'System', 
-    'Initializer', 
-    'system@vertic.local', 
-    'superUser', 
-    'active', 
-    NOW()
-) 
-ON CONFLICT (email) DO NOTHING;
-
--- Hole die System-User ID
+-- Prüfe ob Staff-User ID 1 existiert, falls nicht erstelle Superuser
 DO $$
-DECLARE
-    system_user_id INTEGER;
 BEGIN
-    SELECT id INTO system_user_id FROM staff_users WHERE email = 'system@vertic.local';
-    
-    IF system_user_id IS NULL THEN
-        RAISE EXCEPTION 'System-User konnte nicht erstellt werden!';
+    IF NOT EXISTS (SELECT 1 FROM staff_users WHERE id = 1) THEN
+        -- Erstelle Superuser mit ID 1
+        INSERT INTO staff_users 
+        (
+            id,
+            "firstName", 
+            "lastName", 
+            email, 
+            "staffLevel", 
+            "employmentStatus", 
+            "createdAt"
+        ) 
+        VALUES 
+        (
+            1,
+            'Super', 
+            'Administrator', 
+            'superuser@staff.vertic.local', 
+            'superUser', 
+            'active', 
+            NOW()
+        );
+        
+        RAISE NOTICE '👑 Superuser Staff-User erstellt: ID 1';
+    ELSE
+        RAISE NOTICE '✅ Superuser Staff-User bereits vorhanden: ID 1';
     END IF;
-    
-    RAISE NOTICE '🔧 Temporärer System-User erstellt: ID %', system_user_id;
 END $$;
 
 -- ========================================
@@ -380,10 +377,10 @@ BEGIN
 END $$;
 
 -- ========================================
--- 8. TEMPORÄREN SYSTEM-USER LÖSCHEN
+-- 8. SUPERUSER BESTÄTIGUNG
 -- ========================================
 
-DELETE FROM staff_users WHERE email = 'system@vertic.local';
+RAISE NOTICE '👑 Superuser mit ID 1 bleibt permanent im System';
 
 -- ========================================
 -- 9. VERIFIKATION DER ERGEBNISSE
