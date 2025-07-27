@@ -214,9 +214,8 @@ class _StaffHomePageState extends State<StaffHomePage> {
       setState(() {
         _selectedRoute = route;
         _selectedIndex = newIndex;
-        if (!_isNavExpanded) {
-          _isNavExpanded = true;
-        }
+        // Automatisch Sidebar kollabieren bei Navigation
+        _isNavExpanded = false;
       });
     }
   }
