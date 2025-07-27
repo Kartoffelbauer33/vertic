@@ -231,26 +231,17 @@ class _StaffHomePageState extends State<StaffHomePage> {
         staffAuth.currentStaffUser?.staffLevel == StaffUserType.superUser;
 
     final allPages = <_AppPage>[
-      // 1. POS
       const _AppPage(route: '/pos', page: PosSystemPage()),
-      
-      // 2. Produkte
       const _AppPage(
         route: '/products',
         page: ProductManagementPage(),
         requiredPermission: 'can_create_products',
       ),
-      
-      // 3. Statistik
       const _AppPage(route: '/statistics', page: StatisticsPage()),
-      
-      // 4. Kunden
       _AppPage(
         route: '/customers',
         page: CustomerManagementPage(isSuperUser: isSuperUser),
       ),
-      
-      // 5. Admin (nur sichtbar für Benutzer mit Admin-Berechtigung)
       if (permissionProvider.hasPermission('can_access_admin_dashboard'))
         _AppPage(
           route: '/admin',
@@ -259,12 +250,8 @@ class _StaffHomePageState extends State<StaffHomePage> {
             hallId: staffAuth.currentStaffUser?.hallId,
           ),
         ),
-      
-      // 6. Design (nur im Debug-Modus)
       if (kDebugMode)
         const _AppPage(route: '/design', page: DesignSystemShowcasePage()),
-      
-      // 7. Settings
       _AppPage(route: '/settings', page: _buildSettingsPage(context)),
     ];
 
@@ -328,44 +315,49 @@ class _StaffHomePageState extends State<StaffHomePage> {
             ),
           ),
           bottomNavigationBar: BottomNavigationBar(
-            items: [
-              // POS
-              const BottomNavigationBarItem(
-                icon: Icon(LucideIcons.shoppingCart),
-                label: 'POS',
-              ),
-              // Produkte
-              const BottomNavigationBarItem(
-                icon: Icon(LucideIcons.package),
-                label: 'Produkte',
-              ),
-              // Statistik
-              const BottomNavigationBarItem(
-                icon: Icon(LucideIcons.chartLine),
-                label: 'Statistik',
-              ),
-              // Kunden
-              const BottomNavigationBarItem(
-                icon: Icon(LucideIcons.users),
-                label: 'Kunden',
-              ),
-              // Admin
-                const BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.lockKeyhole),
-                  label: 'Admin',
-                ),
-              // Design (nur im Debug-Modus)
-              if (kDebugMode)
-                const BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.paintBucket),
-                  label: 'Design',
-                ),
-              // Settings
-              const BottomNavigationBarItem(
-                icon: Icon(LucideIcons.settings),
-                label: 'Settings',
-              ),
-            ],
+            items: visiblePages.map((page) {
+              IconData icon;
+              String label;
+              
+              switch (page.route) {
+                case '/pos':
+                  icon = LucideIcons.shoppingCart;
+                  label = 'POS';
+                  break;
+                case '/products':
+                  icon = LucideIcons.package;
+                  label = 'Produkte';
+                  break;
+                case '/statistics':
+                  icon = LucideIcons.chartLine;
+                  label = 'Statistik';
+                  break;
+                case '/customers':
+                  icon = LucideIcons.users;
+                  label = 'Kunden';
+                  break;
+                case '/admin':
+                  icon = LucideIcons.lockKeyhole;
+                  label = 'Admin';
+                  break;
+                case '/design':
+                  icon = LucideIcons.paintBucket;
+                  label = 'Design';
+                  break;
+                case '/settings':
+                  icon = LucideIcons.settings;
+                  label = 'Settings';
+                  break;
+                default:
+                  icon = LucideIcons.circle;
+                  label = 'Unbekannt';
+              }
+              
+              return BottomNavigationBarItem(
+                icon: Icon(icon),
+                label: label,
+              );
+            }).toList(),
             currentIndex: _selectedIndex,
             onTap: (index) {
               if (index < visiblePages.length) {
