@@ -1,3 +1,5 @@
+//vertic_app/vertic/vertic_project/vertic_staff_app/lib/pages/admin/admin_dashboard_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';

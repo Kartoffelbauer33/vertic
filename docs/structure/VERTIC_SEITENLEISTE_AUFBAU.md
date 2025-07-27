@@ -43,8 +43,7 @@ Account:
 - Accounteinstellungen
 - Logout
 
-Logout
-
+Sperren (Sperrt die Anwendung und kann erst durch das erneute einloggen eines Benutzers wieder genutzt werden.
 - - - - - - - - - - -
 Pages
 Dashboard:

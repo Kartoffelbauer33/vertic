@@ -1,376 +1,294 @@
-// lib/widgets/navigation/nav_items.dart
-
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:vertic_staff/router/routes.dart';
 
 import 'nav_models.dart';
 
-/// Haupt-Navigation
 final List<NavItem> mainNavItems = [
   NavItem(
     title: 'Dashboard',
     icon: LucideIcons.layoutDashboard,
-    route: Routes.dashboard,
+    route: '/dashboard',
   ),
-  NavItem(title: 'POS', icon: LucideIcons.shoppingCart, route: Routes.pos),
-  NavItem(title: 'Fastlane', icon: LucideIcons.zap, route: Routes.fastlane),
+  NavItem(title: 'POS', icon: LucideIcons.shoppingCart, route: '/pos'),
+  NavItem(title: 'Fastlane', icon: LucideIcons.zap, route: '/fastlane'),
   NavItem(
     title: 'Kundenverwaltung',
     icon: LucideIcons.users,
-    route: Routes.customers,
+    route: '/members',
     children: [
       NavItem(
         title: 'Kundensuche',
         icon: LucideIcons.userSearch,
-        route: Routes.customers,
+        route: '/members',
       ),
       NavItem(
         title: 'Kunden anlegen',
         icon: LucideIcons.userPlus,
-        route: Routes.customerAdd,
+        route: '/members/add',
       ),
       NavItem(
         title: 'Familie',
         icon: LucideIcons.users,
-        route: Routes.customerFamilies,
+        route: '/members/families',
       ),
     ],
   ),
 ];
 
-/// Schichtplanung
 final List<NavItem> planningNavItems = [
   NavItem(
     title: 'Schichtplanung',
     icon: LucideIcons.calendar,
-    route: Routes.planning,
+    route: '/planning',
     children: [
       NavItem(
         title: 'Kalender',
         icon: LucideIcons.calendarDays,
-        route: Routes.planningCalendar,
+        route: '/planning/calendar',
       ),
       NavItem(
         title: 'Stempeluhr',
         icon: LucideIcons.clock,
-        route: Routes.planningTimeClock,
+        route: '/planning/time-clock',
       ),
       NavItem(
         title: 'Tauschbörse',
         icon: LucideIcons.chevronsLeftRightEllipsis,
-        route: Routes.planningExchangeMarket,
+        route: '/planning/exchange-market',
       ),
       NavItem(
         title: 'Auswertung',
         icon: LucideIcons.chartLine,
-        route: Routes.planningReports,
+        route: '/planning/reports',
       ),
       NavItem(
         title: 'To Dos',
         icon: LucideIcons.listChecks,
-        route: Routes.planningTodos,
+        route: '/planning/todos',
       ),
     ],
   ),
 ];
 
-/// Lagerbestand
 final List<NavItem> reportsNavItems = [
   NavItem(
     title: 'Lagerbestand',
     icon: LucideIcons.package,
-    route: Routes.stock,
+    route: '/stock/',
     children: [
       NavItem(
         title: 'Artikel',
         icon: LucideIcons.package,
-        route: Routes.stockProducts,
+        route: '/stock/products',
       ),
       NavItem(
         title: 'Bestellungen',
         icon: LucideIcons.shoppingCart,
-        route: Routes.stockOrders,
+        route: '/stock/orders',
       ),
       NavItem(
         title: 'Stornierungen',
         icon: LucideIcons.undo2,
-        route: Routes.stockReturns,
+        route: '/stock/returns',
       ),
       NavItem(
         title: 'Bestellliste',
         icon: LucideIcons.shoppingCart,
-        route: Routes.stockOrderList,
+        route: '/stock/stock-list',
       ),
     ],
   ),
 ];
 
-/// Auswertung & Analytics
 final List<NavItem> settingsNavItems = [
   NavItem(
     title: 'Auswertungen',
-    icon: LucideIcons.chartLine,
-    route: Routes.statistics,
+    icon: LucideIcons.info,
+    route: '/analytics',
     children: [
       NavItem(
         title: 'Verkäufe',
-        icon: LucideIcons.euro,
-        route: Routes.analyticsSales,
+        icon: LucideIcons.package,
+        route: '/analytics/sales',
       ),
       NavItem(
         title: 'Stornierungen',
         icon: LucideIcons.undo2,
-        route: Routes.analyticsReturns,
+        route: '/analytics/returns',
       ),
       NavItem(
         title: 'Ausgaben',
-        icon: LucideIcons.creditCard,
-        route: Routes.analyticsExpenses,
+        icon: LucideIcons.package,
+        route: '/analytics/expenses',
       ),
       NavItem(
-        title: 'Kundenverhalten',
+        title: 'Kunden',
         icon: LucideIcons.users,
-        route: Routes.analyticsUserBehavior,
+        route: '/analytics/users',
       ),
       NavItem(
         title: 'Mitarbeiter',
         icon: LucideIcons.userCog,
-        route: Routes.analyticsStaff,
+        route: '/analytics/staff',
       ),
     ],
   ),
 ];
 
-/// Verwaltung
 final List<NavItem> administrationNavItems = [
   NavItem(
     title: 'Verwaltung',
     icon: LucideIcons.archive,
-    route: Routes.administration,
+    route: '/administration',
     children: [
       NavItem(
         title: 'Produkte',
         icon: LucideIcons.package,
-        route: Routes.adminProducts,
+        route: '/administration/products',
       ),
       NavItem(
         title: 'Tickets',
         icon: LucideIcons.ticket,
-        route: Routes.adminTickets,
+        route: '/administration/tickets',
       ),
       NavItem(
         title: 'Kurse',
-        icon: LucideIcons.book,
-        route: Routes.adminCourses,
+        icon: LucideIcons.package,
+        route: '/administration/courses',
       ),
       NavItem(
         title: 'Mitarbeiter',
         icon: LucideIcons.userCog,
-        route: Routes.adminStaff,
+        route: '/administration/staff',
       ),
       NavItem(
         title: 'Rollen',
         icon: LucideIcons.shield,
-        route: Routes.adminRoles,
+        route: '/administration/roles',
       ),
       NavItem(
         title: 'Organisation',
         icon: LucideIcons.building2,
-        route: Routes.adminOrganization,
+        route: '/administration/organization',
       ),
-      NavItem(title: 'Gym', icon: LucideIcons.dumbbell, route: Routes.adminGym),
+      NavItem(
+        title: 'Gym',
+        icon: LucideIcons.dumbbell,
+        route: '/administration/gym',
+      ),
       NavItem(
         title: 'Automationen',
         icon: LucideIcons.workflow,
-        route: Routes.adminAutomation,
+        route: '/administration/automation',
       ),
       NavItem(
         title: 'Einstellungen',
         icon: LucideIcons.settings,
-        route: Routes.adminSettings,
+        route: '/administration/settings',
       ),
     ],
   ),
 ];
 
-/// Design System Showcase
 final List<NavItem> designNavItems = [
-  NavItem(title: 'Design', icon: LucideIcons.paintBucket, route: Routes.design),
+  NavItem(title: 'Design', icon: LucideIcons.paintBucket, route: '/design'),
 ];
 
-/// Superuser/Admin-Bereich
 final List<NavItem> adminNavItems = [
   NavItem(
     title: 'Admin',
     icon: LucideIcons.lockKeyhole,
-    route: Routes.adminDashboard,
+    route: '/admin/dashboard',
     children: [
       NavItem(
         title: 'System Meldungen',
         icon: LucideIcons.messageCircle,
-        route: Routes.adminSystemMessages,
-      ),
-      NavItem(
-        title: 'System-Konfiguration',
-        icon: LucideIcons.settings,
-        route: Routes.adminSystemConfiguration,
+        route: '/admin/system-messages',
       ),
       NavItem(
         title: 'Unified Ticket Managment',
         icon: LucideIcons.ticket,
-        route: Routes.adminUnifiedTicketManagement,
-      ),
-      NavItem(
-        title: 'Email Verification',
-        icon: LucideIcons.mail,
-        route: Routes.adminEmailVerification,
+        route: '/admin/unified-ticket-managment',
       ),
       NavItem(
         title: 'Gym Verwaltung',
         icon: LucideIcons.building2,
-        route: Routes.adminGymManagement,
+        route: '/admin/gym-management',
       ),
       NavItem(
         title: 'RBAC Managment',
         icon: LucideIcons.shield,
-        route: Routes.adminRbacManagement,
-      ),
-      NavItem(
-        title: 'Drucker Einstellungen',
-        icon: LucideIcons.printer,
-        route: Routes.adminPrinterSettings,
-      ),
-      NavItem(
-        title: 'Scanner Einstellungen',
-        icon: LucideIcons.camera,
-        route: Routes.adminScannerSettings,
-      ),
-      NavItem(
-        title: 'Dokumentenverwaltung',
-        icon: LucideIcons.file,
-        route: Routes.adminDocumentManagement,
-      ),
-      NavItem(
-        title: 'Rollen & Permissions',
-        icon: LucideIcons.shield,
-        route: Routes.adminRolePermissions,
-      ),
-      NavItem(
-        title: 'Benutzer-Status verwalten',
-        icon: LucideIcons.userCog,
-        route: Routes.adminUserStatusManagement,
-      ),
-      NavItem(
-        title: 'New Staff Managment',
-        icon: LucideIcons.userPlus,
-        route: Routes.adminNewStaffManagement,
-      ),
-      NavItem(
-        title: 'Staff Managment',
-        icon: LucideIcons.users,
-        route: Routes.adminStaffManagement,
-      ),
-      NavItem(
-        title: 'New Staff',
-        icon: LucideIcons.userPlus,
-        route: Routes.adminNewStaff,
-      ),
-      NavItem(
-        title: 'Preisgestaltung',
-        icon: LucideIcons.euro,
-        route: Routes.adminPricingManagement,
-      ),
-      NavItem(
-        title: 'Abrechnungsmanagement',
-        icon: LucideIcons.creditCard,
-        route: Routes.adminBillingManagement,
-      ),
-      NavItem(
-        title: 'Steuern',
-        icon: LucideIcons.receipt,
-        route: Routes.adminTaxClassManagement,
-      ),
-      NavItem(
-        title: 'Ticket Managment',
-        icon: LucideIcons.ticket,
-        route: Routes.adminTicketTypeManagement,
-      ),
-      NavItem(
-        title: 'Vertic Ticket Managment',
-        icon: LucideIcons.ticketCheck,
-        route: Routes.adminVerticTicketManagement,
+        route: '/admin/rbac-management',
       ),
       NavItem(
         title: 'Ticket Sichtbarkeit',
         icon: LucideIcons.eye,
-        route: Routes.adminTicketVisibility,
+        route: '/admin/ticket-visibility',
+      ),
+      NavItem(
+        title: 'Drucker Einstellungen',
+        icon: LucideIcons.printer,
+        route: '/admin/printer-settings',
+      ),
+      NavItem(
+        title: 'Scanner Einstellungen',
+        icon: LucideIcons.camera,
+        route: '/admin/scanner-settings',
+      ),
+      NavItem(
+        title: 'Dokumentenverwaltung',
+        icon: LucideIcons.file,
+        route: '/admin/document-management',
+      ),
+      NavItem(
+        title: 'Benutzer-Status verwalten',
+        icon: LucideIcons.userCog,
+        route: '/admin/user-status-management',
+      ),
+      NavItem(
+        title: 'Preisgestaltung',
+        icon: LucideIcons.euro,
+        route: '/admin/pricing-management',
+      ),
+      NavItem(
+        title: 'Abrechnungsmanagement',
+        icon: LucideIcons.creditCard,
+        route: '/admin/billing-management',
+      ),
+      NavItem(
+        title: 'System-Konfiguration',
+        icon: LucideIcons.settings,
+        route: '/admin/system-configuration',
       ),
       NavItem(
         title: 'QR-Code Rotation',
         icon: LucideIcons.qrCode,
-        route: Routes.adminQrCodeRotation,
+        route: '/admin/qr-code-rotation',
       ),
       NavItem(
         title: 'External Provider Managment',
         icon: LucideIcons.cloud,
-        route: Routes.adminExternalProviderManagement,
+        route: '/admin/external-provider-management',
       ),
       NavItem(
         title: 'DACH-Complianze',
         icon: LucideIcons.shield,
-        route: Routes.adminDachCompliance,
+        route: '/admin/dach-complianze',
       ),
       NavItem(
-        title: 'Berichte & Analyse',
+        title: 'Berichte % Analyse',
         icon: LucideIcons.chartLine,
-        route: Routes.adminReportsAnalytics,
+        route: '/admin/reports-analysis',
       ),
       NavItem(
         title: 'Backup & Wartung',
         icon: LucideIcons.database,
-        route: Routes.adminBackup,
+        route: '/admin/backup',
       ),
     ],
   ),
 ];
 
-/// Account-Submenü Items für Footer-Bereich
-final List<NavItem> accountNavItems = [
-  NavItem(
-    title: 'Mein Account',
-    icon: LucideIcons.user,
-    route: Routes.account,
-    children: [
-      NavItem(
-        title: 'Profil',
-        icon: LucideIcons.user,
-        route: Routes.accountTabProfile,
-      ),
-      NavItem(
-        title: 'Lohn und Schichten',
-        icon: LucideIcons.calendar,
-        route: Routes.accountTabShifts,
-      ),
-      NavItem(
-        title: 'Berechtigungen',
-        icon: LucideIcons.shield,
-        route: Routes.accountTabPermissions,
-      ),
-      NavItem(
-        title: 'Benachrichtigungen',
-        icon: LucideIcons.bell,
-        route: Routes.accountTabNotifications,
-      ),
-      NavItem(
-        title: 'Sicherheit',
-        icon: LucideIcons.lock,
-        route: Routes.accountTabSecurity,
-      ),
-      NavItem(
-        title: 'Einstellungen',
-        icon: LucideIcons.settings,
-        route: Routes.accountTabSettings,
-      ),
-    ],
-  ),
+final List<NavItem> bottomNavItems = [
+  NavItem(title: 'Settings', icon: LucideIcons.settings, route: '/settings'),
+  NavItem(title: 'Account', icon: LucideIcons.user, route: '/account'),
 ];
