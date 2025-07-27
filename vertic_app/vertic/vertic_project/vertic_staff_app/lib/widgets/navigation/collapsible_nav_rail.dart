@@ -42,8 +42,13 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
   }
 
   void _initializeExpandedState() {
-    // Don't auto-expand menu on initialization or navigation
-    // Menu should only be opened manually by user interaction
+    // Only initialize expanded state if menu is already expanded
+    // Don't auto-expand menu on navigation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isExpanded) {
+        _updateExpandedStateForCurrentRoute();
+      }
+    });
   }
 
   void _updateExpandedStateForCurrentRoute() {
@@ -140,7 +145,9 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
   void didUpdateWidget(CollapsibleNavRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Only update expanded state when menu is manually opened, not on route changes
-    // Removed automatic expansion on route changes to prevent menu from opening automatically
+    if (oldWidget.isExpanded != widget.isExpanded && widget.isExpanded) {
+      _updateExpandedStateForCurrentRoute();
+    }
   }
 
   @override
@@ -378,7 +385,19 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
     final bool isActive =
         isParentOfSelected || widget.selectedRoute == item.route;
 
-    // Removed auto-expansion - menus should only be opened manually by user interaction
+    // Auto-expand if the current route is this item or one of its children
+    if (item.route != null &&
+        isActive &&
+        !(_expandedItems[item.route!] ?? false)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _expandedItems.clear(); // Accordion behavior on load
+            _expandedItems[item.route!] = true;
+          });
+        }
+      });
+    }
 
     final bool isExpanded = _expandedItems[item.route!] ?? false;
     final spacing = context.spacing;
