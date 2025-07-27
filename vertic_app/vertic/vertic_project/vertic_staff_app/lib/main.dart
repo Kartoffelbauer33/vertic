@@ -242,16 +242,17 @@ class _StaffHomePageState extends State<StaffHomePage> {
         route: '/customers',
         page: CustomerManagementPage(isSuperUser: isSuperUser),
       ),
-      _AppPage(
-        route: '/admin',
-        page: AdminDashboardPage(
-          isSuperUser: isSuperUser,
-          hallId: staffAuth.currentStaffUser?.hallId,
+      if (permissionProvider.hasPermission('can_access_admin_dashboard'))
+        _AppPage(
+          route: '/admin',
+          page: AdminDashboardPage(
+            isSuperUser: isSuperUser,
+            hallId: staffAuth.currentStaffUser?.hallId,
+          ),
         ),
-        requiredPermission: 'can_access_admin_dashboard',
-      ),
       if (kDebugMode)
         const _AppPage(route: '/design', page: DesignSystemShowcasePage()),
+      _AppPage(route: '/settings', page: _buildSettingsPage(context)),
     ];
 
     return allPages.where((page) {
@@ -314,32 +315,37 @@ class _StaffHomePageState extends State<StaffHomePage> {
             ),
           ),
           bottomNavigationBar: BottomNavigationBar(
-            items: const <BottomNavigationBarItem>[
-              BottomNavigationBarItem(
+            items: [
+              const BottomNavigationBarItem(
                 icon: Icon(LucideIcons.shoppingCart),
                 label: 'POS',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(LucideIcons.package),
                 label: 'Produkte',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(LucideIcons.chartLine),
                 label: 'Statistik',
               ),
-              BottomNavigationBarItem(
+              const BottomNavigationBarItem(
                 icon: Icon(LucideIcons.users),
                 label: 'Kunden',
               ),
-              BottomNavigationBarItem(
-                icon: Icon(LucideIcons.lockKeyhole),
-                label: 'Admin',
-              ),
+              if (permissionProvider.hasPermission('can_access_admin_dashboard'))
+                const BottomNavigationBarItem(
+                  icon: Icon(LucideIcons.lockKeyhole),
+                  label: 'Admin',
+                ),
               if (kDebugMode)
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(LucideIcons.paintBucket),
                   label: 'Design',
                 ),
+              const BottomNavigationBarItem(
+                icon: Icon(LucideIcons.settings),
+                label: 'Settings',
+              ),
             ],
             currentIndex: _selectedIndex,
             onTap: (index) {
@@ -420,7 +426,148 @@ class _StaffHomePageState extends State<StaffHomePage> {
     );
   }
 
+  Widget _buildSettingsPage(BuildContext context) {
+    return Consumer<StaffAuthProvider>(
+      builder: (context, staffAuth, child) {
+        final currentUser = staffAuth.currentStaffUser;
 
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Einstellungen'),
+            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                // 👤 Staff-User-Info Card
+                if (currentUser != null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.badge, size: 40),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      staffAuth.currentStaffDisplayName,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                    Text(
+                                      staffAuth.currentStaffEmail,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
+                                          context,
+                                        ).primaryColor.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        _getStaffLevelDisplayName(
+                                          currentUser.staffLevel,
+                                        ),
+                                        style: TextStyle(
+                                          color: Theme.of(context).primaryColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (currentUser.employeeId != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              'Mitarbeiter-ID: ${currentUser.employeeId}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
 
+                const Spacer(),
 
+                // 🔓 Logout-Button
+                ElevatedButton.icon(
+                  onPressed: staffAuth.isLoading
+                      ? null
+                      : () async {
+                          try {
+                            await staffAuth.signOut();
+                            if (mounted) {
+                              // Navigation erfolgt automatisch über Consumer
+                              debugPrint('✅ Staff-Logout erfolgreich');
+                            }
+                          } catch (e) {
+                            debugPrint('❌ Staff-Logout Fehler: $e');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Logout-Fehler: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  icon: staffAuth.isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.logout),
+                  label: Text(
+                    staffAuth.isLoading ? 'Wird abgemeldet...' : 'Abmelden',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// **Hilfsfunktion: Staff-Level zu benutzerfreundlichem Namen**
+  String _getStaffLevelDisplayName(StaffUserType level) {
+    switch (level) {
+      case StaffUserType.superUser:
+        return 'Super Administrator';
+      case StaffUserType.facilityAdmin:
+        return 'Standort-Administrator';
+      case StaffUserType.hallAdmin:
+        return 'Hallen-Administrator';
+      case StaffUserType.staff:
+        return 'Mitarbeiter';
+    }
+  }
 }

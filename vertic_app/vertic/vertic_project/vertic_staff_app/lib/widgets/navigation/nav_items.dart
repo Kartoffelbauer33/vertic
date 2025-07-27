@@ -138,52 +138,52 @@ final List<NavItem> administrationNavItems = [
   NavItem(
     title: 'Verwaltung',
     icon: LucideIcons.archive,
-    route: '/administration',
+    route: '/management',
     children: [
       NavItem(
         title: 'Produkte',
         icon: LucideIcons.package,
-        route: '/administration/products',
+        route: '/management/products',
       ),
       NavItem(
         title: 'Tickets',
         icon: LucideIcons.ticket,
-        route: '/administration/tickets',
+        route: '/management/tickets',
       ),
       NavItem(
         title: 'Kurse',
         icon: LucideIcons.package,
-        route: '/administration/courses',
+        route: '/management/courses',
       ),
       NavItem(
         title: 'Mitarbeiter',
         icon: LucideIcons.userCog,
-        route: '/administration/staff',
+        route: '/management/staff',
       ),
       NavItem(
         title: 'Rollen',
         icon: LucideIcons.shield,
-        route: '/administration/roles',
+        route: '/management/roles',
       ),
       NavItem(
         title: 'Organisation',
         icon: LucideIcons.building2,
-        route: '/administration/organization',
+        route: '/management/organization',
       ),
       NavItem(
         title: 'Gym',
         icon: LucideIcons.dumbbell,
-        route: '/administration/gym',
+        route: '/management/gym',
       ),
       NavItem(
         title: 'Automationen',
         icon: LucideIcons.workflow,
-        route: '/administration/automation',
+        route: '/management/automation',
       ),
       NavItem(
         title: 'Einstellungen',
         icon: LucideIcons.settings,
-        route: '/administration/settings',
+        route: '/management/settings',
       ),
     ],
   ),
@@ -197,7 +197,7 @@ final List<NavItem> adminNavItems = [
   NavItem(
     title: 'Admin',
     icon: LucideIcons.lockKeyhole,
-    route: '/admin/dashboard',
+    route: '/admin',
     children: [
       NavItem(
         title: 'System Meldungen',
@@ -290,5 +290,5 @@ final List<NavItem> adminNavItems = [
 
 final List<NavItem> bottomNavItems = [
   NavItem(title: 'Settings', icon: LucideIcons.settings, route: '/settings'),
-  NavItem(title: 'Account', icon: LucideIcons.user, route: '/account'),
+  NavItem(title: 'Admin', icon: LucideIcons.lockKeyhole, route: '/admin'),
 ];
