@@ -437,7 +437,14 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
             child: InkWell(
               onTap: () {
                 if (item.route != null) {
-                  widget.onRouteSelected(item.route!);
+                  // Wenn wir bereits auf einer Unterseite dieses Menüs sind,
+                  // dann zur Hauptseite zurückkehren
+                  if (isParentOfSelected) {
+                    widget.onRouteSelected(item.route!);
+                  } else {
+                    // Ansonsten normale Navigation
+                    widget.onRouteSelected(item.route!);
+                  }
                 }
               },
               borderRadius: BorderRadius.circular(spacing.radiusSm),
