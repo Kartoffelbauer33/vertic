@@ -114,6 +114,10 @@ class _PosSystemPageState extends State<PosSystemPage> {
   Map<String, int> _categoryArticleCounts = {};
   bool _isLiveSearchActive = false;
 
+  // 🛡️ RACE CONDITION PROTECTION
+  int _lastCartSwitchId = 0; // Eindeutige ID für jeden Warenkorb-Wechsel
+  final Map<int, bool> _activeSyncOperations = {}; // Tracking aktiver Sync-Operationen
+
   // 🎯 FILTER-OPTIONEN
   Set<String> _activeFilters = {};
   String _sortOption = 'relevance'; // relevance, alphabetical, price_asc, price_desc
@@ -198,6 +202,10 @@ class _PosSystemPageState extends State<PosSystemPage> {
 
     // 🔍 Live-Filter Cleanup
     _searchDebounceTimer?.cancel();
+
+    // 🛡️ RACE CONDITION CLEANUP: Alle aktiven Sync-Operationen abbrechen
+    _activeSyncOperations.clear();
+    debugPrint('🧹 Alle Sync-Operationen beim Widget-Dispose abgebrochen');
 
     _manualCodeController.dispose();
     _searchController.dispose();
@@ -615,12 +623,19 @@ class _PosSystemPageState extends State<PosSystemPage> {
     }
   }
 
-  /// **🚀 PERFORMANCE-OPTIMIERT: Schneller Warenkorb-Wechsel**
+  /// **🛡️ RACE CONDITION-GESCHÜTZT: Warenkorb-Wechsel mit Async-Guards**
   Future<void> _switchToCart(int index) async {
     if (index < 0 || index >= _activeCarts.length) return;
     if (index == _currentCartIndex) return; // Bereits aktiver Cart
 
     final targetCart = _activeCarts[index];
+    
+    // 🛡️ RACE CONDITION PROTECTION: Eindeutige Switch-ID generieren
+    final switchId = ++_lastCartSwitchId;
+    
+    // 🛡️ Alle vorherigen Sync-Operationen als veraltet markieren
+    _activeSyncOperations.clear();
+    _activeSyncOperations[switchId] = true;
 
     // 🚀 PERFORMANCE: Sofortiger UI-Update ohne Backend-Call
     setState(() {
@@ -635,17 +650,36 @@ class _PosSystemPageState extends State<PosSystemPage> {
       _filteredUsers = _allUsers;
     });
 
-    // 🚀 PERFORMANCE: Backend-Sync asynchron im Hintergrund
-    _syncCartInBackground(targetCart);
+    // 🚀 PERFORMANCE: Backend-Sync asynchron im Hintergrund mit Race Protection
+    _syncCartInBackgroundSafe(targetCart, switchId);
 
-    debugPrint('🚀 Schneller Warenkorb-Wechsel: ${targetCart.displayName}');
+    debugPrint('🛡️ Race-geschützter Warenkorb-Wechsel: ${targetCart.displayName} (ID: $switchId)');
   }
 
-  /// **🔄 HINTERGRUND-SYNC: Synchronisiert Cart-Daten ohne UI-Blockierung**
-  Future<void> _syncCartInBackground(CartSession targetCart) async {
+  /// **🛡️ RACE CONDITION-GESCHÜTZT: Hintergrund-Sync mit Async-Guards**
+  Future<void> _syncCartInBackgroundSafe(CartSession targetCart, int switchId) async {
     try {
+      // 🛡️ RACE PROTECTION: Prüfe ob diese Sync-Operation noch relevant ist
+      if (!_activeSyncOperations.containsKey(switchId)) {
+        debugPrint('🛡️ Sync-Operation $switchId wurde abgebrochen (neuer Warenkorb-Wechsel)');
+        return;
+      }
+
       final client = Provider.of<Client>(context, listen: false);
       final freshItems = await client.pos.getCartItems(targetCart.posSession!.id!);
+      
+      // 🛡️ DOUBLE-CHECK: Prüfe erneut ob diese Sync-Operation noch relevant ist
+      if (!_activeSyncOperations.containsKey(switchId)) {
+        debugPrint('🛡️ Sync-Operation $switchId wurde während Backend-Call abgebrochen');
+        return;
+      }
+
+      // 🛡️ TRIPLE-CHECK: Prüfe ob der Warenkorb noch der aktuelle ist
+      if (_currentCartIndex >= _activeCarts.length || 
+          _activeCarts[_currentCartIndex].id != targetCart.id) {
+        debugPrint('🛡️ Warenkorb $switchId ist nicht mehr aktiv, Sync übersprungen');
+        return;
+      }
       
       // Nur UI updaten wenn sich Daten geändert haben
       if (!_areCartItemsEqual(_cartItems, freshItems)) {
@@ -655,10 +689,16 @@ class _PosSystemPageState extends State<PosSystemPage> {
           final updatedCart = targetCart.copyWith(items: freshItems);
           _activeCarts[_currentCartIndex] = updatedCart;
         });
-        debugPrint('🔄 Cart-Daten im Hintergrund synchronisiert');
+        debugPrint('🛡️ Cart-Daten sicher synchronisiert (ID: $switchId)');
       }
+      
+      // 🧹 Cleanup: Sync-Operation als abgeschlossen markieren
+      _activeSyncOperations.remove(switchId);
+      
     } catch (e) {
-      debugPrint('⚠️ Hintergrund-Sync Fehler (nicht kritisch): $e');
+      debugPrint('⚠️ Hintergrund-Sync Fehler für ID $switchId (nicht kritisch): $e');
+      // 🧹 Cleanup auch bei Fehlern
+      _activeSyncOperations.remove(switchId);
     }
   }
 

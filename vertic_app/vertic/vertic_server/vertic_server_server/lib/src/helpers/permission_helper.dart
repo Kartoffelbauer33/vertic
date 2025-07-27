@@ -255,6 +255,17 @@ class PermissionHelper {
     final now = DateTime.now();
 
     try {
+      // 🔥 SUPERUSER-CHECK: Superuser erhalten automatisch ALLE Permissions
+      final staffUser = await StaffUser.db.findById(session, staffUserId);
+      if (staffUser?.staffLevel == StaffUserType.superUser) {
+        // Lade ALLE verfügbaren Permissions aus der DB
+        final allPermissions = await Permission.db.find(session);
+        final allPermissionNames = allPermissions.map((p) => p.name).toSet();
+        
+        session.log(
+            '👑 SUPERUSER $staffUserId: Automatisch alle ${allPermissionNames.length} Permissions gewährt: ${allPermissionNames.join(", ")}');
+        return allPermissionNames;
+      }
       // 1. Direkte Permissions laden (StaffUserPermission) - VEREINFACHT
       final directPermissionAssignments = await StaffUserPermission.db.find(
         session,
