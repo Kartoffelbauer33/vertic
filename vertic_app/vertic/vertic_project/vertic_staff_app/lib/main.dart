@@ -1,3 +1,4 @@
+//vertic_staff_app/lib/main.dart
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

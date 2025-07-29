@@ -1,3 +1,4 @@
+//vertic_staff_app/lib/widgets/navigation/collapsible_nav_rail.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
