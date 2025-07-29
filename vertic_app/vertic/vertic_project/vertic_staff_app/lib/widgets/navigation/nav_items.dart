@@ -33,11 +33,6 @@ final List<NavItem> mainNavItems = [
       ),
     ],
   ),
-  NavItem(
-    title: 'Statistik',
-    icon: LucideIcons.chartLine,
-    route: '/statistics',
-  ),
 ];
 
 final List<NavItem> planningNavItems = [
@@ -109,12 +104,12 @@ final List<NavItem> settingsNavItems = [
   NavItem(
     title: 'Auswertungen',
     icon: LucideIcons.info,
-    route: '/analytics',
+    route: '/statistics',
     children: [
       NavItem(
         title: 'Verkäufe',
         icon: LucideIcons.package,
-        route: '/analytics/sales',
+        route: '/statistics',
       ),
       NavItem(
         title: 'Stornierungen',
