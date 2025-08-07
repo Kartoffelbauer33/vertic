@@ -104,7 +104,7 @@ final List<NavItem> settingsNavItems = [
   NavItem(
     title: 'Auswertungen',
     icon: LucideIcons.info,
-    route: '/statistics',
+    route: '/analytics',
     children: [
       NavItem(
         title: 'Verkäufe',

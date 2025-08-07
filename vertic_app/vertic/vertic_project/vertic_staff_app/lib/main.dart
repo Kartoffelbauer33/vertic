@@ -238,6 +238,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
         requiredPermission: 'can_create_products',
       ),
       const _AppPage(route: '/statistics', page: StatisticsPage()),
+      const _AppPage(route: '/analytics', page: StatisticsPage()),
       _AppPage(
         route: '/customers',
         page: CustomerManagementPage(isSuperUser: isSuperUser),
@@ -330,6 +331,10 @@ class _StaffHomePageState extends State<StaffHomePage> {
                 case '/statistics':
                   icon = LucideIcons.chartLine;
                   label = 'Statistik';
+                  break;
+                case '/analytics':
+                  icon = LucideIcons.chartLine;
+                  label = 'Auswertungen';
                   break;
                 case '/customers':
                   icon = LucideIcons.users;
