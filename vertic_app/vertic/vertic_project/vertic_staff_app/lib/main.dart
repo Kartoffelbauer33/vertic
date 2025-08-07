@@ -13,7 +13,7 @@ import 'design_system/design_system.dart';
 import 'pages/admin/admin_dashboard_page.dart';
 import 'pages/customer_management_page.dart';
 import 'pages/login_page.dart';
-import 'pages/pos_system_page.dart';
+import 'pages/pos/pos_system_page.dart';
 import 'pages/product_management_page.dart';
 import 'pages/statistics_page.dart';
 import 'services/background_scanner_service.dart';

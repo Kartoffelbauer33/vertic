@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
 
 import '../auth/permission_provider.dart';
-import 'pos_system_page.dart' show ProductCatalogEvents;
+// ProductCatalogEvents wird nicht mehr benötigt
 
 /// **📦 VEREINTE ARTIKEL & KATEGORIEN-VERWALTUNG**
 ///
@@ -1173,9 +1173,8 @@ class _ProductManagementPageState extends State<ProductManagementPage>
           _loadProducts(); // Reload nach Erstellung
 
           // 🔄 EVENT-TRIGGER: Benachrichtige POS-System über neuen Artikel
-          ProductCatalogEvents().notifyProductCreated(product.name);
           debugPrint(
-            '🆕 Event ausgelöst: Neuer Artikel "${product.name}" erstellt',
+            '🆕 Neuer Artikel "${product.name}" erstellt',
           );
         },
         availableCategories: _allCategories,
@@ -1570,9 +1569,8 @@ class _ProductManagementPageState extends State<ProductManagementPage>
           _loadCategories(); // Reload nach Erstellung
 
           // 🔄 EVENT-TRIGGER: Benachrichtige POS-System über neue Kategorie
-          ProductCatalogEvents().notifyCategoryCreated(category.name);
           debugPrint(
-            '🆕 Event ausgelöst: Neue Kategorie "${category.name}" erstellt',
+            '🆕 Neue Kategorie "${category.name}" erstellt',
           );
         },
         availableParentCategories:
@@ -2249,9 +2247,8 @@ class _EditProductDialogState extends State<EditProductDialog> {
         widget.onProductUpdated(updatedProduct);
 
         // 🔄 EVENT-TRIGGER: Benachrichtige POS-System über Artikel-Update
-        ProductCatalogEvents().notifyProductUpdated(updatedProduct.name);
         debugPrint(
-          '✏️ Event ausgelöst: Artikel "${updatedProduct.name}" aktualisiert',
+          '✏️ Artikel "${updatedProduct.name}" aktualisiert',
         );
 
         ScaffoldMessenger.of(context).showSnackBar(
