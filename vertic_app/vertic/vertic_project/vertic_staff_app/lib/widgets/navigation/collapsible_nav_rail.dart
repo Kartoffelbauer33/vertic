@@ -1,3 +1,4 @@
+//vertic_staff_app/lib/widgets/navigation/collapsible_nav_rail.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -42,8 +43,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
   }
 
   void _initializeExpandedState() {
-    // Only initialize expanded state if menu is already expanded
-    // Don't auto-expand menu on navigation
+    // Initialisiere den erweiterten Zustand immer, wenn das Menü geöffnet wird
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && widget.isExpanded) {
         _updateExpandedStateForCurrentRoute();
@@ -144,7 +144,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
   @override
   void didUpdateWidget(CollapsibleNavRail oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Only update expanded state when menu is manually opened, not on route changes
+    // Aktualisiere den erweiterten Zustand immer, wenn das Menü geöffnet wird
     if (oldWidget.isExpanded != widget.isExpanded && widget.isExpanded) {
       _updateExpandedStateForCurrentRoute();
     }
@@ -385,19 +385,8 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
     final bool isActive =
         isParentOfSelected || widget.selectedRoute == item.route;
 
-    // Auto-expand if the current route is this item or one of its children
-    if (item.route != null &&
-        isActive &&
-        !(_expandedItems[item.route!] ?? false)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {
-            _expandedItems.clear(); // Accordion behavior on load
-            _expandedItems[item.route!] = true;
-          });
-        }
-      });
-    }
+    // Entferne die automatische Expansion hier, da sie bereits in _updateExpandedStateForCurrentRoute behandelt wird
+    // Das verhindert Konflikte beim manuellen Öffnen anderer Menüs
 
     final bool isExpanded = _expandedItems[item.route!] ?? false;
     final spacing = context.spacing;
@@ -437,7 +426,14 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
             child: InkWell(
               onTap: () {
                 if (item.route != null) {
-                  widget.onRouteSelected(item.route!);
+                  // Wenn wir bereits auf einer Unterseite dieses Menüs sind,
+                  // dann zur Hauptseite zurückkehren
+                  if (isParentOfSelected) {
+                    widget.onRouteSelected(item.route!);
+                  } else {
+                    // Ansonsten normale Navigation
+                    widget.onRouteSelected(item.route!);
+                  }
                 }
               },
               borderRadius: BorderRadius.circular(spacing.radiusSm),

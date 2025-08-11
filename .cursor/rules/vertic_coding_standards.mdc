@@ -5,6 +5,11 @@ alwaysApply: true
 
 Diese Regel erzwingt konsistente Codierungsstandards und Best Practices für die Vertic Flutter- und Serverpod-Projekte. Die Einhaltung dieser Richtlinien trägt zur Aufrechterhaltung der Codequalität, Lesbarkeit und zur Vermeidung gängiger Fehler bei.
 
+
+## Git
+
+* Commite niemals
+
 ## Allgemeine Prinzipien
 
 *   **Vollständigkeit**: Niemals TODOs oder unvollständige Funktionen hinterlassen. Alle Funktionen müssen vollständig implementiert sein.
@@ -50,7 +55,6 @@ Diese Regel erzwingt konsistente Codierungsstandards und Best Practices für die
 *   **Kompatible Typ-Checks**: Stellen Sie sicher, dass Typgleichheitsprüfungen (`==`) kompatible Typen vergleichen (`unrelated_type_equality_checks`).
 
 ### 5. Dokumentation
-*   **Keine `TODO`-Kommentare**: Alle `TODO`-Kommentare müssen vor dem Commit gelöst und entfernt werden. Implementieren Sie stattdessen alle Funktionen vollständig und ohne Platzhalter.
 *   **Doc-Kommentare HTML**: Verwenden Sie Backticks für Code-Snippets in Dokumentationskommentaren, um Fehlinterpretationen als HTML zu vermeiden (`unintended_html_in_doc_comment`).
 
 ### 6. Fehlerbehandlung

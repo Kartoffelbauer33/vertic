@@ -1,3 +1,4 @@
+//vertic_staff_app/lib/widgets/navigation/nav_items.dart
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'nav_models.dart';
@@ -13,22 +14,22 @@ final List<NavItem> mainNavItems = [
   NavItem(
     title: 'Kundenverwaltung',
     icon: LucideIcons.users,
-    route: '/members',
+    route: '/customers',
     children: [
       NavItem(
         title: 'Kundensuche',
         icon: LucideIcons.userSearch,
-        route: '/members',
+        route: '/customers',
       ),
       NavItem(
         title: 'Kunden anlegen',
         icon: LucideIcons.userPlus,
-        route: '/members/add',
+        route: '/customers',
       ),
       NavItem(
         title: 'Familie',
         icon: LucideIcons.users,
-        route: '/members/families',
+        route: '/customers',
       ),
     ],
   ),
@@ -108,7 +109,7 @@ final List<NavItem> settingsNavItems = [
       NavItem(
         title: 'Verkäufe',
         icon: LucideIcons.package,
-        route: '/analytics/sales',
+        route: '/statistics',
       ),
       NavItem(
         title: 'Stornierungen',
@@ -143,7 +144,7 @@ final List<NavItem> administrationNavItems = [
       NavItem(
         title: 'Produkte',
         icon: LucideIcons.package,
-        route: '/management/products',
+        route: '/products',
       ),
       NavItem(
         title: 'Tickets',
