@@ -257,6 +257,17 @@ class PermissionHelper {
     try {
       // 🔥 SUPERUSER-CHECK: Superuser erhalten automatisch ALLE Permissions
       final staffUser = await StaffUser.db.findById(session, staffUserId);
+      
+      // 🔍 DEBUG: Superuser-Prüfung detailliert loggen
+      session.log('🔍 DEBUG: staffUser gefunden: ${staffUser != null}');
+      if (staffUser != null) {
+        session.log('🔍 DEBUG: staffUser.staffLevel = ${staffUser.staffLevel}');
+        session.log('🔍 DEBUG: StaffUserType.superUser = ${StaffUserType.superUser}');
+        session.log('🔍 DEBUG: Enum-Vergleich: ${staffUser.staffLevel == StaffUserType.superUser}');
+        session.log('🔍 DEBUG: staffLevel.index = ${staffUser.staffLevel.index}');
+        session.log('🔍 DEBUG: superUser.index = ${StaffUserType.superUser.index}');
+      }
+      
       if (staffUser?.staffLevel == StaffUserType.superUser) {
         // Lade ALLE verfügbaren Permissions aus der DB
         final allPermissions = await Permission.db.find(session);

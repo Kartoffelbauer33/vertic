@@ -1,0 +1,4 @@
+class: VerifyStaffUserEmailRequest
+fields:
+  email: String
+  verificationCode: String

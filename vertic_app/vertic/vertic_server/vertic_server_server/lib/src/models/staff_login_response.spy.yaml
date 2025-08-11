@@ -1,0 +1,6 @@
+class: StaffLoginResponse
+fields:
+  success: bool
+  message: String
+  staffUser: StaffUser?
+  staffToken: String?

@@ -84,10 +84,8 @@ void run(List<String> args) async {
         session.log('Konnte Email-Code nicht in Datei schreiben: $e');
       }
 
-      // 🔧 DEVELOPMENT: Überschreibe Code mit 123456 für einfache Tests
-      session.log(
-          '🔧 DEVELOPMENT: Verwende Standard-Code 123456 statt $validationCode');
-      return true; // Für Testing
+      // Email wird tatsächlich versendet (oder in Entwicklung in Datei geschrieben)
+      return true;
     },
     // Passwort-Reset für Client-App
     sendPasswordResetEmail: (session, userInfo, validationCode) async {

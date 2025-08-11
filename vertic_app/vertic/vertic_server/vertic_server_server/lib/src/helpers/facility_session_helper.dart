@@ -117,16 +117,9 @@ class FacilitySessionHelper {
         return true;
       }
 
-      // FacilityAdmin haben nur Zugriff auf ihre eigene Facility
-      if (staffUser.staffLevel == StaffUserType.facilityAdmin) {
-        final hasAccess = staffUser.facilityId == facilityId;
-        session.log(hasAccess
-            ? '✅ FacilityAdmin $staffUserId: Zugriff auf eigene Facility $facilityId gewährt'
-            : '❌ FacilityAdmin $staffUserId: Zugriff auf fremde Facility $facilityId verweigert');
-        return hasAccess;
-      }
-
-      // Normale Staff haben nur Zugriff auf ihre zugewiesene Facility
+      // Bei rollenbasierten Staff-Usern:
+      // Prüfe ob die Facility-ID mit der zugewiesenen Facility übereinstimmt
+      // Die tatsächlichen Berechtigungen werden über Permissions gesteuert
       final hasAccess = staffUser.facilityId == facilityId;
       session.log(hasAccess
           ? '✅ Staff $staffUserId: Zugriff auf zugewiesene Facility $facilityId gewährt'
@@ -156,16 +149,18 @@ class FacilitySessionHelper {
         return true;
       }
 
-      // HallAdmin haben nur Zugriff auf ihre eigene Hall
-      if (staffUser.staffLevel == StaffUserType.hallAdmin) {
+      // Bei rollenbasierten Staff-Usern:
+      // Prüfe ob die Hall-ID mit der zugewiesenen Hall übereinstimmt
+      // Die tatsächlichen Berechtigungen werden über Permissions gesteuert
+      if (staffUser.hallId != null) {
         final hasAccess = staffUser.hallId == hallId;
         session.log(hasAccess
-            ? '✅ HallAdmin $staffUserId: Zugriff auf eigene Hall $hallId gewährt'
-            : '❌ HallAdmin $staffUserId: Zugriff auf fremde Hall $hallId verweigert');
+            ? '✅ Staff $staffUserId: Zugriff auf zugewiesene Hall $hallId gewährt'
+            : '❌ Staff $staffUserId: Zugriff auf fremde Hall $hallId verweigert');
         return hasAccess;
       }
 
-      // Facility-Level Staff haben Zugriff auf alle Halls ihrer Facility
+      // Wenn keine spezifische Hall zugewiesen ist, prüfe Facility-Ebene
       // TODO: Implementiere hall-zu-facility Relation-Check
       session.log(
           '🔧 Hall-Zugriffsprüfung: Hall-zu-Facility Relation noch nicht implementiert');

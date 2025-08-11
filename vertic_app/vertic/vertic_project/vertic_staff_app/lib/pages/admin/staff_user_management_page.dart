@@ -34,7 +34,7 @@ class _StaffUserManagementPageState extends State<StaffUserManagementPage> {
     });
 
     try {
-      final staffUsers = await client.unifiedAuth.getAllStaffUsers();
+      final staffUsers = await client.staffUserManagement.getAllStaffUsers(limit: 100, offset: 0);
       setState(() {
         _staffUsers = staffUsers;
         _isLoading = false;
@@ -272,10 +272,6 @@ class _StaffUserManagementPageState extends State<StaffUserManagementPage> {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Colors.red;
-      case StaffUserType.facilityAdmin:
-        return Colors.purple;
-      case StaffUserType.hallAdmin:
-        return Colors.orange;
       case StaffUserType.staff:
         return Colors.blue;
     }
@@ -285,10 +281,6 @@ class _StaffUserManagementPageState extends State<StaffUserManagementPage> {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Icons.verified;
-      case StaffUserType.facilityAdmin:
-        return Icons.business;
-      case StaffUserType.hallAdmin:
-        return Icons.admin_panel_settings;
       case StaffUserType.staff:
         return Icons.person;
     }
@@ -298,10 +290,6 @@ class _StaffUserManagementPageState extends State<StaffUserManagementPage> {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return 'Super-Administrator';
-      case StaffUserType.facilityAdmin:
-        return 'Facility-Administrator';
-      case StaffUserType.hallAdmin:
-        return 'Hallen-Administrator';
       case StaffUserType.staff:
         return 'Mitarbeiter';
     }
@@ -454,7 +442,7 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
 
   // RBAC Integration
   List<Role> _availableRoles = [];
-  List<int> _selectedRoleIds = [];
+  final List<int> _selectedRoleIds = [];
   bool _rolesLoaded = false;
 
   @override
@@ -483,7 +471,7 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
       setState(() {
         _rolesLoaded = true;
       });
-      print('Fehler beim Laden der Rollen: $e');
+      debugPrint('Fehler beim Laden der Rollen: $e');
     }
   }
 
@@ -569,27 +557,6 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
                           Icon(Icons.person, color: Colors.blue),
                           SizedBox(width: 8),
                           Text('Mitarbeiter'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: StaffUserType.hallAdmin,
-                      child: Row(
-                        children: [
-                          Icon(Icons.admin_panel_settings,
-                              color: Colors.orange),
-                          SizedBox(width: 8),
-                          Text('Hallen-Administrator'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: StaffUserType.facilityAdmin,
-                      child: Row(
-                        children: [
-                          Icon(Icons.business, color: Colors.purple),
-                          SizedBox(width: 8),
-                          Text('Facility-Administrator'),
                         ],
                       ),
                     ),
@@ -744,22 +711,18 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
         return;
       }
 
-      // 🔄 UNIFIED AUTH: Neue E-Mail-basierte Staff-Erstellung
-      final result = await client.unifiedAuth.createStaffUserWithEmail(
-        _emailController.text.trim(), // email (echte E-Mail-Adresse)
-        username, // username
-        password, // Sicheres Passwort vom Dialog
-        _firstNameController.text.trim(), // firstName
-        _lastNameController.text.trim(), // lastName
-        _selectedStaffLevel, // staffLevel
+      // 🔄 Legacy Staff-Erstellung (temporär)
+      final request = CreateStaffUserRequest(
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        email: _emailController.text.trim(),
+        employeeId: username,
+        staffLevel: _selectedStaffLevel,
       );
 
-      if (result.success != true) {
-        throw Exception(result.message ?? 'Unbekannter Fehler');
-      }
+      final newStaffUser = await client.staffUserManagement.createStaffUser(request);
 
-      // Extrahiere StaffUser aus dem Result
-      final newStaffUser = result.staffUser!;
+      // Erfolgreich erstellt
 
       // Rollen zuweisen, falls welche ausgewählt wurden
       if (_selectedRoleIds.isNotEmpty) {
@@ -772,7 +735,7 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
           }
         } catch (e) {
           // Bei Fehlern bei der Rollenzuweisung trotzdem erfolgreich melden
-          print('Fehler bei Rollenzuweisung: $e');
+          debugPrint('Fehler bei Rollenzuweisung: $e');
         }
       }
 

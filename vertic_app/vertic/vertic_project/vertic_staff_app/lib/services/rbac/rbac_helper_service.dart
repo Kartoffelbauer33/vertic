@@ -17,12 +17,10 @@ class RbacHelperService {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Colors.red;
-      case StaffUserType.facilityAdmin:
-        return Colors.purple;
-      case StaffUserType.hallAdmin:
-        return Colors.orange;
       case StaffUserType.staff:
         return Colors.blue;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -32,12 +30,10 @@ class RbacHelperService {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Icons.verified;
-      case StaffUserType.facilityAdmin:
-        return Icons.business;
-      case StaffUserType.hallAdmin:
-        return Icons.admin_panel_settings;
       case StaffUserType.staff:
         return Icons.person;
+      default:
+        return Icons.person_outline;
     }
   }
 
@@ -47,12 +43,10 @@ class RbacHelperService {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return 'Super-Administrator';
-      case StaffUserType.facilityAdmin:
-        return 'Facility-Administrator';
-      case StaffUserType.hallAdmin:
-        return 'Hallen-Administrator';
       case StaffUserType.staff:
         return 'Mitarbeiter';
+      default:
+        return 'Unbekannt';
     }
   }
 

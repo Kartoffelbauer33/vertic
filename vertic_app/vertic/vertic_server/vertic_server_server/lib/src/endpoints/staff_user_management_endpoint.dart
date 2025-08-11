@@ -503,11 +503,10 @@ class StaffUserManagementEndpoint extends Endpoint {
   }
 
   // PRIVATE HILFSMETHODEN
-
+  
   /// Generiert ein temporäres Passwort
   String _generateTemporaryPassword() {
-    final chars =
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final random = DateTime.now().millisecondsSinceEpoch;
     var result = '';
     for (int i = 0; i < 12; i++) {
@@ -515,4 +514,220 @@ class StaffUserManagementEndpoint extends Endpoint {
     }
     return result;
   }
+  
+  // ===== EMAIL VERIFICATION METHODS =====
+  // MOVED TO UnifiedAuthEndpoint for proper email handling
+  // All methods below are deprecated and moved to UnifiedAuthEndpoint
+  
+  /* DEPRECATED - Use UnifiedAuthEndpoint.createStaffUserWithEmail instead
+  /// Startet die E-Mail-Verifizierung für einen neuen Staff-User
+  Future<String> createStaffUserWithEmail(
+      Session session, CreateStaffUserWithEmailRequest request) async {
+    // 🔐 RBAC SECURITY CHECK
+    final authUserId =
+        await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Staff-User-Erstellung verweigert',
+          level: LogLevel.warning);
+      throw Exception('Authentication erforderlich für Staff-User-Erstellung');
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+        session, authUserId, 'can_create_staff');
+    if (!hasPermission) {
+      session.log(
+          '❌ Fehlende Berechtigung: can_create_staff (User: $authUserId)',
+          level: LogLevel.warning);
+      throw Exception('Keine Berechtigung zum Erstellen von Staff-Benutzern');
+    }
+
+    try {
+      // E-Mail-Uniqueness prüfen
+      final existingUser = await StaffUser.db.findFirstRow(
+        session,
+        where: (u) => u.email.equals(request.email),
+      );
+
+      if (existingUser != null) {
+        throw Exception('E-Mail-Adresse bereits vergeben');
+      }
+
+      // Check pending users too
+      final existingPending = await PendingStaffUser.db.findFirstRow(
+        session,
+        where: (u) => u.email.equals(request.email),
+      );
+
+      if (existingPending != null) {
+        // Delete old pending entry if expired
+        if (existingPending.tokenExpiresAt.isBefore(DateTime.now().toUtc())) {
+          await PendingStaffUser.db.deleteRow(session, existingPending);
+        } else {
+          throw Exception('E-Mail-Verifizierung bereits ausstehend. Bitte warten Sie oder fordern Sie einen neuen Code an.');
+        }
+      }
+
+      // Generate 6-digit verification code
+      final random = Random.secure();
+      final verificationCode = (100000 + random.nextInt(900000)).toString();
+      
+      // Hash the password
+      final passwordHash = sha256.convert(utf8.encode(request.password)).toString();
+      
+      // Create pending user entry
+      final now = DateTime.now().toUtc();
+      final expiresAt = now.add(const Duration(minutes: 15)); // 15 minutes expiry
+      
+      final pendingUser = PendingStaffUser(
+        firstName: request.firstName,
+        lastName: request.lastName,
+        email: request.email,
+        passwordHash: passwordHash,
+        phoneNumber: request.phoneNumber,
+        employeeId: request.employeeId,
+        staffLevel: request.staffLevel,
+        hallId: request.hallId,
+        facilityId: request.facilityId,
+        departmentId: request.departmentId,
+        contractType: request.contractType,
+        hourlyRate: request.hourlyRate,
+        monthlySalary: request.monthlySalary,
+        workingHours: request.workingHours,
+        roleIds: request.roleIds != null ? jsonEncode(request.roleIds) : null,
+        verificationToken: verificationCode,
+        tokenExpiresAt: expiresAt,
+        createdAt: now,
+      );
+
+      await PendingStaffUser.db.insertRow(session, pendingUser);
+
+      // TODO: Send email with verification code
+      // For now, we'll just log it
+      session.log(
+          '📧 E-Mail-Verifizierungscode für ${request.email}: $verificationCode',
+          level: LogLevel.info);
+
+      return verificationCode; // In production, don't return this - just send email
+    } catch (e) {
+      session.log('Fehler beim Starten der E-Mail-Verifizierung: $e',
+          level: LogLevel.error);
+      rethrow;
+    }
+  }
+
+  /// Verifiziert die E-Mail-Adresse und erstellt den Staff-User
+  Future<StaffUser> verifyStaffUserEmail(
+      Session session, VerifyStaffUserEmailRequest request) async {
+    try {
+      // Find pending user
+      final pendingUser = await PendingStaffUser.db.findFirstRow(
+        session,
+        where: (u) => u.email.equals(request.email) &
+                     u.verificationToken.equals(request.verificationCode),
+      );
+
+      if (pendingUser == null) {
+        throw Exception('Ungültiger Verifizierungscode');
+      }
+
+      // Check if token expired
+      if (pendingUser.tokenExpiresAt.isBefore(DateTime.now().toUtc())) {
+        // Delete expired entry
+        await PendingStaffUser.db.deleteRow(session, pendingUser);
+        throw Exception('Verifizierungscode abgelaufen. Bitte fordern Sie einen neuen an.');
+      }
+
+      // Create the actual staff user
+      final now = DateTime.now().toUtc();
+      final newUser = StaffUser(
+        firstName: pendingUser.firstName,
+        lastName: pendingUser.lastName,
+        email: pendingUser.email,
+        phoneNumber: pendingUser.phoneNumber,
+        staffLevel: pendingUser.staffLevel,
+        hallId: pendingUser.hallId,
+        facilityId: pendingUser.facilityId,
+        departmentId: pendingUser.departmentId,
+        employeeId: pendingUser.employeeId,
+        contractType: pendingUser.contractType,
+        hourlyRate: pendingUser.hourlyRate,
+        monthlySalary: pendingUser.monthlySalary,
+        workingHours: pendingUser.workingHours,
+        employmentStatus: 'active',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final savedUser = await StaffUser.db.insertRow(session, newUser);
+
+      // Identity creation will be handled separately in unified_auth_endpoint
+      // For now, store password hash in a temporary location or skip
+      // TODO: Integrate with unified auth system
+
+      // Assign roles if any
+      if (pendingUser.roleIds != null && pendingUser.roleIds!.isNotEmpty) {
+        final roleIds = jsonDecode(pendingUser.roleIds!) as List<dynamic>;
+        for (final roleId in roleIds) {
+          final userRole = StaffUserRole(
+            staffUserId: savedUser.id!,
+            roleId: roleId as int,
+            assignedBy: 1, // System assigned during verification
+            assignedAt: now,
+          );
+          await StaffUserRole.db.insertRow(session, userRole);
+        }
+      }
+
+      // Delete pending user entry
+      await PendingStaffUser.db.deleteRow(session, pendingUser);
+
+      session.log(
+          '✅ Staff-User erfolgreich verifiziert und erstellt: ${savedUser.email}',
+          level: LogLevel.info);
+
+      return savedUser;
+    } catch (e) {
+      session.log('Fehler bei der E-Mail-Verifizierung: $e',
+          level: LogLevel.error);
+      rethrow;
+    }
+  }
+
+  /// Sendet einen neuen Verifizierungscode
+  Future<bool> resendVerificationEmail(Session session, String email) async {
+    try {
+      // Find pending user
+      final pendingUser = await PendingStaffUser.db.findFirstRow(
+        session,
+        where: (u) => u.email.equals(email),
+      );
+
+      if (pendingUser == null) {
+        throw Exception('Keine ausstehende Verifizierung für diese E-Mail gefunden');
+      }
+
+      // Generate new verification code
+      final random = Random.secure();
+      final newCode = (100000 + random.nextInt(900000)).toString();
+      
+      // Update token and expiry
+      pendingUser.verificationToken = newCode;
+      pendingUser.tokenExpiresAt = DateTime.now().toUtc().add(const Duration(minutes: 15));
+      
+      await PendingStaffUser.db.updateRow(session, pendingUser);
+
+      // TODO: Send email with new code
+      session.log(
+          '📧 Neuer Verifizierungscode für $email: $newCode',
+          level: LogLevel.info);
+
+      return true;
+    } catch (e) {
+      session.log('Fehler beim erneuten Senden des Verifizierungscodes: $e',
+          level: LogLevel.error);
+      return false;
+    }
+  }
+
+  */ // End of deprecated methods
 }

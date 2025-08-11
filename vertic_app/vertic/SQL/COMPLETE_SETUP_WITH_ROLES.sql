@@ -31,7 +31,7 @@ BEGIN
             'Super', 
             'Administrator', 
             'superuser@staff.vertic.local', 
-            'superUser', 
+            1, -- KORRIGIERT: 1 = superUser enum (nicht String!)
             'active', 
             NOW()
         );
@@ -242,7 +242,7 @@ SELECT
     'Administrator', 
     'superuser@staff.vertic.local',
     'superuser',
-    'superUser', 
+    1, -- KORRIGIERT: 1 = superUser enum (nicht String!)
     'active',
     NOW(),
     NOW()
@@ -251,48 +251,19 @@ WHERE ui.email = 'superuser@staff.vertic.local'
 ON CONFLICT (email) DO NOTHING;
 
 -- ========================================
--- 5. SYSTEMROLLEN ERSTELLEN
+-- 5. KEINE VORDEFINIERTEN ROLLEN
 -- ========================================
+-- WICHTIG: Es werden KEINE Rollen automatisch erstellt!
+-- Der Superuser erstellt alle Rollen manuell über die Admin-Oberfläche.
+-- Jede Rolle wird individuell mit Permissions konfiguriert.
+-- Es gibt nur den Superuser als feste Entität im System.
 
-DO $$
-DECLARE
-    superuser_staff_id INTEGER;
-BEGIN
-    -- Hole Superuser Staff-ID
-    SELECT id INTO superuser_staff_id FROM staff_users WHERE email = 'superuser@staff.vertic.local';
-    
-    IF superuser_staff_id IS NULL THEN
-        RAISE EXCEPTION 'Superuser nicht gefunden! Staff-User muss zuerst erstellt werden.';
-    END IF;
-    
-    RAISE NOTICE '🎭 Erstelle Systemrollen mit Staff-User ID %', superuser_staff_id;
-    
-    -- 1. Super Admin Rolle
-    INSERT INTO roles (name, "displayName", description, color, "iconName", "isSystemRole", "isActive", "sortOrder", "createdAt", "createdBy") 
-    VALUES ('super_admin', 'Super Administrator', 'Vollzugriff auf alle Systemfunktionen. Kann alle Berechtigungen verwalten und kritische Systemeinstellungen ändern.', '#D32F2F', 'admin_panel_settings', true, true, 1, NOW(), superuser_staff_id)
-    ON CONFLICT (name) DO NOTHING;
-
-    -- 2. Facility Admin Rolle
-    INSERT INTO roles (name, "displayName", description, color, "iconName", "isSystemRole", "isActive", "sortOrder", "createdAt", "createdBy") 
-    VALUES ('facility_admin', 'Facility Administrator', 'Verwaltung eines Standorts. Kann Personal, Kassen, Tickets und lokale Einstellungen verwalten.', '#1976D2', 'business', true, true, 2, NOW(), superuser_staff_id)
-    ON CONFLICT (name) DO NOTHING;
-
-    -- 3. Kassierer Rolle
-    INSERT INTO roles (name, "displayName", description, color, "iconName", "isSystemRole", "isActive", "sortOrder", "createdAt", "createdBy") 
-    VALUES ('kassierer', 'Kassierer', 'Ticketverkauf, Kundenbetreuung und Kassenfunktionen. Kern-Rolle für den täglichen Betrieb.', '#4CAF50', 'point_of_sale', true, true, 3, NOW(), superuser_staff_id)
-    ON CONFLICT (name) DO NOTHING;
-
-    -- 4. Support Staff Rolle
-    INSERT INTO roles (name, "displayName", description, color, "iconName", "isSystemRole", "isActive", "sortOrder", "createdAt", "createdBy") 
-    VALUES ('support_staff', 'Support Mitarbeiter', 'Kundenbetreuung, Problemlösung und grundlegende Verwaltungsaufgaben.', '#FF9800', 'support_agent', true, true, 4, NOW(), superuser_staff_id)
-    ON CONFLICT (name) DO NOTHING;
-
-    -- 5. Readonly User Rolle
-    INSERT INTO roles (name, "displayName", description, color, "iconName", "isSystemRole", "isActive", "sortOrder", "createdAt", "createdBy") 
-    VALUES ('readonly_user', 'Readonly User', 'Nur-Lese-Zugriff für Einblicke und Reporting. Keine Änderungen möglich.', '#607D8B', 'visibility', false, true, 5, NOW(), superuser_staff_id)
-    ON CONFLICT (name) DO NOTHING;
-    
-END $$;
+-- Hinweis für Administratoren:
+-- Nach der Installation müssen Sie sich als Superuser einloggen und:
+-- 1. Eigene Rollen erstellen (z.B. Manager, Kassierer, Support)
+-- 2. Diesen Rollen die gewünschten Permissions zuweisen
+-- 3. Die Rollen in eine Rangordnung bringen (sortOrder)
+-- 4. Staff-Mitglieder diesen Rollen zuordnen
 
 -- ========================================
 -- 6. ALLE PERMISSIONS DEM SUPERUSER ZUWEISEN

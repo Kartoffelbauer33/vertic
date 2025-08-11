@@ -1,0 +1,37 @@
+class: StaffVerificationToken
+table: staff_verification_tokens
+fields:
+  # Verknüpfung zum Staff-User
+  staffUserId: int
+
+  # E-Mail-Adresse für die Verifikation
+  email: String
+
+  # Der Verifizierungs-Token (6-stelliger Code)
+  token: String
+
+  # Art des Tokens (email_verification, password_reset, etc.)
+  tokenType: String
+
+  # Ablaufzeit des Tokens
+  expiresAt: DateTime
+
+  # Ob der Token bereits verwendet wurde
+  isUsed: bool
+
+  # Wann der Token verwendet wurde
+  usedAt: DateTime?
+
+  # Erstellungsdatum
+  createdAt: DateTime
+
+indexes:
+  staff_verification_tokens_staff_user_id_idx:
+    fields: staffUserId
+  staff_verification_tokens_email_idx:
+    fields: email
+  staff_verification_tokens_token_idx:
+    fields: token
+    unique: true
+  staff_verification_tokens_email_token_composite_idx:
+    fields: email

@@ -35,7 +35,7 @@ class _StaffNewPageState extends State<StaffNewPage> {
     });
 
     try {
-      final staffUsers = await client.unifiedAuth.getAllStaffUsers();
+      final staffUsers = await client.staffUserManagement.getAllStaffUsers(limit: 100, offset: 0);
       setState(() {
         _staffUsers = staffUsers;
         _isLoading = false;
@@ -361,10 +361,6 @@ class _StaffNewPageState extends State<StaffNewPage> {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Colors.red;
-      case StaffUserType.facilityAdmin:
-        return Colors.purple;
-      case StaffUserType.hallAdmin:
-        return Colors.orange;
       case StaffUserType.staff:
         return Colors.blue;
     }
@@ -374,10 +370,6 @@ class _StaffNewPageState extends State<StaffNewPage> {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Icons.verified;
-      case StaffUserType.facilityAdmin:
-        return Icons.business;
-      case StaffUserType.hallAdmin:
-        return Icons.admin_panel_settings;
       case StaffUserType.staff:
         return Icons.person;
     }
@@ -387,10 +379,6 @@ class _StaffNewPageState extends State<StaffNewPage> {
     switch (staffLevel) {
       case StaffUserType.superUser:
         return 'Super-Administrator';
-      case StaffUserType.facilityAdmin:
-        return 'Facility-Administrator';
-      case StaffUserType.hallAdmin:
-        return 'Hallen-Administrator';
       case StaffUserType.staff:
         return 'Mitarbeiter';
     }
@@ -542,9 +530,12 @@ class _CreateStaffDialogState extends State<CreateStaffDialog> {
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value?.trim().isEmpty == true)
+                    if (value?.trim().isEmpty == true) {
                       return 'E-Mail erforderlich';
-                    if (!value!.contains('@')) return 'G�ltige E-Mail eingeben';
+                    }
+                    if (!value!.contains('@')) {
+                      return 'Gültige E-Mail eingeben';
+                    }
                     return null;
                   },
                 ),
@@ -580,27 +571,6 @@ class _CreateStaffDialogState extends State<CreateStaffDialog> {
                           Icon(Icons.person, color: Colors.blue, size: 18),
                           SizedBox(width: 8),
                           Text('Mitarbeiter'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: StaffUserType.hallAdmin,
-                      child: Row(
-                        children: [
-                          Icon(Icons.admin_panel_settings,
-                              color: Colors.orange, size: 18),
-                          SizedBox(width: 8),
-                          Text('Hallen-Administrator'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: StaffUserType.facilityAdmin,
-                      child: Row(
-                        children: [
-                          Icon(Icons.business, color: Colors.purple, size: 18),
-                          SizedBox(width: 8),
-                          Text('Facility-Administrator'),
                         ],
                       ),
                     ),
@@ -737,19 +707,20 @@ class _CreateStaffDialogState extends State<CreateStaffDialog> {
         return;
       }
 
-      // 🔄 UNIFIED AUTH: Neue E-Mail-basierte Staff-Erstellung
-      final result = await client.unifiedAuth.createStaffUserWithEmail(
-        _emailController.text.trim(), // email (echte E-Mail-Adresse)
-        username, // username (employeeId oder firstName)
-        password, // Sicheres Passwort vom Dialog
-        _firstNameController.text.trim(), // firstName
-        _lastNameController.text.trim(), // lastName
-        _selectedStaffLevel, // staffLevel
+      // 🔄 Legacy Staff-Erstellung (temporär)
+      final request = CreateStaffUserRequest(
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        email: _emailController.text.trim(),
+        employeeId: username,
+        staffLevel: _selectedStaffLevel,
       );
 
-      if (result.success != true) {
-        throw Exception(result.message ?? 'Unbekannter Fehler');
-      }
+      await client.staffUserManagement.createStaffUser(request);
+      
+      // Staff-User wurde erfolgreich erstellt
+
+      // Erfolgreich erstellt
 
       Navigator.pop(context);
       widget.onStaffCreated();

@@ -323,6 +323,64 @@ class PermissionManagementEndpoint extends Endpoint {
     }
   }
 
+  /// **Holt nur Rollen, die der aktuelle Benutzer anderen zuweisen darf**
+  /// 
+  /// Hierarchisches System:
+  /// - Superuser: kann alle Rollen zuweisen (außer anderen Superuser)
+  /// - Normale User: können nur Rollen zuweisen, deren Permissions sie selbst haben
+  Future<List<Role>> getAssignableRoles(Session session) async {
+    try {
+      final currentUserId = await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+      if (currentUserId == null) {
+        throw Exception('Keine gültige Staff-Authentifizierung');
+      }
+
+      // Hole aktuellen Staff-User und seine Permissions
+      final currentUser = await StaffUser.db.findById(session, currentUserId);
+      if (currentUser == null) {
+        throw Exception('Staff-User nicht gefunden');
+      }
+
+      // Hole alle aktiven Rollen
+      final allRoles = await Role.db.find(
+        session,
+        where: (t) => t.isActive.equals(true),
+        orderBy: (t) => t.sortOrder,
+      );
+
+      List<Role> assignableRoles = [];
+
+      // Superuser kann alle Rollen außer anderen Superuser-Rollen zuweisen
+      if (currentUser.staffLevel == StaffUserType.superUser) {
+        assignableRoles = allRoles.where((role) => !role.isSystemRole).toList();
+        session.log('👑 Superuser kann ${assignableRoles.length} Rollen zuweisen');
+        return assignableRoles;
+      }
+
+      // Für normale User: Hole ihre aktuellen Permissions
+      final userPermissions = await PermissionHelper.getUserPermissions(session, currentUserId);
+      
+      // Prüfe für jede Rolle, ob der User alle ihre Permissions besitzt
+      for (final role in allRoles) {
+        if (role.isSystemRole) continue; // System-Rollen nie zuweisbar für normale User
+        
+        final rolePermissions = await getRolePermissions(session, role.id!);
+        final rolePermissionNames = rolePermissions.map((p) => p.name).toSet();
+        
+        // Kann nur Rollen zuweisen, deren Permissions er selbst hat
+        if (rolePermissionNames.every((perm) => userPermissions.contains(perm))) {
+          assignableRoles.add(role);
+        }
+      }
+
+      session.log('🔒 User $currentUserId kann ${assignableRoles.length} von ${allRoles.length} Rollen zuweisen');
+      return assignableRoles;
+    } catch (e) {
+      session.log('❌ getAssignableRoles Error: $e', level: LogLevel.error);
+      return [];
+    }
+  }
+
   /// **Erstellt eine neue Rolle**
   Future<Role?> createRole(Session session, Role role) async {
     try {
@@ -663,6 +721,64 @@ class PermissionManagementEndpoint extends Endpoint {
     } catch (e) {
       session.log('❌ getStaffRoles Error: $e', level: LogLevel.error);
       return [];
+    }
+  }
+
+  /// **Aktualisiert alle Rollen eines StaffUsers (ersetzt bestehende)**
+  Future<bool> updateStaffRoles(
+    Session session,
+    int staffUserId,
+    List<int> roleIds,
+  ) async {
+    try {
+      // TODO: Permission-Check: can_manage_roles
+      // await PermissionHelper.requirePermission(session, 'can_manage_roles');
+
+      // Aktuelle Staff-User-ID ermitteln
+      final currentStaffUserId =
+          await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+      if (currentStaffUserId == null) {
+        throw Exception('Keine gültige Staff-Authentifizierung gefunden');
+      }
+
+      // 1. Alle bestehenden Rollen-Zuweisungen löschen
+      await StaffUserRole.db.deleteWhere(
+        session,
+        where: (t) => t.staffUserId.equals(staffUserId),
+      );
+
+      // 2. Neue Rollen zuweisen
+      final now = DateTime.now();
+      for (final roleId in roleIds) {
+        // Prüfe ob Rolle existiert und aktiv ist
+        final role = await Role.db.findFirstRow(
+          session,
+          where: (t) => t.id.equals(roleId) & t.isActive.equals(true),
+        );
+        
+        if (role == null) {
+          session.log('⚠️ Skipping invalid role ID: $roleId');
+          continue;
+        }
+
+        await StaffUserRole.db.insertRow(
+          session,
+          StaffUserRole(
+            staffUserId: staffUserId,
+            roleId: roleId,
+            assignedAt: now,
+            assignedBy: currentStaffUserId,
+            isActive: true,
+            expiresAt: null, // No expiration for manual assignments
+          ),
+        );
+      }
+
+      session.log('✅ Updated roles for Staff $staffUserId: ${roleIds.length} roles assigned');
+      return true;
+    } catch (e) {
+      session.log('❌ updateStaffRoles Error: $e', level: LogLevel.error);
+      return false;
     }
   }
 

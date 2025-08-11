@@ -571,12 +571,10 @@ class _StaffHomePageState extends State<StaffHomePage> {
     switch (level) {
       case StaffUserType.superUser:
         return 'Super Administrator';
-      case StaffUserType.facilityAdmin:
-        return 'Standort-Administrator';
-      case StaffUserType.hallAdmin:
-        return 'Hallen-Administrator';
       case StaffUserType.staff:
         return 'Mitarbeiter';
+      default:
+        return 'Unbekannt';
     }
   }
 }

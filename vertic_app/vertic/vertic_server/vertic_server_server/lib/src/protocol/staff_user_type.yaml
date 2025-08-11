@@ -1,6 +1,4 @@
 enum: StaffUserType
 values:
-  - staff
-  - hallAdmin  
-  - facilityAdmin
-  - superUser 
+  - staff  # Standard staff member (role-based permissions)
+  - superUser  # System superuser with all permissions 
