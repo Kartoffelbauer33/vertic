@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
 /// Vollbild-Kamera zum Aufnehmen eines Profilfotos für die Fastlane-Registrierung.
@@ -26,6 +27,9 @@ class _FastlaneCameraCapturePageState extends State<FastlaneCameraCapturePage> {
 
   Future<void> _initializeCamera() async {
     try {
+      // Auf macOS/Windows/Linux nutzen wir die federierten Pakete; availableCameras bleibt gleich,
+      // wichtig ist, dass die jeweiligen Implementierungen per pubspec eingebunden sind.
+      // Zusätzlich sicherstellen, dass Flutter-Engine initialisiert ist (im main bereits geschehen).
       _cameras = await availableCameras();
       if (_cameras == null || _cameras!.isEmpty) {
         _showError('Keine Kamera gefunden');

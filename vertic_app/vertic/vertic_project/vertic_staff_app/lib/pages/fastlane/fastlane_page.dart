@@ -59,7 +59,7 @@ class _FastlanePageState extends State<FastlanePage> {
     final typography = context.typography;
 
     final child = fastlane.mode == null
-        ? _buildModePicker(context)R
+        ? _buildModePicker(context)
         : _buildModeContent(context, fastlane.mode!);
 
     // Shortcuts für Desktop: Robuste, plattformübergreifende Kombination
