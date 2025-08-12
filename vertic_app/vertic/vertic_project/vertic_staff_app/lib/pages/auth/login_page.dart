@@ -20,7 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   
   // 🚀 Development Auto-Login Configuration
   static const bool _enableAutoLogin = kDebugMode; // Nur in Debug-Mode aktiv
-  static const String _devUsername = 'superuser';
+  static const String _devUsername = 'leonstadler';
   static const String _devPassword = 'super123';
   bool _autoLoginTriggered = false;
 

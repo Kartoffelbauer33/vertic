@@ -16,7 +16,9 @@ import 'pages/login_page.dart';
 import 'pages/pos/pos_system_page.dart';
 import 'pages/product_management_page.dart';
 import 'pages/statistics_page.dart';
+import 'pages/fastlane/fastlane_page.dart';
 import 'services/background_scanner_service.dart';
+import 'services/fastlane/fastlane_state_provider.dart';
 import 'widgets/navigation/collapsible_nav_rail.dart';
 
 // Globale Client-Instanz (SessionManager entfernt!)
@@ -82,6 +84,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => StaffAuthProvider(client)),
         ChangeNotifierProvider(create: (_) => PermissionProvider(client)),
         ChangeNotifierProvider(create: (_) => BackgroundScannerService(client)),
+        ChangeNotifierProvider(create: (_) => FastlaneStateProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const MyApp(),
@@ -208,6 +211,16 @@ class _StaffHomePageState extends State<StaffHomePage> {
   }
 
   void _handleNavigation(String route) {
+    final fastlane = Provider.of<FastlaneStateProvider>(context, listen: false);
+    if (fastlane.isActive && route != '/fastlane') {
+      // Im Fastlane-Lock keine Navigation außerhalb erlauben
+      setState(() {
+        _selectedRoute = '/fastlane';
+        _selectedIndex = _getVisiblePages(context).indexWhere((p) => p.route == '/fastlane');
+        _isNavExpanded = false;
+      });
+      return;
+    }
     final visiblePages = _getVisiblePages(context);
     final newIndex = visiblePages.indexWhere((p) => p.route == route);
 
@@ -232,6 +245,7 @@ class _StaffHomePageState extends State<StaffHomePage> {
 
     final allPages = <_AppPage>[
       const _AppPage(route: '/pos', page: PosSystemPage()),
+      const _AppPage(route: '/fastlane', page: FastlaneEntryGuard()),
       const _AppPage(
         route: '/products',
         page: ProductManagementPage(),
@@ -276,6 +290,15 @@ class _StaffHomePageState extends State<StaffHomePage> {
         return Scaffold(
           body: Listener(
             onPointerDown: (event) {
+              // Fastlane-Lock: Wenn aktiv, blockiere Navigation außerhalb der Fastlane
+              final fastlane = Provider.of<FastlaneStateProvider>(context, listen: false);
+              if (fastlane.isActive && _selectedRoute != '/fastlane') {
+                setState(() {
+                  _selectedRoute = '/fastlane';
+                  _selectedIndex = _getVisiblePages(context).indexWhere((p) => p.route == '/fastlane');
+                });
+                return;
+              }
               // Close menu when clicking outside of it
               if (_isNavExpanded) {
                 final RenderBox? navRailBox = context.findRenderObject() as RenderBox?;
@@ -299,6 +322,15 @@ class _StaffHomePageState extends State<StaffHomePage> {
                   selectedRoute: _selectedRoute,
                   onRouteSelected: _handleNavigation,
                   onExpansionChanged: () {
+                    final fastlane = Provider.of<FastlaneStateProvider>(context, listen: false);
+                    if (fastlane.isActive && _selectedRoute != '/fastlane') {
+                      // Im Fastlane-Lock nicht expandieren, sondern auf Fastlane bleiben
+                      setState(() {
+                        _selectedRoute = '/fastlane';
+                        _selectedIndex = _getVisiblePages(context).indexWhere((p) => p.route == '/fastlane');
+                      });
+                      return;
+                    }
                     setState(() {
                       _isNavExpanded = !_isNavExpanded;
                     });
@@ -586,3 +618,19 @@ class _StaffHomePageState extends State<StaffHomePage> {
     }
   }
 }
+/// Wrapper, der sicherstellt, dass bei aktivierter Fastlane immer die
+/// FastlanePage angezeigt wird und die restliche App gesperrt bleibt.
+class FastlaneEntryGuard extends StatelessWidget {
+  const FastlaneEntryGuard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final fastlane = Provider.of<FastlaneStateProvider>(context);
+    if (!fastlane.isActive) {
+      // Wenn Fastlane noch nicht aktiv, zeige die Auswahl/Startseite
+      return const FastlanePage();
+    }
+    return const FastlanePage();
+  }
+}
+
