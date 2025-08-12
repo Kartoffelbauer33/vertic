@@ -36,11 +36,11 @@ class PosProductCardWidget extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                categoryData['color'].withOpacity(0.1),
-                categoryData['color'].withOpacity(0.05),
+                categoryData['color'].withValues(alpha: 0.1),
+                categoryData['color'].withValues(alpha: 0.05),
               ],
             ),
-            border: Border.all(color: categoryData['color'].withOpacity(0.3)),
+            border: Border.all(color: categoryData['color'].withValues(alpha: 0.3)),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

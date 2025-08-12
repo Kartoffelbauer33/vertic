@@ -88,7 +88,7 @@ class PosCategoryNavigationWidget extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -128,9 +128,9 @@ class PosCategoryNavigationWidget extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
+        color: Colors.blue.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -181,7 +181,7 @@ class PosCategoryNavigationWidget extends StatelessWidget {
 
   /// **🏗️ TOP-LEVEL-KATEGORIEN ANZEIGEN**
   Widget _buildTopLevelCategoryTabs(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 100,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -221,7 +221,7 @@ class PosCategoryNavigationWidget extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     color: isSelected ? color : Colors.white,
                     border: Border.all(
-                      color: color.withOpacity(0.7),
+                      color: color.withValues(alpha: 0.7),
                       width: 2,
                     ),
                   ),
@@ -278,7 +278,7 @@ class PosCategoryNavigationWidget extends StatelessWidget {
     final subCategories =
         (hierarchyData?['subCategories'] as Map<String, List<dynamic>>?) ?? <String, List<dynamic>>{};
 
-    return Container(
+    return SizedBox(
       height: 60,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -310,7 +310,7 @@ class PosCategoryNavigationWidget extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     color: isSelected ? parentColor : Colors.white,
                     border: Border.all(
-                      color: parentColor.withOpacity(0.7),
+                      color: parentColor.withValues(alpha: 0.7),
                       width: 1.5,
                     ),
                   ),

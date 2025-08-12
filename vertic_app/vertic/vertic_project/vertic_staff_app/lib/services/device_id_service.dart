@@ -134,7 +134,7 @@ class DeviceIdService {
       } else if (kIsWeb) {
         final webInfo = await deviceInfo.webBrowserInfo;
         info.addAll({
-          'browserName': webInfo.browserName?.name,
+          'browserName': webInfo.browserName.name,
           'userAgent': webInfo.userAgent,
           'platform': webInfo.platform,
         });

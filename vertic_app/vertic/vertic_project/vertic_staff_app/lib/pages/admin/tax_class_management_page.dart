@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
-import '../../auth/permission_provider.dart';
 
 /// **🏛️ ROBUSTE STEUERKLASSEN-VERWALTUNG (Layout-Fix)**
 ///

@@ -278,7 +278,7 @@ class _CategorizedPermissionsWidgetState extends State<CategorizedPermissionsWid
         border: Border.all(color: Colors.grey[300]!),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 3,
             offset: const Offset(0, 1),
@@ -298,7 +298,7 @@ class _CategorizedPermissionsWidgetState extends State<CategorizedPermissionsWid
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: (config['color'] as Color).withOpacity(0.1),
+                color: (config['color'] as Color).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.vertical(
                   top: const Radius.circular(12),
                   bottom: isExpanded ? Radius.zero : const Radius.circular(12),

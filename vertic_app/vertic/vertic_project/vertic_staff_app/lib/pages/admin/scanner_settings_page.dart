@@ -318,7 +318,7 @@ class _ScannerSettingsPageState extends State<ScannerSettingsPage> {
                 },
                 secondary: Icon(_getScanTypeIcon(scanType)),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

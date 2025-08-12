@@ -18,7 +18,7 @@ class GymManagementPage extends StatefulWidget {
 
 class _GymManagementPageState extends State<GymManagementPage> {
   List<Gym> _gyms = [];
-  List<GymStats> _gymStats = [];
+  final List<GymStats> _gymStats = [];
   List<Facility> _facilities = []; // 🏢 FACILITY-LISTE
   bool _isLoading = true;
   bool _isCreating = false;

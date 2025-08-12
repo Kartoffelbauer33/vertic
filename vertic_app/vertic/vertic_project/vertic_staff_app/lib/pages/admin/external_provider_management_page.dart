@@ -1286,29 +1286,24 @@ class _ProviderConfigurationDialogState
   }
 
   void _updateDefaultValues() {
-    switch (_selectedProviderType) {
-      case 'fitpass':
-        _displayNameController.text = 'Fitpass Premium';
-        _apiUrlController.text = 'https://rest-fitpass-ch.herokuapp.com';
-        _credentialsController.text = '{"secret_key": "", "user_id": 0}';
-        _sportPartnerIdController.text = '';
-        _doorIdController.text = '';
-        break;
-      case 'friction':
-        _displayNameController.text = 'Friction Access';
-        _apiUrlController.text = 'https://api.apptive.ch';
-        _credentialsController.text =
-            ''; // Friction benötigt keine Credentials!
-        _sportPartnerIdController.text = '';
-        _doorIdController.text = '27'; // Standard Partner-ID
-        break;
-      case 'urban_sports_club':
-        _displayNameController.text = 'Urban Sports Club';
-        _apiUrlController.text = 'https://api.urbansportsclub.com';
-        _credentialsController.text = '{"api_key": "", "client_id": ""}';
-        _sportPartnerIdController.text = '';
-        _doorIdController.text = '';
-        break;
+    if (_selectedProviderType == 'fitpass') {
+      _displayNameController.text = 'Fitpass Premium';
+      _apiUrlController.text = 'https://rest-fitpass-ch.herokuapp.com';
+      _credentialsController.text = '{"secret_key": "", "user_id": 0}';
+      _sportPartnerIdController.text = '';
+      _doorIdController.text = '';
+    } else if (_selectedProviderType == 'friction') {
+      _displayNameController.text = 'Friction Access';
+      _apiUrlController.text = 'https://api.apptive.ch';
+      _credentialsController.text = '';
+      _sportPartnerIdController.text = '';
+      _doorIdController.text = '27';
+    } else if (_selectedProviderType == 'urban_sports_club') {
+      _displayNameController.text = 'Urban Sports Club';
+      _apiUrlController.text = 'https://api.urbansportsclub.com';
+      _credentialsController.text = '{"api_key": "", "client_id": ""}';
+      _sportPartnerIdController.text = '';
+      _doorIdController.text = '';
     }
   }
 

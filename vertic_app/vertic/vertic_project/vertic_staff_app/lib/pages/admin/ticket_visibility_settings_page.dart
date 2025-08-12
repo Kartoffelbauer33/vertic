@@ -22,8 +22,8 @@ class _TicketVisibilitySettingsPageState
   List<Gym> _gyms = [];
   List<Facility> _facilities = []; // 🏢 FACILITIES HINZUFÜGEN
   List<TicketType> _allTicketTypes = [];
-  Map<String, TicketVisibilityData> _visibilityData = {};
-  Map<String, FacilityVisibilityData> _facilityVisibilityData =
+  final Map<String, TicketVisibilityData> _visibilityData = {};
+  final Map<String, FacilityVisibilityData> _facilityVisibilityData =
       {}; // 🏢 FACILITY-DATEN
   bool _isLoading = true;
   bool _hasUnsavedChanges = false;

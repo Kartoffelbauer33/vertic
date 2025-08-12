@@ -36,7 +36,7 @@ class PosMultiCartTabsWidget extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -88,20 +88,20 @@ class PosMultiCartTabsWidget extends StatelessWidget {
                                 ? Colors.white
                                 : isOnHold
                                 ? Colors.amber[600]
-                                : Colors.white.withOpacity(0.85),
+                                : Colors.white.withValues(alpha: 0.85),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: isActive
                                   ? Colors.blue[300]!
                                   : isOnHold
                                   ? Colors.amber[700]!
-                                  : Colors.white.withOpacity(0.5),
+                                  : Colors.white.withValues(alpha: 0.5),
                               width: 2,
                             ),
                             boxShadow: isActive
                                 ? [
                                     BoxShadow(
-                                      color: Colors.blue.withOpacity(0.3),
+                                      color: Colors.blue.withValues(alpha: 0.3),
                                       blurRadius: 6,
                                       offset: const Offset(0, 2),
                                     ),

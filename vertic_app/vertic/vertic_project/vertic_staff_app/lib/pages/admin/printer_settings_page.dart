@@ -18,7 +18,7 @@ class PrinterSettingsPage extends StatefulWidget {
 }
 
 class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
-  List<PrinterConfiguration> _printerConfigs = [];
+  final List<PrinterConfiguration> _printerConfigs = [];
   List<String> _availableComPorts = [];
   bool _isLoading = true;
   bool _hasUnsavedChanges = false;

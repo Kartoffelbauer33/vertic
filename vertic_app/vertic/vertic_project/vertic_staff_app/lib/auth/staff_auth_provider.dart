@@ -292,7 +292,7 @@ class StaffAuthProvider extends ChangeNotifier {
         if (_client.authenticationKeyManager != null) {
           await _client.authenticationKeyManager!.put(authToken);
           debugPrint(
-            '✅ Auth-Token wiederhergestellt: ${authToken.length > 8 ? authToken.substring(0, 8) + '...' : authToken}',
+            '✅ Auth-Token wiederhergestellt: ${authToken.length > 8 ? '${authToken.substring(0, 8)}...' : authToken}',
           );
         }
 
@@ -435,8 +435,6 @@ class StaffAuthProvider extends ChangeNotifier {
         return 100;
       case StaffUserType.staff:
         return 40;
-      default:
-        return 0;
     }
   }
 }
@@ -457,7 +455,7 @@ class StaffAuthenticationKeyManager extends AuthenticationKeyManager {
   Future<void> put(String key) async {
     _staffToken = key;
     debugPrint(
-      '🔐 Staff-Token gesetzt: ${key.length > 16 ? key.substring(0, 16) + '...' : key}',
+      '🔐 Staff-Token gesetzt: ${key.length > 16 ? '${key.substring(0, 16)}...' : key}',
     );
   }
 

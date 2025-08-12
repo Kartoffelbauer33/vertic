@@ -122,7 +122,7 @@ class _RoleAssignmentDialogState extends State<RoleAssignmentDialog> {
           ),
         ],
       ),
-      content: Container(
+      content: SizedBox(
         width: 600,
         height: 500,
         child: _isLoading 

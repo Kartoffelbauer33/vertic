@@ -156,9 +156,9 @@ class PosProductGridWidget extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: parentColor.withOpacity(0.1),
+        color: parentColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: parentColor.withOpacity(0.3)),
+        border: Border.all(color: parentColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -215,7 +215,7 @@ class PosProductGridWidget extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: parentColor.withOpacity(0.2),
+                                color: parentColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(

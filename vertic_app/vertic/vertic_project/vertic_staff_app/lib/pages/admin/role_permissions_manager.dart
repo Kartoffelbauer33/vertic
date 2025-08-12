@@ -27,7 +27,7 @@ class RolePermissionsManager extends StatefulWidget {
 
 class _RolePermissionsManagerState extends State<RolePermissionsManager> {
   List<Permission> _assignedPermissions = [];
-  Map<String, List<Permission>> _permissionsByCategory = {};
+  final Map<String, List<Permission>> _permissionsByCategory = {};
   String _searchQuery = '';
   String _selectedCategory = 'all';
   bool _isLoading = true;

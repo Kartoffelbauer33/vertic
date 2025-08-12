@@ -19,8 +19,8 @@ class BackgroundScannerService extends ChangeNotifier {
   BuildContext? _context;
 
   // **SESSION CONTEXT** - ✅ TODO-FIX: Dynamische IDs statt hardcoded
-  int _facilityId = 1; // Default bis Session geladen
-  int _hallId = 1; // Default bis Session geladen
+  final int _facilityId = 1; // Default bis Session geladen
+  final int _hallId = 1; // Default bis Session geladen
 
   // **SCANNER HARDWARE**
   SerialScanner? _serialScanner;
@@ -30,7 +30,7 @@ class BackgroundScannerService extends ChangeNotifier {
   int _baudRate = 9600;
 
   // **SCANNER STATE**
-  bool _isScanning = true; // Background Scanner läuft permanent
+  final bool _isScanning = true; // Background Scanner läuft permanent
   bool _isProcessing = false;
   String _lastResult = '';
   DateTime? _lastScanTime;

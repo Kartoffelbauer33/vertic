@@ -103,8 +103,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
         onPressed: () {
           _showFilterDialog(context);
         },
-        child: const Icon(Icons.filter_list),
         tooltip: 'Filter anwenden',
+        child: const Icon(Icons.filter_list),
       ),
     );
   }

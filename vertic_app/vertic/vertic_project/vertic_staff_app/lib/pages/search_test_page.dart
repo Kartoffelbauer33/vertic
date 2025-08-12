@@ -25,7 +25,7 @@ class _SearchTestPageState extends State<SearchTestPage> {
   List<SearchResult> _searchResults = [];
   bool _isLoading = false;
   String _lastQuery = '';
-  List<String> _selectedEntityTypes = ['customer', 'product', 'category'];
+  final List<String> _selectedEntityTypes = ['customer', 'product', 'category'];
 
   @override
   void dispose() {
@@ -193,7 +193,7 @@ class _SearchTestPageState extends State<SearchTestPage> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: getColor().withOpacity(0.1),
+                    color: getColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -242,7 +242,7 @@ class _SearchTestPageState extends State<SearchTestPage> {
           // **SUCHFELD**
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.indigo.withOpacity(0.1),
+            color: Colors.indigo.withValues(alpha: 0.1),
             child: Column(
               children: [
                 TextField(

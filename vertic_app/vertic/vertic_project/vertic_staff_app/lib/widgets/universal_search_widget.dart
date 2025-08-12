@@ -231,7 +231,7 @@ class _UniversalSearchWidgetState extends State<UniversalSearchWidget>
   /// **📱 BUILD UI**
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: widget.width,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -253,7 +253,7 @@ class _UniversalSearchWidgetState extends State<UniversalSearchWidget>
         border: Border.all(color: Colors.grey.shade300),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -303,7 +303,7 @@ class _UniversalSearchWidgetState extends State<UniversalSearchWidget>
           border: Border.all(color: Colors.grey.shade300),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -367,7 +367,7 @@ class _UniversalSearchWidgetState extends State<UniversalSearchWidget>
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: entityColor.withOpacity(0.1),
+          color: entityColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(entityIcon, color: entityColor, size: 20),
@@ -393,7 +393,7 @@ class _UniversalSearchWidgetState extends State<UniversalSearchWidget>
               margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: entityColor.withOpacity(0.1),
+                color: entityColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(

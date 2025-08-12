@@ -57,8 +57,8 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
   // Search & Filter - Vereinfacht durch universelle Suche
   // 🗑️ DEPRECATED: Nur noch für Kompatibilität - neue Suche verwendet CustomerManagementSection
   final TextEditingController _searchController = TextEditingController();
-  String _searchText = '';
-  String _selectedSearchType = 'all';
+  final String _searchText = '';
+  final String _selectedSearchType = 'all';
 
   // Loading States
   bool _isLoading = true;
@@ -863,7 +863,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               ),
             )
           else
-            ..._userTickets.map((ticket) => _buildTicketCard(ticket)).toList(),
+            ..._userTickets.map((ticket) => _buildTicketCard(ticket)),
         ],
       ),
     );
@@ -1008,7 +1008,7 @@ class _CustomerManagementPageState extends State<CustomerManagementPage>
               ),
             )
           else
-            ..._userStatuses.map((status) => _buildStatusCard(status)).toList(),
+            ..._userStatuses.map((status) => _buildStatusCard(status)),
         ],
       ),
     );

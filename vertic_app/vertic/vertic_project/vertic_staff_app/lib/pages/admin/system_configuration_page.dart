@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:test_server_client/test_server_client.dart';
-import '../../main.dart';
 import '../../auth/permission_wrapper.dart';
 
 class SystemConfigurationPage extends StatefulWidget {

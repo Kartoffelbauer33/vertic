@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:serverpod_auth_email_flutter/serverpod_auth_email_flutter.dart';
 import 'package:test_server_client/test_server_client.dart';
 
 /// E-Mail-Bestätigungsseite für Staff-User
@@ -10,10 +11,10 @@ class EmailVerificationPage extends StatefulWidget {
   final String verificationCode;
 
   const EmailVerificationPage({
-    Key? key,
+    super.key,
     required this.email,
     required this.verificationCode,
-  }) : super(key: key);
+  });
 
   @override
   State<EmailVerificationPage> createState() => _EmailVerificationPageState();
@@ -46,14 +47,12 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
 
     try {
       final client = Provider.of<Client>(context, listen: false);
+      final code = _codeController.text.trim();
+      // Standard-Email-Auth-Validierung: analog zu Staff-Erstellung verwenden
+      final emailAuth = EmailAuthController(client.modules.auth);
+      final userInfo = await emailAuth.validateAccount(widget.email, code);
 
-      // TODO: Implementiere Verification über StaffUserManagementService
-      // Temporäre Simulation - User als verifiziert markieren
-      final result = (success: true, message: 'E-Mail erfolgreich bestätigt');
-
-      if (result.success != true) {
-        throw Exception(result.message ?? 'Unbekannter Fehler');
-      }
+      if (userInfo == null) throw Exception('Verifikation fehlgeschlagen');
 
       // Erfolg - zurück zur vorherigen Seite
       Navigator.pop(context, true);

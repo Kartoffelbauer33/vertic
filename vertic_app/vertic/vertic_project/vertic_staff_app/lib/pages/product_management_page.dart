@@ -411,11 +411,11 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                categoryConfig.color.withOpacity(0.1),
-                categoryConfig.color.withOpacity(0.05),
+                categoryConfig.color.withValues(alpha: 0.1),
+                categoryConfig.color.withValues(alpha: 0.05),
               ],
             ),
-            border: Border.all(color: categoryConfig.color.withOpacity(0.3)),
+            border: Border.all(color: categoryConfig.color.withValues(alpha: 0.3)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -507,13 +507,13 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: categoryConfig.color.withOpacity(0.15),
+                    color: categoryConfig.color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     category.name,
                     style: TextStyle(
-                      color: categoryConfig.color.withOpacity(0.8),
+                      color: categoryConfig.color.withValues(alpha: 0.8),
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
                     ),
@@ -528,7 +528,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
-                  color: categoryConfig.color.withOpacity(0.1),
+                  color: categoryConfig.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -705,7 +705,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 🏗️ TOP-LEVEL-KATEGORIE (größer dargestellt)
-          Container(
+          SizedBox(
             width: double.infinity,
             child: _buildCategoryCard(topCategory, isTopLevel: true),
           ),
@@ -848,12 +848,12 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                effectiveColor.withOpacity(isTopLevel ? 0.2 : 0.15),
-                effectiveColor.withOpacity(isTopLevel ? 0.1 : 0.05),
+                effectiveColor.withValues(alpha: isTopLevel ? 0.2 : 0.15),
+                effectiveColor.withValues(alpha: isTopLevel ? 0.1 : 0.05),
               ],
             ),
             border: Border.all(
-              color: effectiveColor.withOpacity(isTopLevel ? 0.6 : 0.4),
+              color: effectiveColor.withValues(alpha: isTopLevel ? 0.6 : 0.4),
               width: borderWidth,
             ),
           ),
@@ -1010,7 +1010,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.purple.withOpacity(0.2),
+                        color: Colors.purple.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Text(
@@ -1029,7 +1029,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.2),
+                        color: Colors.blue.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -1080,7 +1080,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: categoryConfig.color.withOpacity(0.1),
+                  color: categoryConfig.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -2300,9 +2300,9 @@ class _EditProductDialogState extends State<EditProductDialog> {
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                   ),
                   child: const Row(
                     children: [
@@ -2774,7 +2774,7 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
     }
 
     // Generic fallback
-    return '❌ Unbekannter Fehler\n\nBeim Erstellen der Kategorie ist ein Fehler aufgetreten:\n\n${errorMessage.length > 100 ? errorMessage.substring(0, 100) + '...' : errorMessage}';
+    return '❌ Unbekannter Fehler\n\nBeim Erstellen der Kategorie ist ein Fehler aufgetreten:\n\n${errorMessage.length > 100 ? '${errorMessage.substring(0, 100)}...' : errorMessage}';
   }
 
   /// **🎨 HILFSMETHODE: Nur Top-Level-Kategorien für Parent-Auswahl**
@@ -2980,9 +2980,9 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3074,7 +3074,7 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                         height: 50,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? Colors.blue.withOpacity(0.1)
+                              ? Colors.blue.withValues(alpha: 0.1)
                               : Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
@@ -3116,9 +3116,9 @@ class _CreateCategoryDialogState extends State<CreateCategoryDialog> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3349,9 +3349,9 @@ class _EditCategoryDialogState extends State<EditCategoryDialog> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
+                      color: Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       children: [

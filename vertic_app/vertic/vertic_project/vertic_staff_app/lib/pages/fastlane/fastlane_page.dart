@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -63,20 +63,18 @@ class _FastlanePageState extends State<FastlanePage> {
         : _buildModeContent(context, fastlane.mode!);
 
     // Shortcuts für Desktop: Robuste, plattformübergreifende Kombination
-    // macOS: Cmd + Option + Shift + U
-    // Windows/Linux: Ctrl + Alt + Shift + U
+    // macOS: Cmd + Shift + U
+    // Windows/Linux: Alt + Shift + U
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
-        // macOS Variante (Cmd)
+        // macOS Variante (Cmd + Shift + U)
         LogicalKeySet(
           LogicalKeyboardKey.meta,
-          LogicalKeyboardKey.alt,
           LogicalKeyboardKey.shift,
           LogicalKeyboardKey.keyU,
         ): _FastlaneUnlockIntent(),
-        // Windows/Linux Variante (Ctrl)
+        // Windows/Linux Variante (Alt + Shift + U)
         LogicalKeySet(
-          LogicalKeyboardKey.control,
           LogicalKeyboardKey.alt,
           LogicalKeyboardKey.shift,
           LogicalKeyboardKey.keyU,
@@ -87,9 +85,14 @@ class _FastlanePageState extends State<FastlanePage> {
           _FastlaneUnlockIntent: CallbackAction<_FastlaneUnlockIntent>(
             onInvoke: (intent) {
               // Ignoriere Shortcut, wenn ein Textfeld fokussiert ist
-              final focused = FocusManager.instance.primaryFocus?.context?.widget;
-              if (focused is EditableText) return null;
-              if (!Platform.isAndroid && !Platform.isIOS) {
+              final focusContext = FocusManager.instance.primaryFocus?.context;
+              final hasEditableAncestor =
+                  focusContext?.findAncestorWidgetOfExactType<EditableText>() != null;
+              if (hasEditableAncestor) return null;
+              // Desktop / Nicht-Mobile Plattformen direkt entsperrbar per Shortcut
+              final isMobile = defaultTargetPlatform == TargetPlatform.android ||
+                  defaultTargetPlatform == TargetPlatform.iOS;
+              if (!isMobile) {
                 // Direkt den Staff-Unlock-Dialog anzeigen (robust, kein 5x Tap nötig)
                 _promptStaffUnlock();
               }
@@ -164,7 +167,7 @@ class _FastlanePageState extends State<FastlanePage> {
             ),
             SizedBox(height: spacing.lg),
             Text(
-              'Hinweis: Nach Auswahl ist die Staff-App gesperrt. Beenden über 5x Tippen auf das Icon oder Cmd+V (Desktop).',
+              'Hinweis: Nach Auswahl ist die Staff-App gesperrt. Beenden über 5x Tippen auf das Icon oder Shortcut (Desktop: macOS Cmd+Shift+U, Windows/Linux Alt+Shift+U).',
               style: typography.bodySmall.copyWith(color: colors.onSurfaceVariant),
             ),
           ],

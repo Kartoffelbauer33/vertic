@@ -810,14 +810,13 @@ class _UserStatusManagementPageState extends State<UserStatusManagementPage> {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (status.description?.isNotEmpty == true)
-                Text(status.description!),
+              if (status.description.isNotEmpty == true)
+                Text(status.description),
               const SizedBox(height: 4),
               Text(
-                '${status.discountPercentage?.toStringAsFixed(0) ?? 0}% Rabatt' +
-                    (status.requiresVerification
+                '${status.discountPercentage.toStringAsFixed(0) ?? 0}% Rabatt${status.requiresVerification
                         ? ' • Verifizierung erforderlich'
-                        : ''),
+                        : ''}',
                 style: TextStyle(
                   color: Colors.grey.shade600,
                   fontSize: 12,
@@ -1296,7 +1295,7 @@ class _AddEditUserStatusDialogState extends State<AddEditUserStatusDialog> {
       final now = DateTime.now().toUtc();
 
       double discountPercentage = 0;
-      double? fixedDiscountAmount = null;
+      double? fixedDiscountAmount;
 
       // Preisgestaltung verarbeiten
       switch (_pricingMode) {

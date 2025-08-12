@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
 import '../../services/background_scanner_service.dart';
 import '../../services/device_id_service.dart';
-import '../../auth/permission_provider.dart';
 
 import '../../widgets/pos/pos_cart_widget.dart';
 import '../../widgets/pos/pos_multi_cart_tabs_widget.dart';
@@ -87,7 +86,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
   final FocusNode _searchFocusNode = FocusNode();
   List<PosCartItem> _cartItems = [];
   bool _isLoading = false;
-  String _scannerMode = 'POS'; // Express, POS, Hybrid
+  final String _scannerMode = 'POS'; // Express, POS, Hybrid
   Map<String, List<dynamic>> _categorizedItems = {};
   PosSession? _currentSession;
 
@@ -103,7 +102,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
   bool _showingSubCategories = false; // Zeigt Sub-Kategorien an
 
   // 🛒 MULTI-CART-SYSTEM
-  List<CartSession> _activeCarts = []; // Alle aktiven Warenkörbe
+  final List<CartSession> _activeCarts = []; // Alle aktiven Warenkörbe
   int _currentCartIndex = 0; // Index des aktuell angezeigten Warenkorbs
 
   // 🔍 LIVE-FILTER STATE
@@ -119,10 +118,10 @@ class _PosSystemPageState extends State<PosSystemPage> {
   final Map<int, bool> _activeSyncOperations = {}; // Tracking aktiver Sync-Operationen
 
   // 🎯 FILTER-OPTIONEN
-  Set<String> _activeFilters = {};
-  String _sortOption = 'relevance'; // relevance, alphabetical, price_asc, price_desc
-  bool _showOnlyTickets = false;
-  bool _showOnlyProducts = false;
+  final Set<String> _activeFilters = {};
+  final String _sortOption = 'relevance'; // relevance, alphabetical, price_asc, price_desc
+  final bool _showOnlyTickets = false;
+  final bool _showOnlyProducts = false;
 
   // 🎨 DYNAMISCHE ICON-MAPPING für Backend-Kategorien
   final Map<String, IconData> _iconMapping = {
@@ -314,7 +313,7 @@ class _PosSystemPageState extends State<PosSystemPage> {
           final cartItems = await client.pos.getCartItems(posSession.id!);
 
           debugPrint(
-            '✅ Stelle Session ${posSession.id} wieder her - ${cartItems.length} Artikel, Kunde: ${posSession.customerId != null ? posSession.customerId : 'keiner'}',
+            '✅ Stelle Session ${posSession.id} wieder her - ${cartItems.length} Artikel, Kunde: ${posSession.customerId ?? 'keiner'}',
           );
 
           final cartId = 'cart_${posSession.id}_restored';
@@ -416,11 +415,6 @@ class _PosSystemPageState extends State<PosSystemPage> {
     debugPrint('🔄 Rufe Backend createDeviceSession auf...');
     final session = await client.pos.createDeviceSession(deviceId, null);
     debugPrint('🔄 Backend-Antwort für createDeviceSession: $session');
-
-    if (session == null) {
-      debugPrint('❌ Backend gab null Session zurück für Device: $deviceId');
-      throw Exception('Backend gab null Session zurück für Device: $deviceId');
-    }
 
     debugPrint('✅ Session erhalten, rufe _createNewCartWithSession auf...');
     await _createNewCartWithSession(session);
@@ -2576,8 +2570,9 @@ Future<void> _syncRemoveCartInBackground(
   Future<void> _clearCurrentCart() async {
     if (_activeCarts.isEmpty ||
         _currentCartIndex < 0 ||
-        _currentCartIndex >= _activeCarts.length)
+        _currentCartIndex >= _activeCarts.length) {
       return;
+    }
 
     final currentCart = _activeCarts[_currentCartIndex];
     
@@ -2614,8 +2609,9 @@ Future<void> _syncRemoveCartInBackground(
   void _removeItemFromCurrentCart(int itemId) {
     if (_activeCarts.isEmpty ||
         _currentCartIndex < 0 ||
-        _currentCartIndex >= _activeCarts.length)
+        _currentCartIndex >= _activeCarts.length) {
       return;
+    }
 
     setState(() {
       _activeCarts[_currentCartIndex].items.removeWhere(
@@ -2632,8 +2628,9 @@ Future<void> _syncRemoveCartInBackground(
   void _updateCurrentCartItemQuantity(int itemId, int newQuantity) {
     if (_activeCarts.isEmpty ||
         _currentCartIndex < 0 ||
-        _currentCartIndex >= _activeCarts.length)
+        _currentCartIndex >= _activeCarts.length) {
       return;
+    }
     if (newQuantity <= 0) return;
 
     setState(() {
@@ -2734,7 +2731,7 @@ Future<void> _syncRemoveCartInBackground(
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
+                            color: Colors.grey.withValues(alpha: 0.1),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(0, 2),
@@ -2855,8 +2852,11 @@ Future<void> _syncRemoveCartInBackground(
         });
 
         // 🔄 Backend-Sync im Hintergrund
-        client.pos.updateCartItem(nonNullItem.id!, nonNullItem.quantity + 1).catchError((e) {
+        client.pos
+            .updateCartItem(nonNullItem.id!, nonNullItem.quantity + 1)
+            .catchError((e) {
           debugPrint('⚠️ Hintergrund-Update fehlgeschlagen: $e');
+          return nonNullItem; // geforderter Rückgabewert für Typ-Signatur
         });
 
         debugPrint('🚀 Schnelle Mengenänderung: ${product.name} (${nonNullItem.quantity + 1})');

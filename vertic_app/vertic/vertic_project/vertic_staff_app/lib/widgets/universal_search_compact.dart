@@ -152,7 +152,7 @@ class _UniversalSearchCompactState extends State<UniversalSearchCompact> {
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: getColor().withOpacity(0.1),
+          color: getColor().withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -177,7 +177,7 @@ class _UniversalSearchCompactState extends State<UniversalSearchCompact> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: widget.width,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -244,7 +244,7 @@ class _UniversalSearchCompactState extends State<UniversalSearchCompact> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),

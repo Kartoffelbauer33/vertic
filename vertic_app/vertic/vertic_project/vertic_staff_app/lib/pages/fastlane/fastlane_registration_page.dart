@@ -2,6 +2,7 @@ import 'dart:typed_data';
 // removed unused imports
 import 'fastlane_camera_capture_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' as fsv;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:test_server_client/test_server_client.dart';
@@ -29,11 +30,19 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _birthDate = TextEditingController();
-  final _address = TextEditingController();
+  final _address = TextEditingController(); // Straße
+  final _houseNumber = TextEditingController();
+  final _postalCode = TextEditingController();
+  final _city = TextEditingController();
+  final _country = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
   String? _gender;
   ByteData? _profilePhoto; // Upload später via userProfile.uploadProfilePhoto
+
+  // Erweiterte Adressfelder (bereits oben definiert)
+
+  // (String-basierte Fehler entfernt – unten folgen bool-Flags)
 
   // Schritt 2 Notfallkontakt
   final _emFirstName = TextEditingController();
@@ -55,6 +64,20 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
   bool _agreedAGB = false;
   bool _agreedPrivacy = false;
 
+  // Schritt 1 Fehlerzustände
+  bool _errFirstName = false;
+  bool _errLastName = false;
+  bool _errBirthDate = false;
+  bool _errGender = false;
+  bool _errEmail = false;
+  bool _errStreet = false;
+  bool _errHouseNumber = false;
+  bool _errPostal = false;
+  bool _errCity = false;
+  bool _errCountry = false;
+  bool _errPhoto = false;
+  bool _errPhoneFormat = false; // optionales Feld, aber Format prüfen, falls befüllt
+
   @override
   void dispose() {
     _controller.dispose();
@@ -62,6 +85,10 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
     _lastName.dispose();
     _birthDate.dispose();
     _address.dispose();
+    _houseNumber.dispose();
+    _postalCode.dispose();
+    _city.dispose();
+    _country.dispose();
     _email.dispose();
     _phone.dispose();
     _emFirstName.dispose();
@@ -99,21 +126,21 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
         ),
         SizedBox(height: spacing.md),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: spacing.lg),
+          padding: EdgeInsets.fromLTRB(spacing.lg, 0, spacing.lg, spacing.sm),
           child: Row(
             children: [
               if (_currentStep > 0)
-                VerticOutlineButton(text: 'Zurück', onPressed: _prev, width: 160),
+                VerticOutlineButton(text: 'Zurück', onPressed: _prev, width: 140),
               const Spacer(),
               PrimaryButton(
                 text: _currentStep < 3 ? 'Weiter' : 'Senden',
                 onPressed: _handlePrimary,
-                width: 200,
+                width: 160,
               ),
             ],
           ),
         ),
-        SizedBox(height: spacing.lg),
+        SizedBox(height: spacing.md),
       ],
     );
   }
@@ -160,8 +187,8 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
 
   Widget _buildStep1(BuildContext context) {
     final spacing = context.spacing;
-    final colors = context.colors;
-    final typography = context.typography;
+    // final colors = context.colors;
+    // final typography = context.typography;
 
     // Layout: Foto links, rechts die Felder in gewünschter Reihenfolge
     final form = Column(
@@ -169,8 +196,22 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
         children: [
         // Name-Reihe
           _row2(
-            TextInput(label: 'Vorname', controller: _firstName, required: true),
-            TextInput(label: 'Nachname', controller: _lastName, required: true),
+            TextInput(
+              label: 'Vorname',
+              controller: _firstName,
+              required: true,
+              state: _errFirstName ? VerticInputState.error : VerticInputState.normal,
+              errorText: _errFirstName ? 'Bitte Vornamen angeben' : null,
+              onChanged: (_) => setState(() => _errFirstName = false),
+            ),
+            TextInput(
+              label: 'Nachname',
+              controller: _lastName,
+              required: true,
+              state: _errLastName ? VerticInputState.error : VerticInputState.normal,
+              errorText: _errLastName ? 'Bitte Nachnamen angeben' : null,
+              onChanged: (_) => setState(() => _errLastName = false),
+            ),
           ),
           SizedBox(height: spacing.md),
         // Geburtsdatum + Geschlecht
@@ -179,6 +220,9 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
               label: 'Geburtsdatum (TT.MM.JJJJ)',
               controller: _birthDate,
               required: true,
+              state: _errBirthDate ? VerticInputState.error : VerticInputState.normal,
+              errorText: _errBirthDate ? 'Bitte gültiges Datum angeben' : null,
+              onChanged: (_) => setState(() => _errBirthDate = false),
               suffixIcon: Icons.calendar_today,
               onSuffixIconPressed: () async {
                 final now = DateTime.now();
@@ -196,29 +240,85 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
             ),
           _GenderDropdown(
             value: _gender,
-            onChanged: (g) => setState(() => _gender = g),
+            onChanged: (g) => setState(() {
+              _gender = g;
+              _errGender = false;
+            }),
           ),
         ),
         SizedBox(height: spacing.md),
-        // E-Mail + Telefon
+        // E-Mail + Telefon (Telefon optional, mit Ländervorwahl)
         _row2(
-          EmailInput(label: 'E-Mail', controller: _email, required: true),
-          PhoneInput(label: 'Telefonnummer', controller: _phone),
+          EmailInput(
+            label: 'E-Mail',
+            controller: _email,
+            required: true,
+            state: _errEmail ? VerticInputState.error : VerticInputState.normal,
+            errorText: _errEmail ? 'Bitte gültige E-Mail angeben' : null,
+            onChanged: (_) => setState(() => _errEmail = false),
+          ),
+          PhoneInput(
+            label: 'Telefonnummer',
+            controller: _phone,
+            helperText: 'Mit Ländervorwahl, z. B. +49 151 1234567',
+            inputFormatters: [
+              fsv.FilteringTextInputFormatter.allow(RegExp(r'[+0-9 ]')),
+            ],
+            state: _errPhoneFormat ? VerticInputState.error : VerticInputState.normal,
+            errorText: _errPhoneFormat ? 'Bitte mit Ländervorwahl angeben (z. B. +49 ...)' : null,
+            onChanged: (_) => setState(() => _errPhoneFormat = false),
+          ),
         ),
         SizedBox(height: spacing.md),
         // Adresse als vierer Grid auf zwei Reihen
         _row2(
-          TextInput(label: 'Straße', controller: _address, required: true),
-          TextInput(label: 'Hausnummer', controller: TextEditingController()),
+          TextInput(
+            label: 'Straße',
+            controller: _address,
+            required: true,
+            state: _errStreet ? VerticInputState.error : VerticInputState.normal,
+            errorText: _errStreet ? 'Bitte Straße angeben' : null,
+            onChanged: (_) => setState(() => _errStreet = false),
+          ),
+          TextInput(
+            label: 'Hausnummer',
+            controller: _houseNumber,
+            required: true,
+            state: _errHouseNumber ? VerticInputState.error : VerticInputState.normal,
+            errorText: _errHouseNumber ? 'Bitte Hausnummer angeben' : null,
+            onChanged: (_) => setState(() => _errHouseNumber = false),
+          ),
           ),
           SizedBox(height: spacing.md),
           _row2(
-          TextInput(label: 'Postleitzahl', controller: TextEditingController()),
-          TextInput(label: 'Ort', controller: TextEditingController()),
+          TextInput(
+            label: 'Postleitzahl',
+            controller: _postalCode,
+            required: true,
+            state: _errPostal ? VerticInputState.error : VerticInputState.normal,
+            errorText: _errPostal ? 'Bitte Postleitzahl angeben' : null,
+            onChanged: (_) => setState(() => _errPostal = false),
+          ),
+          TextInput(
+            label: 'Ort',
+            controller: _city,
+            required: true,
+            state: _errCity ? VerticInputState.error : VerticInputState.normal,
+            errorText: _errCity ? 'Bitte Ort angeben' : null,
+            onChanged: (_) => setState(() => _errCity = false),
+          ),
         ),
         SizedBox(height: spacing.md),
-        Text('Profilfoto ist verpflichtend. Aufnahme über Kamera (Desktop/Mobil), Upload nur im Web.',
-            style: typography.labelSmall.copyWith(color: colors.onSurfaceVariant)),
+        _row2(
+          _CountryAutocomplete(
+            controller: _country,
+            required: true,
+            showError: _errCountry,
+            onChanged: (_) => setState(() => _errCountry = false),
+          ),
+          const SizedBox.shrink(),
+        ),
+        SizedBox(height: spacing.md),
       ],
     );
 
@@ -227,7 +327,7 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _PhotoPicker(onPicked: (data) => _profilePhoto = data, required: true),
+            _PhotoPicker(onPicked: (data) => _profilePhoto = data, required: true, showError: _errPhoto),
             SizedBox(height: spacing.md),
             form,
           ],
@@ -235,33 +335,37 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
       );
     }
 
-    return SingleChildScrollView(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(flex: 1, child: _PhotoPicker(onPicked: (data) => _profilePhoto = data, required: true)),
-          SizedBox(width: spacing.lg),
-          Expanded(flex: 2, child: form),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 1,
+          child: _PhotoPicker(
+            onPicked: (data) => _profilePhoto = data,
+            required: true,
+            showError: _errPhoto,
+          ),
+        ),
+        SizedBox(width: spacing.lg),
+        Expanded(flex: 2, child: form),
+      ],
     );
   }
 
   Widget _buildStep2(BuildContext context) {
     final spacing = context.spacing;
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _row2(
-            TextInput(label: 'Notfall Vorname', controller: _emFirstName, required: true),
-            TextInput(label: 'Notfall Nachname', controller: _emLastName, required: true),
-          ),
-          SizedBox(height: spacing.md),
-          PhoneInput(label: 'Notfall Telefonnummer', controller: _emPhone, required: true),
-        ],
-      ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _row2(
+          TextInput(label: 'Notfall Vorname', controller: _emFirstName, required: true),
+          TextInput(label: 'Notfall Nachname', controller: _emLastName, required: true),
+        ),
+        SizedBox(height: spacing.md),
+        PhoneInput(label: 'Notfall Telefonnummer', controller: _emPhone, required: true),
+      ],
     );
+    return context.isCompact ? SingleChildScrollView(child: content) : content;
   }
 
   Widget _buildStep3(BuildContext context) {
@@ -334,43 +438,41 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
 
   Widget _buildStep4(BuildContext context) {
     final spacing = context.spacing;
-
     final colors = context.colors;
     final typography = context.typography;
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Übersicht', style: typography.titleMedium),
-          SizedBox(height: spacing.md),
-          _summaryRow('Name', '${_firstName.text} ${_lastName.text}'),
-          _summaryRow('Geburtsdatum', _birthDate.text),
-          _summaryRow('E-Mail', _email.text),
-          _summaryRow('Telefon', _phone.text.isEmpty ? '—' : _phone.text),
-          _summaryRow('Adresse', _address.text),
-          _summaryRow('Geschlecht', _gender ?? '—'),
-          SizedBox(height: spacing.lg),
-          Text('Zustimmungen', style: typography.titleSmall),
-          CheckboxListTile(
-            value: _agreedHouseRules,
-            onChanged: (v) => setState(() => _agreedHouseRules = v ?? false),
-            title: const Text('Ich akzeptiere die Hallenordnung'),
-          ),
-          CheckboxListTile(
-            value: _agreedAGB,
-            onChanged: (v) => setState(() => _agreedAGB = v ?? false),
-            title: const Text('Ich akzeptiere die Vertic AGBs'),
-          ),
-          CheckboxListTile(
-            value: _agreedPrivacy,
-            onChanged: (v) => setState(() => _agreedPrivacy = v ?? false),
-            title: const Text('Ich akzeptiere die Datenschutzbestimmungen'),
-          ),
-          if (!(_agreedHouseRules && _agreedAGB && _agreedPrivacy))
-            Text('Bitte alle Zustimmungen geben', style: typography.labelSmall.copyWith(color: colors.error)),
-        ],
-      ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Übersicht', style: typography.titleMedium),
+        SizedBox(height: spacing.md),
+        _summaryRow('Name', '${_firstName.text} ${_lastName.text}'),
+        _summaryRow('Geburtsdatum', _birthDate.text),
+        _summaryRow('E-Mail', _email.text),
+        _summaryRow('Telefon', _phone.text.isEmpty ? '—' : _phone.text),
+        _summaryRow('Adresse', _address.text),
+        _summaryRow('Geschlecht', _gender ?? '—'),
+        SizedBox(height: spacing.lg),
+        Text('Zustimmungen', style: typography.titleSmall),
+        CheckboxListTile(
+          value: _agreedHouseRules,
+          onChanged: (v) => setState(() => _agreedHouseRules = v ?? false),
+          title: const Text('Ich akzeptiere die Hallenordnung'),
+        ),
+        CheckboxListTile(
+          value: _agreedAGB,
+          onChanged: (v) => setState(() => _agreedAGB = v ?? false),
+          title: const Text('Ich akzeptiere die Vertic AGBs'),
+        ),
+        CheckboxListTile(
+          value: _agreedPrivacy,
+          onChanged: (v) => setState(() => _agreedPrivacy = v ?? false),
+          title: const Text('Ich akzeptiere die Datenschutzbestimmungen'),
+        ),
+        if (!(_agreedHouseRules && _agreedAGB && _agreedPrivacy))
+          Text('Bitte alle Zustimmungen geben', style: typography.labelSmall.copyWith(color: colors.error)),
+      ],
     );
+    return context.isCompact ? SingleChildScrollView(child: content) : content;
   }
 
   Widget _summaryRow(String label, String value) {
@@ -432,9 +534,9 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
         null,
         birth,
         _gender,
-        _address.text.trim(),
-        null,
-        null,
+        '${_address.text.trim()} ${_houseNumber.text.trim()}, ${_postalCode.text.trim()} ${_city.text.trim()}, ${_country.text.trim()}',
+        _city.text.trim(),
+        _postalCode.text.trim(),
         _phone.text.trim().isEmpty ? null : _phone.text.trim(),
       );
       if (profile == null) throw Exception('Profil konnte nicht gespeichert werden');
@@ -452,7 +554,7 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
           c.lastName,
           c.birthDate,
           c.gender,
-          address: _address.text.trim(),
+          address: '${_address.text.trim()} ${_houseNumber.text.trim()}, ${_postalCode.text.trim()} ${_city.text.trim()}, ${_country.text.trim()}',
         );
       }
 
@@ -484,14 +586,33 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
   bool _validateStep(int step) {
     switch (step) {
       case 0:
-        final hasPhoto = _profilePhoto != null;
-        return _firstName.text.isNotEmpty &&
-            _lastName.text.isNotEmpty &&
-            _email.text.contains('@') &&
-            _birthDate.text.isNotEmpty &&
-            _address.text.isNotEmpty &&
-            _gender != null &&
-            hasPhoto;
+        // Fehlerflags setzen
+        _errFirstName = _firstName.text.isEmpty;
+        _errLastName = _lastName.text.isEmpty;
+        _errBirthDate = _birthDate.text.isEmpty || _parseDate(_birthDate.text) == null;
+        _errGender = _gender == null;
+        _errEmail = !_email.text.contains('@');
+        _errStreet = _address.text.isEmpty;
+        _errHouseNumber = _houseNumber.text.isEmpty;
+        _errPostal = _postalCode.text.isEmpty;
+        _errCity = _city.text.isEmpty;
+        _errCountry = _country.text.isEmpty;
+        _errPhoto = _profilePhoto == null;
+        // Telefon: falls befüllt, prüfen ob mit Ländervorwahl beginnt
+        _errPhoneFormat = _phone.text.isNotEmpty && !_phone.text.trim().startsWith('+');
+        setState(() {});
+        return !(_errFirstName ||
+            _errLastName ||
+            _errBirthDate ||
+            _errGender ||
+            _errEmail ||
+            _errStreet ||
+            _errHouseNumber ||
+            _errPostal ||
+            _errCity ||
+            _errCountry ||
+            _errPhoto ||
+            _errPhoneFormat);
       case 1:
         return _emFirstName.text.isNotEmpty && _emLastName.text.isNotEmpty && _emPhone.text.isNotEmpty;
       case 2:
@@ -535,7 +656,8 @@ class _FastlaneRegistrationPageState extends State<FastlaneRegistrationPage> {
 class _PhotoPicker extends StatefulWidget {
   final ValueChanged<ByteData?> onPicked;
   final bool required;
-  const _PhotoPicker({required this.onPicked, this.required = false});
+  final bool showError;
+  const _PhotoPicker({required this.onPicked, this.required = false, this.showError = false});
   @override
   State<_PhotoPicker> createState() => _PhotoPickerState();
 }
@@ -581,14 +703,18 @@ class _PhotoPickerState extends State<_PhotoPicker> {
                     ? Icon(Icons.person, color: colors.onSurfaceVariant)
                     : Icon(Icons.check, color: Colors.green),
               ),
-              SizedBox(width: spacing.md),
-              _PhotoActions(
-                onPicked: (d) {
-                  setState(() => _data = d);
-                  widget.onPicked(d);
-                },
-              ),
             ],
+          ),
+          if (widget.showError && _data == null) ...[
+            SizedBox(height: spacing.xs),
+            Text('Bitte ein Foto aufnehmen', style: typography.bodySmall.copyWith(color: colors.error)),
+          ],
+          SizedBox(height: spacing.md),
+          _PhotoActions(
+            onPicked: (d) {
+              setState(() => _data = d);
+              widget.onPicked(d);
+            },
           ),
         ],
       ),
@@ -619,7 +745,6 @@ class _PhotoActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
     return Row(
       children: [
         PrimaryButton(
@@ -646,7 +771,75 @@ class _GenderDropdown extends StatelessWidget {
         DropdownMenuItem(value: 'divers', child: Text('divers')),
       ],
       onChanged: (v) { if (v != null) onChanged(v); },
-      decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Geschlecht (m/w/d)'),
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        labelText: 'Geschlecht (m/w/d)',
+        errorText: value == null ? 'Bitte auswählen' : null,
+      ),
+    );
+  }
+}
+
+class _CountryAutocomplete extends StatelessWidget {
+  final TextEditingController controller;
+  final bool required;
+  final bool showError;
+  final ValueChanged<String>? onChanged;
+  const _CountryAutocomplete({
+    required this.controller,
+    this.required = false,
+    this.showError = false,
+    this.onChanged,
+  });
+
+  static const List<String> _countries = [
+    'Deutschland','Österreich','Schweiz','Frankreich','Italien','Spanien','Niederlande','Belgien','Luxemburg','Dänemark','Norwegen','Schweden','Finnland','Polen','Tschechien','Slowakei','Ungarn','Slowenien','Kroatien','Griechenland','Portugal','Irland','Vereinigtes Königreich','USA','Kanada','Australien','Neuseeland'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final colors = context.colors;
+    final typography = context.typography;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Autocomplete<String>(
+          initialValue: TextEditingValue(text: controller.text),
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text.isEmpty) {
+              return const Iterable<String>.empty();
+            }
+            final input = textEditingValue.text.toLowerCase();
+            return _countries.where((c) => c.toLowerCase().contains(input));
+          },
+          displayStringForOption: (o) => o,
+          onSelected: (String selection) {
+            controller.text = selection;
+            onChanged?.call(selection);
+          },
+          fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+            textController.text = controller.text;
+            textController.addListener(() {
+              controller.text = textController.text;
+              if (onChanged != null) onChanged!(controller.text);
+            });
+            return TextField(
+              controller: textController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                labelText: 'Land',
+                border: const OutlineInputBorder(),
+                errorText: required && showError && controller.text.isEmpty ? 'Bitte Land angeben' : null,
+              ),
+            );
+          },
+        ),
+        if (required && showError && controller.text.isEmpty) ...[
+          SizedBox(height: spacing.xs),
+          Text('Land ist erforderlich', style: typography.bodySmall.copyWith(color: colors.error)),
+        ]
+      ],
     );
   }
 }

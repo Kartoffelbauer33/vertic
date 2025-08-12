@@ -23,7 +23,7 @@ class PricingManagementPage extends StatefulWidget {
 class _PricingManagementPageState extends State<PricingManagementPage> {
   List<TicketType> _ticketTypes = [];
   List<UserStatusType> _statusTypes = [];
-  Map<String, double> _pricingMatrix = {}; // Key: "ticketTypeId_statusTypeId"
+  final Map<String, double> _pricingMatrix = {}; // Key: "ticketTypeId_statusTypeId"
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -663,7 +663,7 @@ class _PricingManagementPageState extends State<PricingManagementPage> {
       );
     }
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

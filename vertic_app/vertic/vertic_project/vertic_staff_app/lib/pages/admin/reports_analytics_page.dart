@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:test_server_client/test_server_client.dart';
 import 'package:provider/provider.dart';
-import '../../main.dart';
 import '../../auth/permission_wrapper.dart';
 import '../../auth/staff_auth_provider.dart';
 
@@ -36,9 +35,9 @@ class _ReportsAnalyticsPageState extends State<ReportsAnalyticsPage>
   List<Ticket> _allTickets = [];
   List<AppUser> _allUsers = [];
   List<Gym> _allGyms = [];
-  Map<String, double> _revenueByDay = {};
-  Map<String, int> _ticketsByType = {};
-  Map<String, int> _usersByStatus = {};
+  final Map<String, double> _revenueByDay = {};
+  final Map<String, int> _ticketsByType = {};
+  final Map<String, int> _usersByStatus = {};
 
   // Filter States
   DateTimeRange? _dateRange;

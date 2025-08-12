@@ -1154,9 +1154,7 @@ class AdminDashboardPageState extends State<AdminDashboardPage> {
                           ),
                         ),
                         Text(
-                          '• Länder-Zuordnung bestimmt Steuerklassen und Compliance\n' +
-                              '• Einmal gesperrt, kann nur SuperUser ändern\n' +
-                              '• Beeinflusst alle Artikel in dieser Facility',
+                          '• Länder-Zuordnung bestimmt Steuerklassen und Compliance\n' '• Einmal gesperrt, kann nur SuperUser ändern\n' '• Beeinflusst alle Artikel in dieser Facility',
                           style: TextStyle(color: Colors.amber[800]),
                         ),
                       ],

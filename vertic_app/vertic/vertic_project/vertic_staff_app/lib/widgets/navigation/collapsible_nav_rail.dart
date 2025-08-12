@@ -326,7 +326,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
         message: widget.isExpanded ? '' : item.title,
         child: Material(
           color: isSelected
-              ? colors.primary.withOpacity(0.1)
+              ? colors.primary.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(spacing.radiusSm),
           child: InkWell(
@@ -421,7 +421,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
       child: Column(
         children: [
           Material(
-            color: isActive ? activeColor.withOpacity(0.1) : Colors.transparent,
+            color: isActive ? activeColor.withValues(alpha: 0.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(spacing.radiusSm),
             child: InkWell(
               onTap: () {
@@ -587,7 +587,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
 
     final accountHeader = Material(
       color: _isAccountMenuExpanded
-          ? colors.primary.withOpacity(0.1)
+          ? colors.primary.withValues(alpha: 0.1)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(spacing.radiusSm),
       child: InkWell(
@@ -597,7 +597,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
           });
         },
         borderRadius: BorderRadius.circular(spacing.radiusSm),
-        hoverColor: colors.primary.withOpacity(0.1),
+        hoverColor: colors.primary.withValues(alpha: 0.1),
         child: Container(
           height: itemHeight,
           width: double.infinity,
@@ -721,7 +721,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(spacing.radiusSm),
-        hoverColor: colors.primary.withOpacity(0.1),
+        hoverColor: colors.primary.withValues(alpha: 0.1),
         child: Container(
           height: itemHeight,
           width: double.infinity,
@@ -831,7 +831,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
       child: Container(
         height: 40,
         decoration: BoxDecoration(
-          color: colors.surfaceVariant.withOpacity(0.3),
+          color: colors.surfaceVariant.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(spacing.radiusSm),
         ),
         child: TextField(
@@ -913,7 +913,7 @@ class _CollapsibleNavRailState extends State<CollapsibleNavRail>
             child: Text(
               item.parentTitle!,
               style: context.typography.labelSmall.copyWith(
-                color: context.colors.onSurfaceVariant.withOpacity(0.7),
+                color: context.colors.onSurfaceVariant.withValues(alpha: 0.7),
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
               ),

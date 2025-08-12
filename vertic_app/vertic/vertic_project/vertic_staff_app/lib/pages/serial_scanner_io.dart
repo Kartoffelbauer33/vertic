@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 
@@ -12,7 +11,7 @@ class SerialScanner {
   String _currentPortName = '';
 
   // Puffer für eingehende Daten
-  StringBuffer _dataBuffer = StringBuffer();
+  final StringBuffer _dataBuffer = StringBuffer();
   Timer? _bufferTimer;
 
   // Cooldown nach erfolgreicher Verarbeitung

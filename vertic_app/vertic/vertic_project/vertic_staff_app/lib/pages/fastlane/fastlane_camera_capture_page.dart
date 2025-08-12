@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
 /// Vollbild-Kamera zum Aufnehmen eines Profilfotos für die Fastlane-Registrierung.

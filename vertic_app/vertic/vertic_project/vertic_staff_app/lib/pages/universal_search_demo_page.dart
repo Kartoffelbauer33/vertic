@@ -24,7 +24,7 @@ class UniversalSearchDemoPage extends StatefulWidget {
 class _UniversalSearchDemoPageState extends State<UniversalSearchDemoPage> {
   String _currentQuery = '';
   SearchResult? _selectedResult;
-  List<String> _searchHistory = [];
+  final List<String> _searchHistory = [];
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +285,7 @@ class _UniversalSearchDemoPageState extends State<UniversalSearchDemoPage> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: (feature['color'] as Color).withOpacity(0.1),
+                      color: (feature['color'] as Color).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -336,7 +336,7 @@ class _UniversalSearchDemoPageState extends State<UniversalSearchDemoPage> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _getEntityColor(result.entityType).withOpacity(0.1),
+                color: _getEntityColor(result.entityType).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(

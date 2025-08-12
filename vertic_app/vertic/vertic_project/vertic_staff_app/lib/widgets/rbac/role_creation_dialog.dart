@@ -241,7 +241,7 @@ class _RoleCreationDialogState extends State<RoleCreationDialog> {
                             decoration: BoxDecoration(
                               border: Border.all(color: isSelected ? Colors.indigo : Colors.grey),
                               borderRadius: BorderRadius.circular(8),
-                              color: isSelected ? Colors.indigo.withOpacity(0.1) : null,
+                              color: isSelected ? Colors.indigo.withValues(alpha: 0.1) : null,
                             ),
                             child: Icon(
                               icon,
@@ -287,9 +287,9 @@ class _RoleCreationDialogState extends State<RoleCreationDialog> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
+                          color: Colors.red.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [

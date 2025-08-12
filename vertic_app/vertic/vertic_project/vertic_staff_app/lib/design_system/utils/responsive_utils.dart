@@ -3,6 +3,7 @@
 /// Bietet eine zentrale Funktion zur Berechnung von responsiven Werten.
 /// Dies ermöglicht fließende Skalierung von Schriftgrößen, Abständen, Icon-Größen etc.
 /// basierend auf der aktuellen Bildschirmbreite.
+library;
 
 /// Berechnet einen responsiven Wert, der linear zwischen einem Minimal-
 /// und einem Maximalwert skaliert, basierend auf der Bildschirmbreite.
