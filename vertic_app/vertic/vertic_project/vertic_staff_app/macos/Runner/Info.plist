@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Die Kamera wird zur Erstellung des verpflichtenden Profilfotos benötigt.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Das Mikrofon wird nicht verwendet, kann aber vom Kamerasystem angefragt werden.</string>
 </dict>
 </plist>

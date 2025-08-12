@@ -728,7 +728,7 @@ class _StaffUserManagementWidgetState extends State<StaffUserManagementWidget> {
     // 4. Löschung durchführen
     try {
       final client = Provider.of<Client>(context, listen: false);
-      final success = await client.user.deleteSuperUser(staffUser.id!, password);
+    final success = await client.user.deleteSuperUser(staffUser.id!, password);
       
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

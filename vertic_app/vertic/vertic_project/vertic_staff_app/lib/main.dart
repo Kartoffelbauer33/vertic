@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
+import 'package:serverpod_auth_shared_flutter/serverpod_auth_shared_flutter.dart';
 import 'package:test_server_client/test_server_client.dart';
 
 import 'auth/permission_provider.dart';
@@ -66,7 +67,7 @@ void main() async {
   // - Direkte HTTP-Header-Übertragung an StaffAuthHelper
   client = Client(
     Environment.serverUrl,
-    authenticationKeyManager: StaffAuthenticationKeyManager(),
+    authenticationKeyManager: FlutterAuthenticationKeyManager(),
   )..connectivityMonitor = FlutterConnectivityMonitor();
 
   // Debug-Info ausgeben

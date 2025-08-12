@@ -1,8 +1,6 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
+// removed unused imports
+import 'fastlane_camera_capture_page.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -602,65 +600,34 @@ class _PhotoActions extends StatelessWidget {
   final ValueChanged<ByteData?> onPicked;
   const _PhotoActions({required this.onPicked});
 
-  Future<void> _pickFromWeb() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
+  Future<void> _openCamera(BuildContext context) async {
+    final data = await showDialog<ByteData>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 720,
+          height: 560,
+          child: const FastlaneCameraCapturePage(),
+        ),
+      ),
     );
-    final file = result?.files.firstOrNull;
-    if (file?.bytes != null) {
-      onPicked(ByteData.sublistView(file!.bytes!));
-    }
+    if (data != null) onPicked(data);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isWeb = kIsWeb;
     final spacing = context.spacing;
     return Row(
       children: [
         PrimaryButton(
           text: 'Foto aufnehmen',
           onPressed: () async {
-            try {
-              if (kIsWeb) {
-                // Im Web keine explizite Kameraberechtigung → Upload nutzen
-                await _pickFromWeb();
-                return;
-              }
-              // Plattformen mit verlässlicher Kamera-Unterstützung
-              final supportsCamera = (Platform.isAndroid || Platform.isIOS);
-              if (supportsCamera) {
-                final picker = ImagePicker();
-                final x = await picker.pickImage(
-                  source: ImageSource.camera,
-                  preferredCameraDevice: CameraDevice.front,
-                );
-                if (x != null) {
-                  final bytes = await x.readAsBytes();
-                  onPicked(ByteData.sublistView(bytes));
-                }
-                return;
-              }
-              // macOS/Windows/Linux Fallback: Datei wählen
-              await _pickFromWeb();
-            } catch (e) {
-              // Zeige klare Fehlermeldung, wenn Kamera nicht verfügbar/erlaubt ist
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Kamera nicht verfügbar: $e')),
-              );
-            }
+            await _openCamera(context);
           },
         ),
-        SizedBox(width: spacing.sm),
-        if (isWeb)
-          VerticOutlineButton(
-            text: 'Datei wählen',
-            onPressed: () async {
-              await _pickFromWeb();
-            },
-          ),
       ],
     );
   }

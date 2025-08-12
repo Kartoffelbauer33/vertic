@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:vertic_staff/design_system/design_system.dart';
+import 'package:test_server_client/test_server_client.dart';
+import 'faslane_dashboard_page.dart';
 import 'package:vertic_staff/services/fastlane/fastlane_state_provider.dart';
 import 'package:vertic_staff/widgets/fastlane/staff_unlock_dialog.dart';
 
@@ -20,6 +22,7 @@ class FastlanePage extends StatefulWidget {
 class _FastlanePageState extends State<FastlanePage> {
   int _logoTapCounter = 0;
   DateTime? _firstTapAt;
+  bool _clientLoggedIn = false; // Nach Login: zeige Client-Home
 
   @override
   void initState() {
@@ -56,7 +59,7 @@ class _FastlanePageState extends State<FastlanePage> {
     final typography = context.typography;
 
     final child = fastlane.mode == null
-        ? _buildModePicker(context)
+        ? _buildModePicker(context)R
         : _buildModeContent(context, fastlane.mode!);
 
     // Shortcuts für Desktop: Robuste, plattformübergreifende Kombination
@@ -208,11 +211,11 @@ class _FastlanePageState extends State<FastlanePage> {
       case FastlaneMode.registration:
         return const FastlaneRegistrationPage();
       case FastlaneMode.login:
-        return _buildComingSoon(context, 'Login');
+        return _buildLogin(context);
       case FastlaneMode.checkIn:
         return _buildComingSoon(context, 'Check-in');
       case FastlaneMode.loginAndRegistration:
-        return _buildSplit(context, const FastlaneRegistrationPage(), _buildComingSoon(context, 'Login'));
+        return _buildSplit(context, const FastlaneRegistrationPage(), _buildLogin(context));
       case FastlaneMode.allInOne:
         return _buildAllInOne(context);
     }
@@ -232,7 +235,7 @@ class _FastlanePageState extends State<FastlanePage> {
       const FastlaneRegistrationPage(),
       Padding(
         padding: EdgeInsets.all(spacing.md),
-        child: _buildComingSoon(context, 'Login & Check-in'),
+        child: _buildLogin(context),
       ),
     );
   }
@@ -242,6 +245,27 @@ class _FastlanePageState extends State<FastlanePage> {
     final colors = context.colors;
     return Center(
       child: Text('$name wird implementiert...', style: typography.titleMedium.copyWith(color: colors.onSurfaceVariant)),
+    );
+  }
+
+  Widget _buildLogin(BuildContext context) {
+    final client = Provider.of<Client>(context, listen: false);
+    if (_clientLoggedIn) {
+      return FastlaneClientHome(client: client);
+    }
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: FastlaneLoginPanel(
+          client: client,
+          onLoggedIn: (sessionManager, emailAuth) {
+            if (!mounted) return;
+            setState(() {
+              _clientLoggedIn = true;
+            });
+          },
+        ),
+      ),
     );
   }
 }

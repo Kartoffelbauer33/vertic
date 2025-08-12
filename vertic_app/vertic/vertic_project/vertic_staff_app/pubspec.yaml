@@ -35,7 +35,7 @@ dependencies:
   # Serverpod und Client-Abhängigkeiten
   serverpod_flutter: ^2.9.1
   serverpod_auth_shared_flutter: ^2.9.1  # Für AuthenticationKeyManager (SESSION-FIX)
-  serverpod_auth_email_flutter: ^2.9.1   # Für E-Mail-Verifizierung (wie Client-App)
+  serverpod_auth_email_flutter: ^2.9.1   # Für EmailAuthController (Client-Login in Fastlane)
   test_server_client: 
     path: ../../vertic_server/vertic_server_client
   intl: ^0.20.2
@@ -48,7 +48,7 @@ dependencies:
   fl_chart: ^0.64.0  # Für Diagramme und Statistiken
   file_picker: ^8.0.0+1  # Für Datei-Upload
   image_picker: ^1.1.2   # Für Kamera-Aufnahme (iOS/Android/Web)
-  camera: ^0.10.6        # Für Kamera-Vorschau & Aufnahme (macOS/desktop)
+  camera: ^0.11.2        # Für Kamera-Vorschau & Aufnahme inkl. federierter macOS-Implementation
   # Gerätespezifische Session-Verwaltung
   device_info_plus: ^11.5.0  # Für Geräte-Identifikation
 

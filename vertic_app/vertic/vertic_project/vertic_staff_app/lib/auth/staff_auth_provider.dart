@@ -31,15 +31,7 @@ class StaffAuthProvider extends ChangeNotifier {
     _initializeFromStorage();
   }
 
-  /// **🔧 TEMPORÄRER FIX: Session beim App-Start zurücksetzen**
-  Future<void> _resetSessionOnStart() async {
-    debugPrint(
-      '🔧 TEMP-FIX: Setze Session beim App-Start zurück (wegen Auth-Problemen)',
-    );
-    await resetSessionForDebug();
-    // Nach dem Reset normale Initialisierung
-    // await _initializeFromStorage(); // Deaktiviert bis Auth-Problem gelöst ist
-  }
+  // Entfernt: Unbenutzter temporärer Reset-Hook
 
   // ═══════════════════════════════════════════════════════════════
   // 🔍 GETTERS
@@ -94,8 +86,8 @@ class StaffAuthProvider extends ChangeNotifier {
     try {
       debugPrint('🔐 Staff-Login-Versuch: $emailOrUsername');
 
-      // 🔐 ECHTE Backend-Authentifizierung
-      final result = await _client.unifiedAuth.staffLogin(emailOrUsername, password);
+      // 🔐 ECHTE Backend-Authentifizierung (aktuelle Server-Methode)
+      final result = await _client.unifiedAuth.staffSignInFlexible(emailOrUsername, password);
 
       if (result.success == true && result.staffUser != null) {
         // StaffUser direkt aus Response verwenden
@@ -110,13 +102,9 @@ class StaffAuthProvider extends ChangeNotifier {
         // - Token wird als Base64-codierter Authorization-Header übertragen
         // - Backend StaffAuthHelper erkennt den Token korrekt
         if (_authToken != null) {
-          // Staff-Token über benutzerdefinierten Manager setzen
+          // Staff-Token über FlutterAuthenticationKeyManager setzen
           await _client.authenticationKeyManager?.put(_authToken!);
-
-          debugPrint(
-            '🔐 Staff-Token über StaffAuthenticationKeyManager gesetzt: ${_authToken!.length > 16 ? _authToken!.substring(0, 16) + '...' : _authToken!}',
-          );
-          debugPrint('✅ Staff-Auth für HTTP-Header-Übertragung konfiguriert');
+          debugPrint('🔐 Staff-Token gesetzt (${_authToken!.length} Zeichen)');
         }
 
         // Session persistent speichern
