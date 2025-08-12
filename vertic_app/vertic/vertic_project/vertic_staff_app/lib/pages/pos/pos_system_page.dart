@@ -578,6 +578,11 @@ class _PosSystemPageState extends State<PosSystemPage> {
         createdAt: DateTime.now(),
       );
 
+      // 🛡️ RACE CONDITION PROTECTION: Switch-ID für neuen Warenkorb generieren
+      final switchId = ++_lastCartSwitchId;
+      _activeSyncOperations.clear();
+      _activeSyncOperations[switchId] = true;
+
       // 🚀 PERFORMANCE: Sofortiger UI-Update
       setState(() {
         _activeCarts.add(newCart);
@@ -732,6 +737,11 @@ Future<void> _removeCart(int index) async {
   final sessionBackup = _currentSession;
   final customerBackup = _selectedCustomer;
   final itemsBackup = List<PosCartItem>.from(_cartItems);
+
+  // 🛡️ RACE CONDITION PROTECTION: Switch-ID für Warenkorb-Entfernung generieren
+  final switchId = ++_lastCartSwitchId;
+  _activeSyncOperations.clear();
+  _activeSyncOperations[switchId] = true;
 
   // 🚀 PERFORMANCE: Sofortiger optimistischer UI-Update
   setState(() {

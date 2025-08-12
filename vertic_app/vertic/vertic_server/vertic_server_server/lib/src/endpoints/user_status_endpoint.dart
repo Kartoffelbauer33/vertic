@@ -37,9 +37,12 @@ class UserStatusEndpoint extends Endpoint {
     if (staffUser == null) return false;
 
     if (requireHighLevel) {
-      return staffUser.staffLevel == StaffUserType.superUser ||
-          staffUser.staffLevel == StaffUserType.facilityAdmin ||
-          staffUser.staffLevel == StaffUserType.hallAdmin;
+      // SuperUser hat alle Rechte, für andere staff members prüfe permissions
+      if (staffUser.staffLevel == StaffUserType.superUser) {
+        return true;
+      }
+      // Für normale staff members: prüfe ob sie die entsprechende Permission haben
+      return await PermissionHelper.hasPermission(session, staffUserId, 'can_manage_user_status');
     }
 
     return true; // Alle StaffUser dürfen Status verwalten

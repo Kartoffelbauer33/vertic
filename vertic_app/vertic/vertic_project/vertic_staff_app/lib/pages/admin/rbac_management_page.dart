@@ -5,8 +5,12 @@ import 'package:test_server_client/test_server_client.dart';
 import '../../services/rbac/rbac_data_service.dart';
 import '../../services/rbac/rbac_state_provider.dart';
 import '../../services/rbac/role_state_provider.dart';
+import '../../services/rbac/staff_user_state_provider.dart';
 import '../../widgets/rbac/role_management_widget.dart';
+import '../../widgets/rbac/staff_user_management_widget.dart';
+import '../../widgets/rbac/categorized_permissions_widget.dart';
 import '../../auth/permission_wrapper.dart';
+import '../../auth/permission_provider.dart';
 import 'role_permissions_manager.dart';
 
 /// **🔐 RBAC Management Page - Refactored Version**
@@ -154,7 +158,7 @@ class _RbacManagementPageState extends State<RbacManagementPage>
     );
   }
 
-  /// **📊 Permissions Tab**
+  /// **📊 Permissions Tab - Kategorisierte Ansicht**
   Widget _buildPermissionsTab(RbacStateProvider rbacProvider) {
     return PermissionWrapper(
       requiredPermission: 'can_manage_permissions',
@@ -162,7 +166,13 @@ class _RbacManagementPageState extends State<RbacManagementPage>
       child: Column(
         children: [
           _buildPermissionFilters(rbacProvider),
-          Expanded(child: _buildPermissionsList(rbacProvider)),
+          Expanded(
+            child: CategorizedPermissionsWidget(
+              permissions: rbacProvider.filteredPermissions,
+              searchQuery: rbacProvider.searchQuery ?? '',
+              onRefresh: () => rbacProvider.loadInitialData(),
+            ),
+          ),
         ],
       ),
     );
@@ -209,93 +219,45 @@ class _RbacManagementPageState extends State<RbacManagementPage>
     );
   }
 
-  /// **📋 Permissions List**
-  Widget _buildPermissionsList(RbacStateProvider rbacProvider) {
-    final filteredPermissions = rbacProvider.filteredPermissions;
-    
-    if (filteredPermissions.isEmpty) {
-      return const Center(
-        child: Text('Keine Permissions gefunden', style: TextStyle(fontSize: 16)),
-      );
-    }
 
-    return ListView.builder(
-      itemCount: filteredPermissions.length,
-      itemBuilder: (context, index) {
-        final permission = filteredPermissions[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: ListTile(
-            leading: const Icon(
-              Icons.security,
-              color: Colors.blue,
-            ),
-            title: Text(
-              permission.displayName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  /// **👥 Roles Tab - Vollständig refactoriert mit sauberer Auslagerung**
+  Widget _buildRolesTab(RbacStateProvider rbacProvider) {
+    return Consumer<PermissionProvider>(
+      builder: (context, permissionProvider, child) {
+        // Zeige Loading-State wenn Permissions noch nicht geladen
+        if (!permissionProvider.isInitialized) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Name: ${permission.name}'),
-                if (permission.description != null)
-                  Text('Beschreibung: ${permission.description}'),
-                Text('Kategorie: ${permission.category}'),
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Permissions werden geladen...'),
               ],
             ),
-            isThreeLine: true,
+          );
+        }
+        
+        return PermissionWrapper(
+          requiredPermission: 'can_manage_roles',
+          placeholder: _buildAccessDenied('Role Management'),
+          child: ChangeNotifierProvider(
+            create: (context) => RoleStateProvider(Provider.of<Client>(context, listen: false)),
+            child: const RoleManagementWidget(),
           ),
         );
       },
     );
   }
 
-  /// **👥 Roles Tab - Vollständig refactoriert mit sauberer Auslagerung**
-  Widget _buildRolesTab(RbacStateProvider rbacProvider) {
-    return PermissionWrapper(
-      requiredPermission: 'can_manage_roles',
-      placeholder: _buildAccessDenied('Role Management'),
-      child: ChangeNotifierProvider(
-        create: (context) => RoleStateProvider(Provider.of<Client>(context, listen: false)),
-        child: const RoleManagementWidget(),
-      ),
-    );
-  }
-
-  /// **👤 Staff User Tab**
+  /// **👤 Staff User Tab - Vollständig refactoriert mit sauberer Auslagerung**
   Widget _buildStaffUserTab(RbacStateProvider rbacProvider) {
     return PermissionWrapper(
-      requiredPermission: 'can_manage_staff_users',
+      requiredPermission: 'can_view_staff',  // ✅ FIXED: Use correct backend permission
       placeholder: _buildAccessDenied('Staff User Management'),
-      child: ListView.builder(
-        itemCount: rbacProvider.staffUsers.length,
-        itemBuilder: (context, index) {
-          final staffUser = rbacProvider.staffUsers[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.blue,
-                child: Text(
-                  staffUser.firstName.isNotEmpty ? staffUser.firstName[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-              title: Text(
-                '${staffUser.firstName} ${staffUser.lastName}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Email: ${staffUser.email}'),
-                  Text('ID: ${staffUser.id}'),
-                ],
-              ),
-              isThreeLine: true,
-            ),
-          );
-        },
+      child: ChangeNotifierProvider(
+        create: (context) => StaffUserStateProvider(Provider.of<Client>(context, listen: false)),
+        child: const StaffUserManagementWidget(),
       ),
     );
   }
@@ -303,7 +265,7 @@ class _RbacManagementPageState extends State<RbacManagementPage>
   /// **📈 Statistics Tab**
   Widget _buildStatisticsTab(RbacStateProvider rbacProvider) {
     return PermissionWrapper(
-      requiredPermission: 'can_view_statistics',
+      requiredPermission: 'can_manage_permissions',  // ✅ FIXED: Use existing admin permission for statistics
       placeholder: _buildAccessDenied('Statistics'),
       child: Padding(
         padding: const EdgeInsets.all(16),

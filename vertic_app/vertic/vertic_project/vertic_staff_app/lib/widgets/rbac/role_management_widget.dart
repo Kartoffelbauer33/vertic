@@ -29,8 +29,43 @@ class _RoleManagementWidgetState extends State<RoleManagementWidget> {
 
   @override
   Widget build(BuildContext context) {
+    
     return Consumer<RoleStateProvider>(
       builder: (context, roleProvider, child) {
+        
+        // Zeige Loading-State
+        if (roleProvider.isLoading) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Rollen werden geladen...'),
+              ],
+            ),
+          );
+        }
+        
+        // Zeige Error-State
+        if (roleProvider.error != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error, size: 64, color: Colors.red[400]),
+                const SizedBox(height: 16),
+                Text(roleProvider.error ?? 'Unbekannter Fehler'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => roleProvider.loadRoles(),
+                  child: const Text('Erneut versuchen'),
+                ),
+              ],
+            ),
+          );
+        }
+        
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -78,7 +113,7 @@ class _RoleManagementWidgetState extends State<RoleManagementWidget> {
         
         // Neue Rolle erstellen (nur mit Permission)
         PermissionWrapper(
-          requiredPermission: 'can_create_roles',
+          requiredPermission: 'can_manage_roles',
           child: ElevatedButton.icon(
             onPressed: roleProvider.isLoading ? null : _showCreateRoleDialog,
             icon: const Icon(Icons.add),
@@ -199,6 +234,7 @@ class _RoleManagementWidgetState extends State<RoleManagementWidget> {
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.all(16),
       itemCount: roleProvider.filteredRoles.length,
       itemBuilder: (context, index) {
         final role = roleProvider.filteredRoles[index];
@@ -294,7 +330,10 @@ class _RoleManagementWidgetState extends State<RoleManagementWidget> {
               child: IconButton(
                 onPressed: roleProvider.isLoading 
                     ? null 
-                    : () => _showRolePermissions(role),
+                    : () {
+                        debugPrint('🔐 Permission icon clicked for role: ${role.name}');
+                        _showRolePermissions(role);
+                      },
                 icon: const Icon(Icons.security, color: Colors.indigo),
                 tooltip: isSystemRole 
                     ? 'Permissions anzeigen (nicht bearbeitbar)' 
@@ -397,18 +436,26 @@ class _RoleManagementWidgetState extends State<RoleManagementWidget> {
   }
 
   void _showCreateRoleDialog() {
+    final roleProvider = Provider.of<RoleStateProvider>(context, listen: false);
+    
     showDialog(
       context: context,
-      builder: (context) => const RoleCreationDialog(),
+      builder: (dialogContext) => ChangeNotifierProvider.value(
+        value: roleProvider,
+        child: const RoleCreationDialog(),
+      ),
     );
   }
 
   /// 🔐 Permissions für eine Rolle anzeigen/verwalten
   void _showRolePermissions(Role role) async {
+    debugPrint('🔐 Opening permission manager for role: ${role.name}');
     // Alle Permissions laden für den Dialog
     try {
       final client = Provider.of<Client>(context, listen: false);
+      debugPrint('🔐 Loading all permissions...');
       final allPermissions = await client.permissionManagement.getAllPermissions();
+      debugPrint('🔐 Loaded ${allPermissions.length} permissions');
       
       if (!mounted) return;
       

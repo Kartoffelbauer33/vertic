@@ -45,7 +45,7 @@ class _StaffManagementPageState extends State<StaffManagementPage>
     try {
       // Parallel laden für bessere Performance
       final results = await Future.wait([
-        client.unifiedAuth.getAllStaffUsers(),
+        client.staffUserManagement.getAllStaffUsers(limit: 100, offset: 0),
         // client.rbac.getAllRoles(), // Temporär deaktiviert - RBAC wird überarbeitet
         Future.value(<Role>[]), // Leere Liste als Platzhalter
       ]);
@@ -454,11 +454,7 @@ class _StaffManagementPageState extends State<StaffManagementPage>
     final superUsers = _staffUsers
         .where((s) => s.staffLevel == StaffUserType.superUser)
         .length;
-    final admins = _staffUsers
-        .where((s) =>
-            s.staffLevel == StaffUserType.facilityAdmin ||
-            s.staffLevel == StaffUserType.hallAdmin)
-        .length;
+    final admins = 0; // No admin levels anymore
     final regularStaff =
         _staffUsers.where((s) => s.staffLevel == StaffUserType.staff).length;
 
@@ -513,21 +509,6 @@ class _StaffManagementPageState extends State<StaffManagementPage>
                   const SizedBox(height: 12),
                   _buildDistributionBar(
                       'Super-Admin', superUsers, totalStaff, Colors.red),
-                  _buildDistributionBar(
-                      'Facility-Admin',
-                      _staffUsers
-                          .where((s) =>
-                              s.staffLevel == StaffUserType.facilityAdmin)
-                          .length,
-                      totalStaff,
-                      Colors.purple),
-                  _buildDistributionBar(
-                      'Hallen-Admin',
-                      _staffUsers
-                          .where((s) => s.staffLevel == StaffUserType.hallAdmin)
-                          .length,
-                      totalStaff,
-                      Colors.orange),
                   _buildDistributionBar(
                       'Mitarbeiter', regularStaff, totalStaff, Colors.blue),
                 ],
@@ -625,12 +606,10 @@ class _StaffManagementPageState extends State<StaffManagementPage>
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Colors.red;
-      case StaffUserType.facilityAdmin:
-        return Colors.purple;
-      case StaffUserType.hallAdmin:
-        return Colors.orange;
       case StaffUserType.staff:
         return Colors.blue;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -638,12 +617,10 @@ class _StaffManagementPageState extends State<StaffManagementPage>
     switch (staffLevel) {
       case StaffUserType.superUser:
         return Icons.verified;
-      case StaffUserType.facilityAdmin:
-        return Icons.business;
-      case StaffUserType.hallAdmin:
-        return Icons.admin_panel_settings;
       case StaffUserType.staff:
         return Icons.person;
+      default:
+        return Icons.person_outline;
     }
   }
 
@@ -651,12 +628,10 @@ class _StaffManagementPageState extends State<StaffManagementPage>
     switch (staffLevel) {
       case StaffUserType.superUser:
         return 'Super-Administrator';
-      case StaffUserType.facilityAdmin:
-        return 'Facility-Administrator';
-      case StaffUserType.hallAdmin:
-        return 'Hallen-Administrator';
       case StaffUserType.staff:
         return 'Mitarbeiter';
+      default:
+        return 'Unbekannt';
     }
   }
 
@@ -932,27 +907,6 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
                       ),
                     ),
                     DropdownMenuItem(
-                      value: StaffUserType.hallAdmin,
-                      child: Row(
-                        children: [
-                          Icon(Icons.admin_panel_settings,
-                              color: Colors.orange, size: 18),
-                          SizedBox(width: 8),
-                          Text('Hallen-Administrator'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: StaffUserType.facilityAdmin,
-                      child: Row(
-                        children: [
-                          Icon(Icons.business, color: Colors.purple, size: 18),
-                          SizedBox(width: 8),
-                          Text('Facility-Administrator'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
                       value: StaffUserType.superUser,
                       child: Row(
                         children: [
@@ -1109,19 +1063,18 @@ class _CreateStaffUserDialogState extends State<CreateStaffUserDialog> {
         return;
       }
 
-      // 🔄 UNIFIED AUTH: Neue E-Mail-basierte Staff-Erstellung
-      final result = await client.unifiedAuth.createStaffUserWithEmail(
-        _emailController.text.trim(), // email (echte E-Mail-Adresse)
-        username, // username (employeeId oder firstName)
-        password, // Sicheres Passwort vom Dialog
-        _firstNameController.text.trim(), // firstName
-        _lastNameController.text.trim(), // lastName
-        _selectedStaffLevel, // staffLevel
+      // 🔄 Legacy Staff-Erstellung (temporär)
+      final request = CreateStaffUserRequest(
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        email: _emailController.text.trim(),
+        employeeId: username,
+        staffLevel: _selectedStaffLevel,
       );
 
-      if (result.success != true) {
-        throw Exception(result.message ?? 'Unbekannter Fehler');
-      }
+      final newStaffUser = await client.staffUserManagement.createStaffUser(request);
+
+      // newStaffUser wurde erfolgreich erstellt
 
       Navigator.pop(context);
       widget.onStaffUserCreated();

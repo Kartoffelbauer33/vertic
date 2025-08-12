@@ -35,7 +35,7 @@ dependencies:
   # Serverpod und Client-Abhängigkeiten
   serverpod_flutter: ^2.9.1
   serverpod_auth_shared_flutter: ^2.9.1  # Für AuthenticationKeyManager (SESSION-FIX)
-  # Auth-Dependencies entfernt - Nutzen jetzt Custom Staff-Auth-System
+  serverpod_auth_email_flutter: ^2.9.1   # Für E-Mail-Verifizierung (wie Client-App)
   test_server_client: 
     path: ../../vertic_server/vertic_server_client
   intl: ^0.20.2

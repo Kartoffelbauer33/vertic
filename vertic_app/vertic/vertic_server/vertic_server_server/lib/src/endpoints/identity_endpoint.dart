@@ -63,8 +63,12 @@ class IdentityEndpoint extends Endpoint {
     if (staffUser == null) return false;
 
     if (requireHighLevelAccess) {
-      return staffUser.staffLevel == StaffUserType.superUser ||
-          staffUser.staffLevel == StaffUserType.facilityAdmin;
+      // SuperUser hat alle Rechte, für andere staff members prüfe permissions
+      if (staffUser.staffLevel == StaffUserType.superUser) {
+        return true;
+      }
+      // Für normale staff members: prüfe ob sie die entsprechende Permission haben
+      return await PermissionHelper.hasPermission(session, staffUserId, 'can_manage_user_identity');
     }
 
     return true; // Alle StaffUser sind für grundlegende Identity-Funktionen berechtigt

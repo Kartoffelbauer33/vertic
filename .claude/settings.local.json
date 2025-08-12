@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(serverpod generate:*)",
+      "Bash(dart run serverpod_cli:main:*)",
+      "Bash(dart pub:*)",
+      "Bash(dart run:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(timeout 10 dart run:*)",
+      "Bash(flutter pub:*)",
+      "Bash(dart analyze:*)",
+      "Bash(flutter clean:*)",
+      "Bash(timeout 30 dart run serverpod_cli generate)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(serverpod create-migration:*)",
+      "Bash(timeout 30 flutter build:*)",
+      "Bash(find:*)",
+      "Bash(dart compile:*)",
+      "Bash(grep:*)",
+      "Bash(timeout 60 flutter build:*)",
+      "Bash(timeout 30 dart run:*)",
+      "Bash(timeout 60 flutter run -d windows)",
+      "Bash(timeout 120 flutter run -d windows)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)",
+      "Bash(dart:*)",
+      "Bash(rm:*)",
+      "WebFetch(domain:docs.serverpod.dev)"
+    ],
+    "deny": []
+  }
+}

@@ -179,8 +179,7 @@ class _MyHomePageState extends State<MyHomePage> {
         if (updatedUserResult != null) {
           setState(() {
             _resultMessage = 'Profil erfolgreich aktualisiert';
-            _user =
-                updatedUserResult; // Verwende das zurückgegebene User-Objekt
+            _user = updatedUserResult;
           });
         } else {
           setState(() {

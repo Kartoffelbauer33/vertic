@@ -46,8 +46,8 @@ fields:
   postalCode: String?
   emergencyContact: String?        # Notfallkontakt (JSON)
   
-  # Staff-Hierarchie & Berechtigungen (ersetzt AppUser flags)
-  staffLevel: StaffUserType        # staff, hallAdmin, facilityAdmin, superUser
+  # Staff-Hierarchie & Berechtigungen
+  staffLevel: StaffUserType        # staff (role-based) or superUser (all permissions)
   departmentId: int?               # Abteilung (Kasse, Reinigung, etc.)
   hallId: int?                     # Zugeordnete Halle (kann null sein)
   facilityId: int?                 # Zugeordnete Facility (kann null sein)

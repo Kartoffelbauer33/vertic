@@ -1,0 +1,29 @@
+class: CreateStaffUserWithEmailRequest
+fields:
+  # Basis-Informationen
+  firstName: String
+  lastName: String
+  email: String
+  password: String  # NEU: Passwort-Pflicht
+  
+  # Optional
+  phoneNumber: String?
+  employeeId: String?  # Username/Employee-ID
+  
+  # Staff-Informationen
+  staffLevel: StaffUserType
+  hallId: int?
+  facilityId: int?
+  departmentId: int?
+  
+  # Vertragsinformationen
+  contractType: String?
+  hourlyRate: double?
+  monthlySalary: double?
+  workingHours: int?
+  
+  # Rollen-Zuweisung
+  roleIds: List<int>?
+  
+  # Superuser-Sicherheit
+  superuserPasswordConfirmation: String?  # Für Superuser-Erstellung

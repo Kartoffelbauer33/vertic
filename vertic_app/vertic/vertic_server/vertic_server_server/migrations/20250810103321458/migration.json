@@ -1,0 +1,18 @@
+{
+  "actions": [
+    {
+      "type": "deleteTable",
+      "deleteTable": "pending_staff_users"
+    }
+  ],
+  "warnings": [
+    {
+      "type": "tableDropped",
+      "message": "Table \"pending_staff_users\" will be dropped.",
+      "table": "pending_staff_users",
+      "columns": [],
+      "destrucive": true
+    }
+  ],
+  "migrationApiVersion": 1
+}

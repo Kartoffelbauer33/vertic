@@ -4,6 +4,7 @@ import '../generated/protocol.dart';
 import '../helpers/permission_helper.dart';
 import '../helpers/staff_auth_helper.dart';
 import 'package:serverpod_auth_server/serverpod_auth_server.dart';
+import 'package:bcrypt/bcrypt.dart';
 
 /// Admin-Endpoint für Benutzerverwaltung (nur für Staff/Admin-Zugriff)
 class UserEndpoint extends Endpoint {
@@ -18,8 +19,12 @@ class UserEndpoint extends Endpoint {
     if (staffUser == null) return false;
 
     if (requireHighLevel) {
-      return staffUser.staffLevel == StaffUserType.superUser ||
-          staffUser.staffLevel == StaffUserType.facilityAdmin;
+      // SuperUser hat alle Rechte, für andere staff members prüfe permissions
+      if (staffUser.staffLevel == StaffUserType.superUser) {
+        return true;
+      }
+      // Für normale staff members: prüfe ob sie die entsprechende Permission haben
+      return await PermissionHelper.hasPermission(session, staffUserId, 'can_manage_users');
     }
 
     return true; // Alle StaffUser dürfen User-Daten lesen/verwalten
@@ -259,7 +264,148 @@ class UserEndpoint extends Endpoint {
     }
   }
 
+  /// **Aktualisiert Staff-User-Daten**
+  Future<StaffUser?> updateStaffUser(Session session, StaffUser staffUser) async {
+    // 🔐 RBAC SECURITY CHECK
+    final authUserId = await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Staff-User-Update verweigert', level: LogLevel.warning);
+      return null;
+    }
+
+    final hasPermission = await PermissionHelper.hasPermission(
+        session, authUserId, 'can_edit_staff');
+    if (!hasPermission) {
+      session.log('❌ Fehlende Berechtigung: can_edit_staff (User: $authUserId)', level: LogLevel.warning);
+      return null;
+    }
+
+    try {
+      // Prüfe ob Staff-User existiert
+      final existingStaffUser = await StaffUser.db.findById(session, staffUser.id!);
+      if (existingStaffUser == null) {
+        throw Exception('Staff-User nicht gefunden');
+      }
+
+      // SuperUser kann nicht bearbeitet werden (außer von SuperUser selbst)
+      if (existingStaffUser.staffLevel == StaffUserType.superUser && authUserId != staffUser.id) {
+        final currentStaffUser = await StaffUser.db.findById(session, authUserId);
+        if (currentStaffUser?.staffLevel != StaffUserType.superUser) {
+          throw Exception('SuperUser können nur von anderen SuperUsern bearbeitet werden');
+        }
+      }
+
+      // Staff-User aktualisieren
+      final updatedStaffUser = await StaffUser.db.updateRow(session, staffUser);
+
+      session.log('✅ Staff-User ${updatedStaffUser.firstName} ${updatedStaffUser.lastName} aktualisiert');
+      return updatedStaffUser;
+    } catch (e) {
+      session.log('❌ updateStaffUser Error: $e', level: LogLevel.error);
+      return null;
+    }
+  }
+
+  /// **Löscht einen Superuser (mit Sicherheitsprüfungen)**
+  Future<bool> deleteSuperUser(Session session, int superUserId, String password) async {
+    // 1. 🔐 RBAC SECURITY CHECK
+    final authUserId = await StaffAuthHelper.getAuthenticatedStaffUserId(session);
+    if (authUserId == null) {
+      session.log('❌ Nicht eingeloggt - Superuser-Löschung verweigert', level: LogLevel.warning);
+      return false;
+    }
+
+    final currentStaffUser = await StaffUser.db.findById(session, authUserId);
+    if (currentStaffUser == null || currentStaffUser.staffLevel != StaffUserType.superUser) {
+      session.log('❌ Nur Superuser können andere Superuser löschen', level: LogLevel.warning);
+      return false;
+    }
+
+    try {
+      // 2. Prüfe Passwort des aktuellen Superusers
+      final currentEmailAuth = await EmailAuth.db.findFirstRow(
+        session,
+        where: (t) => t.userId.equals(currentStaffUser.userInfoId!),
+      );
+
+      if (currentEmailAuth == null) {
+        session.log('❌ Authentifizierung nicht gefunden', level: LogLevel.error);
+        return false;
+      }
+
+      if (!_verifyPassword(password, currentEmailAuth.hash)) {
+        session.log('❌ Ungültiges Passwort für Superuser-Löschung', level: LogLevel.warning);
+        return false;
+      }
+
+      // 3. Prüfe ob genug Superuser vorhanden sind (mindestens 2 aktive)
+      final activeSuperUsers = await StaffUser.db.count(
+        session,
+        where: (t) => t.staffLevel.equals(StaffUserType.superUser) & 
+                     t.employmentStatus.equals('active'),
+      );
+
+      if (activeSuperUsers <= 1) {
+        session.log('❌ Letzter Superuser kann nicht gelöscht werden', level: LogLevel.warning);
+        return false;
+      }
+
+      // 4. Prüfe ob zu löschender User ein Superuser ist
+      final targetStaffUser = await StaffUser.db.findById(session, superUserId);
+      if (targetStaffUser == null) {
+        session.log('❌ Zu löschender Staff-User nicht gefunden', level: LogLevel.error);
+        return false;
+      }
+
+      if (targetStaffUser.staffLevel != StaffUserType.superUser) {
+        session.log('❌ Nur Superuser können mit dieser Methode gelöscht werden', level: LogLevel.warning);
+        return false;
+      }
+
+      // 5. Lösche alle Rollen-Zuweisungen
+      await StaffUserRole.db.deleteWhere(
+        session,
+        where: (t) => t.staffUserId.equals(superUserId),
+      );
+
+      // 6. Lösche alle Permission-Zuweisungen
+      await StaffUserPermission.db.deleteWhere(
+        session,
+        where: (t) => t.staffUserId.equals(superUserId),
+      );
+
+      // 7. Lösche den Staff-User
+      final deleted = await StaffUser.db.deleteWhere(
+        session, 
+        where: (t) => t.id.equals(superUserId)
+      );
+
+      if (deleted.isNotEmpty) {
+        session.log('✅ Superuser ${targetStaffUser.firstName} ${targetStaffUser.lastName} erfolgreich gelöscht von ${currentStaffUser.firstName}', level: LogLevel.warning);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      session.log('❌ deleteSuperUser Error: $e', level: LogLevel.error);
+      return false;
+    }
+  }
+
   // PRIVATE HILFSMETHODEN
+
+  /// **Password-Verifikation (aus unified_auth_endpoint kopiert)**
+  bool _verifyPassword(String password, String hash) {
+    try {
+      // 1. Echter bcrypt Hash - verwende BCrypt.checkpw()
+      if (hash.startsWith('\$2b\$') || hash.startsWith('\$2a\$')) {
+        return BCrypt.checkpw(password, hash);
+      }
+      // 2. Legacy MD5 (falls noch vorhanden)
+      return hash == password; // Unsicher, nur für Migration
+    } catch (e) {
+      return false;
+    }
+  }
 
   /// Fügt eine automatische System-Notiz hinzu
   Future<void> _addSystemNote(

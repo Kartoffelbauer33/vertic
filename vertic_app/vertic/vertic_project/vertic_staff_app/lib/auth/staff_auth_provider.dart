@@ -27,8 +27,8 @@ class StaffAuthProvider extends ChangeNotifier {
   String? _lastError;
 
   StaffAuthProvider(this._client) {
-    // 🔧 TEMPORÄRER DEBUG-FIX: Session zurücksetzen wegen Authentication-Problemen
-    _resetSessionOnStart();
+    // Session-Wiederherstellung beim App-Start
+    _initializeFromStorage();
   }
 
   /// **🔧 TEMPORÄRER FIX: Session beim App-Start zurücksetzen**
@@ -94,17 +94,13 @@ class StaffAuthProvider extends ChangeNotifier {
     try {
       debugPrint('🔐 Staff-Login-Versuch: $emailOrUsername');
 
-      final result = await _client.unifiedAuth.staffSignInFlexible(
-        emailOrUsername,
-        password,
-      );
+      // 🔐 ECHTE Backend-Authentifizierung
+      final result = await _client.unifiedAuth.staffLogin(emailOrUsername, password);
 
       if (result.success == true && result.staffUser != null) {
         // StaffUser direkt aus Response verwenden
         _currentStaffUser = result.staffUser!;
-        _authToken =
-            result.staffToken ??
-            result.userInfoId?.toString(); // Neuen Staff-Token verwenden
+        _authToken = result.staffToken;
         _isAuthenticated = true;
 
         // 🔐 **STAFF-AUTH-FIX: Authorization Header für Staff-Token setzen**
@@ -449,12 +445,10 @@ class StaffAuthProvider extends ChangeNotifier {
     switch (level) {
       case StaffUserType.superUser:
         return 100;
-      case StaffUserType.facilityAdmin:
-        return 80;
-      case StaffUserType.hallAdmin:
-        return 60;
       case StaffUserType.staff:
         return 40;
+      default:
+        return 0;
     }
   }
 }
